@@ -72,11 +72,11 @@ void process (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "nvs") == 0)           mt_dump_nvs         (nparam, param);
   else if (nparam==1 && strcmp (param[0], "pins")  == 0)         showPinConfig       ();
   else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
-  //else if (nparam<=2 && strcmp (param[0], "switchref") == 0)     mt_set_switchRef    (nparam, param);
   else if (nparam==1 && strcmp (param[0], "restart") == 0)       mt_sys_restart      ("command line request");
   else if (nparam<=4 && strcmp (param[0], "wifi") == 0)          mt_set_wifi         (nparam, param);
+  else if (nparam<=2 && strcmp (param[0], "wifiscan") == 0)      mt_set_wifiscan     (nparam, param);
   else if (nparam==1 && strcmp (param[0], "locos") == 0)         displayLocos        ();
-  else if (nparam==1 && strcmp (param[0], "switches") == 0)      displaySwitches     ();
+  else if (nparam==1 && strcmp (param[0], "turnouts") == 0)      displayTurnouts     ();
   else if (nparam==1 && strcmp (param[0], "routes") == 0)        displayRoutes       ();
   else if (nparam==1 && strcmp (param[0], "showpackets")     == 0) showPackets   = true;
   else if (nparam==1 && strcmp (param[0], "noshowpackets")   == 0) showPackets   = false;
@@ -272,27 +272,33 @@ void mt_set_name (int nparam, char **param)   // Set name of throttle
   }
 }
 
-/*void mt_set_switchRef (int nparam, char **param)  // set numeric or named switch references
+
+void mt_set_wifiscan(int nparam, char **param)
 {
-  if (nparam == 1) {
+  int use_multiwifi = 99;
+  
+  if (nparam==1) {
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-      Serial.print ("Switch reference by: ");
-      if (nvs_get_int ("switchRef", 0) == 1) Serial.println ("Name");
-      else Serial.println ("ID Number");
+      Serial.print ("wifi scan: ");
+      use_multiwifi = nvs_get_int ("use_multiwifi", 0);
+      if (use_multiwifi == 0) Serial.println ("disabled");
+      else Serial.println ("enabled");
       xSemaphoreGive(displaySem);
     }
   }
   else {
-    if (strcmp (param[1], "name") == 0) nvs_put_int ("switchRef", 1);
-    else if (strcmp (param[1], "number") == 0) nvs_put_int ("switchRef", 0);
+    if (strcmp (param[1], "disabled") == 0) use_multiwifi = 0;
+    else if (strcmp (param[1], "enabled") == 0) use_multiwifi = 1;
     else {
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        Serial.println ("parameter should be either \"name\" or \"number\"");
+        Serial.println ("wifiscan should be enabled or disabled");
         xSemaphoreGive(displaySem);
       }
+      return;
     }
+    if (use_multiwifi==0 || use_multiwifi==1) nvs_put_int ("use_multiwifi", use_multiwifi);
   }
-}*/
+}
 
 void displayLocos()  // display locomotive data
 {
@@ -313,16 +319,16 @@ void displayLocos()  // display locomotive data
   }
 }
 
-void displaySwitches()  // display known data about switches / points
+void displayTurnouts()  // display known data about switches / points
 {
   char outBuffer[40];
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
     Serial.print   ("Switch (turnout/point) statuses = ");
-    Serial.println (switchStateCount);
-    if (switchStateCount>0) {
+    Serial.println (turnoutStateCount);
+    if (turnoutStateCount>0) {
       Serial.println ("   ID | State");
-      for (uint8_t n=0; n<switchStateCount; n++) {
-        sprintf (outBuffer, "  %3d | %s", switchState[n].state, switchState[n].name);
+      for (uint8_t n=0; n<turnoutStateCount; n++) {
+        sprintf (outBuffer, "  %3d | %s", turnoutState[n].state, turnoutState[n].name);
         Serial.println (outBuffer);
       }
     }
@@ -332,7 +338,7 @@ void displaySwitches()  // display known data about switches / points
       sprintf (outBuffer, "%-16s | %-16s | %s", "System-Name", "User-Name", "State");
       Serial.println (outBuffer);
       for (uint8_t n=0; n<switchCount; n++) {
-        sprintf (outBuffer, "%-16s | %-16s | %d", switchList[n].sysName, switchList[n].userName, switchList[n].state);
+        sprintf (outBuffer, "%-16s | %-16s | %d", turnoutList[n].sysName, turnoutList[n].userName, turnoutList[n].state);
         Serial.println (outBuffer);
       }
     }
@@ -442,7 +448,7 @@ void mt_set_server (int nparam, char **param)  // set details about remote serve
 void mt_dump_data (int nparam, char **param)  // set details about remote servers
 {
   if (nparam == 1) {
-    char *newParams[] = {"void", "loco", "switch", "switchstate", "route", "routestate"};
+    char *newParams[] = {"void", "loco", "turnout", "turnoutstate", "route", "routestate"};
     for (uint8_t n=0; n<5; n++) {
       mt_dump_data (2, &newParams[n]);
     }
@@ -461,15 +467,15 @@ void mt_dump_data (int nparam, char **param)  // set details about remote server
         xSemaphoreGive(displaySem);
       }
     }
-    else if (strcmp (param[1], "switch") == 0) {
+    else if (strcmp (param[1], "turnout") == 0) {
       blk_size = sizeof(struct turnout_s);
       blk_count = switchCount;
-      blk_start = (char*) switchList;
+      blk_start = (char*) turnoutList;
     }
-    else if (strcmp (param[1], "switchstate") == 0) {
+    else if (strcmp (param[1], "turnoutstate") == 0) {
       blk_size = sizeof(struct turnoutState_s);
-      blk_count = switchStateCount;
-      blk_start = (char*) switchState;
+      blk_count = turnoutStateCount;
+      blk_start = (char*) turnoutState;
     }
     else if (strcmp (param[1], "route") == 0) {
       blk_size = sizeof(struct route_s);
@@ -598,8 +604,10 @@ void mt_set_cpuspeed(int nparam, char **param)
 void showPinConfig()  // Display pin out selection
 {
   char outBuffer[50];
+  #ifndef keynone
   uint8_t rows[] = { MEMBR_ROWS };
   uint8_t cols[] = { MEMBR_COLS };
+  #endif
 
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
     Serial.println ("Hardware configuration, check pin numbers are not duplicated");
@@ -621,6 +629,7 @@ void showPinConfig()  // Display pin out selection
     Serial.println (outBuffer);
     sprintf (outBuffer, "Direction Rev  = %d", DIRREVPIN);
     Serial.println (outBuffer);
+    #ifndef keynone
     sprintf (outBuffer, "Keyboard rows (%d) ", sizeof(rows));
     Serial.print (outBuffer);
     for (uint8_t n=0; n<sizeof(rows); n++) {
@@ -637,8 +646,13 @@ void showPinConfig()  // Display pin out selection
       Serial.print (outBuffer);
     }
     Serial.println ("");
+    #endif
     #ifdef TRACKPWR
     sprintf (outBuffer, "Trk Power indc = %d", TRACKPWR);
+    Serial.println (outBuffer);
+    #endif
+    #ifdef TRACKPWRINV
+    sprintf (outBuffer, "Trk Power indc = %d (Inverted)", TRACKPWRINV);
     Serial.println (outBuffer);
     #endif
     #ifdef TRAINSETLEN
@@ -665,60 +679,60 @@ void showPinConfig()  // Display pin out selection
 void help()  // show help data
 {
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-    Serial.println ("Running permanent settings without parameters prints current settings:");
-    // Serial.println ("");
-    Serial.println ("config");
-    Serial.println ("    Show current configuration settings");
-    Serial.println ("    info only");
-    Serial.println ("cpuspeed [240|160|80|0]");
-    Serial.println ("    Set CPU speed in MHz, try to use the lowest viable to save power consumption");
-    Serial.println ("    Use zero to use factory default speed");
-    Serial.println ("    permanent setting, restart required");
-    Serial.println ("detentcount [<n>]");
-    Serial.println ("    Set the number or rotary encoder clicks per up/down movement");
-    Serial.println ("    permanent setting");
-    Serial.println ("dump [loco|switch|switchstate|route|routestate]");
-    Serial.println ("    Dump memory structures of objects");
-    Serial.println ("    info only");
-    Serial.println ("help");
-    Serial.println ("    Print this help menu");
-    Serial.println ("    info only");
-    Serial.println ("locos|switches");
-    Serial.println ("    List known locomotives or switches");
-    Serial.println ("    info only");
-    Serial.println ("name [<name>]");
-    Serial.println ("    Set the name of the throttle");
-    Serial.println ("    permanent setting");
-    Serial.println ("nvs [<namespace>|*]");
-    Serial.println ("    Show contents of Non-Volatile-Storage (NVS) namespace(s)");
-    Serial.println ("    info only");
-    Serial.println ("pins");
-    Serial.println ("    Show processor pin assignment");
-    Serial.println ("    info only");
-    Serial.println ("restart");
-    Serial.println ("    Restart throttle");
-    Serial.println ("    temporary setting");
-    Serial.println ("server [<index> <IP-address|DNS-name> [<port-number>]]");
-    Serial.println ("    Set the server address and port");
-    Serial.println ("    permanent setting");
-    Serial.println ("[no]showkeepalive");
-    Serial.println ("    Show network packets received and transmitted");
-    Serial.println ("    temporary setting");
-    Serial.println ("[no]showkeypad");
-    Serial.println ("    Show keypad keystrokes to console");
-    Serial.println ("    temporary setting");
-    Serial.println ("[no]showpackets");
-    Serial.println ("    Show network packets received and transmitted");
-    Serial.println ("    temporary setting");
-    /* Serial.println ("switchref [name|number]");
-    Serial.println ("    Select either name or number as reference when changing switches (turnouts/points)");
-    Serial.println ("    permanent setting"); */
-    Serial.println ("[no]trainsetmode");
-    Serial.println ("    turn train set mode on/off as default setting");
-    Serial.println ("    permanent setting");
-    Serial.println ("wifi [<index> <ssid> [<password>]]");
-    Serial.println ("    Set WiFi SSID and password");
-    Serial.println ("    permanent setting");
+    Serial.println ((const char*) "Running permanent settings without parameters prints current settings:");
+    Serial.println ((const char*) "config");
+    Serial.println ((const char*) "    Show current configuration settings");
+    Serial.println ((const char*) "    info only");
+    Serial.println ((const char*) "cpuspeed [240|160|80|0]");
+    Serial.println ((const char*) "    Set CPU speed in MHz, try to use the lowest viable to save power consumption");
+    Serial.println ((const char*) "    Use zero to use factory default speed");
+    Serial.println ((const char*) "    permanent setting, restart required");
+    Serial.println ((const char*) "detentcount [<n>]");
+    Serial.println ((const char*) "    Set the number or rotary encoder clicks per up/down movement");
+    Serial.println ((const char*) "    permanent setting");
+    Serial.println ((const char*) "dump [loco|turnout|turnoutstate|route|routestate]");
+    Serial.println ((const char*) "    Dump memory structures of objects");
+    Serial.println ((const char*) "    info only");
+    Serial.println ((const char*) "help");
+    Serial.println ((const char*) "    Print this help menu");
+    Serial.println ((const char*) "    info only");
+    Serial.println ((const char*) "locos|turnouts");
+    Serial.println ((const char*) "    List known locomotives or turnouts");
+    Serial.println ((const char*) "    info only");
+    Serial.println ((const char*) "name [<name>]");
+    Serial.println ((const char*) "    Set the name of the throttle");
+    Serial.println ((const char*) "    permanent setting");
+    Serial.println ((const char*) "nvs [<namespace>|*]");
+    Serial.println ((const char*) "    Show contents of Non-Volatile-Storage (NVS) namespace(s)");
+    Serial.println ((const char*) "    info only");
+    Serial.println ((const char*) "pins");
+    Serial.println ((const char*) "    Show processor pin assignment");
+    Serial.println ((const char*) "    info only");
+    Serial.println ((const char*) "restart");
+    Serial.println ((const char*) "    Restart throttle");
+    Serial.println ((const char*) "    temporary setting");
+    Serial.println ((const char*) "server [<index> <IP-address|DNS-name> [<port-number>]]");
+    Serial.println ((const char*) "    Set the server address and port");
+    Serial.println ((const char*) "    permanent setting");
+    Serial.println ((const char*) "[no]showkeepalive");
+    Serial.println ((const char*) "    Show network packets received and transmitted");
+    Serial.println ((const char*) "    temporary setting");
+    Serial.println ((const char*) "[no]showkeypad");
+    Serial.println ((const char*) "    Show keypad keystrokes to console");
+    Serial.println ((const char*) "    temporary setting");
+    Serial.println ((const char*) "[no]showpackets");
+    Serial.println ((const char*) "    Show network packets received and transmitted");
+    Serial.println ((const char*) "    temporary setting");
+    Serial.println ((const char*) "[no]trainsetmode");
+    Serial.println ((const char*) "    turn train set mode on/off as default setting");
+    Serial.println ((const char*) "    permanent setting");
+    Serial.println ((const char*) "wifi [<index> <ssid> [<password>]]");
+    Serial.println ((const char*) "    Set WiFi SSID and password");
+    Serial.println ((const char*) "    permanent setting");
+    Serial.println ((const char*) "wifiscan [enable|disable]");
+    Serial.println ((const char*) "    set wifi to scan for non-hidden ssids and use strongest signal");
+    Serial.println ((const char*) "    NB: the network used must be predefined by \"wifi\", or it will be ignored");
+    Serial.println ((const char*) "    permanent setting");
     xSemaphoreGive(displaySem);
   }
 }

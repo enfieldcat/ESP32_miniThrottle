@@ -20,18 +20,18 @@ static SemaphoreHandle_t transmitSem = xSemaphoreCreateMutex();
 static SemaphoreHandle_t displaySem  = xSemaphoreCreateMutex();
 static QueueHandle_t keyboardQueue   = xQueueCreate (10, sizeof(char));   // Queue for keyboard type of events
 static QueueHandle_t keyReleaseQueue = xQueueCreate (10, sizeof(char));   // Queue for keyboard release type of events
-static struct locomotive_s   *locoRoster  = (struct locomotive_s*) malloc (sizeof(struct locomotive_s) * MAXCONSISTSIZE);
-static struct turnoutState_s *switchState = NULL;
-static struct turnout_s      *switchList  = NULL;
-static struct routeState_s   *routeState  = NULL;
-static struct route_s        *routeList   = NULL;
+static struct locomotive_s   *locoRoster   = (struct locomotive_s*) malloc (sizeof(struct locomotive_s) * MAXCONSISTSIZE);
+static struct turnoutState_s *turnoutState = NULL;
+static struct turnout_s      *turnoutList  = NULL;
+static struct routeState_s   *routeState   = NULL;
+static struct route_s        *routeList    = NULL;
 static int screenWidth      = 0;
 static int screenHeight     = 0;
 static int keepAliveTime    = 10;
 static uint16_t initialLoco = 3;
 static uint8_t locomotiveCount      = 0;
 static uint8_t switchCount          = 0;
-static uint8_t switchStateCount     = 0;
+static uint8_t turnoutStateCount     = 0;
 static uint8_t routeCount           = 0;
 static uint8_t routeStateCount      = 0;
 static uint8_t lastMainMenuOption   = 0;
@@ -43,8 +43,8 @@ static uint8_t linesPerScreen;
 static uint8_t debounceTime = DEBOUNCEMS;
 static uint8_t cmdProtocol = UNDEFINED;
 static uint8_t nextThrottle = 'A';
-static char ssid[33];
-static char tname[33];
+static char ssid[SSIDLENGTH];
+static char tname[SSIDLENGTH];
 static char remServerType[10] = { "" };  // eg: JMRI
 static char remServerDesc[32] = { "" };  // eg: JMRI My whizzbang server v 1.0.4
 static char remServerNode[32] = { "" };  // eg: 192.168.6.1
@@ -96,6 +96,9 @@ void setup()  {
   #ifdef TRACKPWR
   pinMode(TRACKPWR, OUTPUT); digitalWrite(TRACKPWR, LOW);
   #endif
+  #ifdef TRACKPWRINV
+  pinMode(TRACKPWRINV, OUTPUT); digitalWrite(TRACKPWRINV, HIGH);
+  #endif
   #ifdef F1LED
   pinMode(F1LED, OUTPUT); digitalWrite(F1LED, LOW);
   #endif
@@ -132,7 +135,9 @@ void setup()  {
   #ifdef DELAYONSTART
   Serial.println ("Network services started, starting user interface");
   #endif
+  #ifndef keynone
   xTaskCreate(keypadMonitor, "keypadMonitor", 2048, NULL, 4, NULL);
+  #endif
   xTaskCreate(switchMonitor, "switchMonitor", 2048, NULL, 4, NULL);
 }
 
@@ -149,7 +154,7 @@ void loop()
   uint8_t answer;
   char commandKey;
   char commandStr[2];
-  char *baseMenu[] = { "Locomotives", "Switches", "Routes", "Track Power", "Info", "Restart" };
+  char *baseMenu[] = { "Locomotives", "Turnouts", "Routes", "Track Power", "Info", "Restart" };
   
   display.begin();
   #ifdef SCREENINVERT
@@ -281,26 +286,26 @@ void mkLocoMenu()
 void mkSwitchMenu()
 {
   char *switchMenu[switchCount + 1];
-  char *stateMenu[switchStateCount];
+  char *stateMenu[turnoutStateCount];
   uint8_t result = 255;
   uint8_t reqState = 255;
   uint8_t option = 0;
 
-  if (switchCount == 0 || switchStateCount == 0) {
+  if (switchCount == 0 || turnoutStateCount == 0) {
     displayTempMessage ("Warning:", "No switches or switch states defined", true);
     return;
   }
-  for (uint8_t n=0; n<switchCount; n++) switchMenu[n] = switchList[n].userName;
+  for (uint8_t n=0; n<switchCount; n++) switchMenu[n] = turnoutList[n].userName;
   switchMenu[switchCount] = (char*) prevMenuOption;
-  for (uint8_t n=0; n<switchStateCount; n++) stateMenu[n] = switchState[n].name;
+  for (uint8_t n=0; n<turnoutStateCount; n++) stateMenu[n] = turnoutState[n].name;
   while (result!=0) {
     result = displayMenu (switchMenu, switchCount+1, lastSwitchMenuOption);
     if (result == (switchCount+1)) result = 0;  // give option to go to previous menu
     if (result > 0) {
       lastSwitchMenuOption = result - 1;
-      if (switchList[result-1].state == switchState[0].state) option = 0;
+      if (turnoutList[result-1].state == turnoutState[0].state) option = 0;
       else option = 1;
-      reqState = displayMenu (stateMenu, switchStateCount, option);
+      reqState = displayMenu (stateMenu, turnoutStateCount, option);
       if (reqState != 0) {
         setTurnout (result-1, reqState-1);
       }

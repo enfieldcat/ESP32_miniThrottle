@@ -15,11 +15,12 @@ void connectionManager(void *pvParameters)
 {
   uint8_t index = 0;
   uint8_t preferRef = 0;
-  char paramName[16];
-  char password[33];
-  
+  char paramName[SSIDLENGTH];
+  char password[SSIDLENGTH];
+
+  uint8_t use_multiwifi = nvs_get_int ("use_multiwifi", 0);
   // load array of possible networks
-  {
+  if (use_multiwifi == 1) {
     for (index = 0; index < WIFINETS; index++) {
       sprintf (paramName, "wifissid_%d", index);
       // use a different default for ssid for wifi 0 to other wifi
@@ -43,22 +44,35 @@ void connectionManager(void *pvParameters)
       #ifdef TRACKPWR
       digitalWrite(TRACKPWR, LOW);
       #endif
-      if (wifiMulti.run() == WL_CONNECTED) {
-        // Place name of actually selected SSID in ssid variable
-        WiFi.SSID().toCharArray(ssid, sizeof(ssid));
-        MDNS.begin(tname);
-        Serial.println ("");
-        Serial.print   ("WiFi Connected: ");
-        Serial.println (ssid);
-        // Find the index number of the actually used SSID, use that as prefered ref to server index
-        for (preferRef=255, index = 0; index < WIFINETS && preferRef == 255; index++) {
-          sprintf (paramName, "wifissid_%d", index); // NB do not replace live SSID while doing the comparison, use local password variable instead
-          if (index == 0) nvs_get_string (paramName, password, MYSSID, sizeof(password));  // ssid has a different default to all others
-          else nvs_get_string (paramName, password, "none", sizeof(ssid));
-          if (strcmp (ssid, password) == 0) preferRef = index;
+      #ifdef TRACKPWRINV
+      digitalWrite(TRACKPWRINV, HIGH);
+      #endif
+      if (use_multiwifi == 1) {
+        Serial.println ("Will search for strongest WiFi signal");
+        if (wifiMulti.run() == WL_CONNECTED) {
+          // Place name of actually selected SSID in ssid variable
+          WiFi.SSID().toCharArray(ssid, sizeof(ssid));
+          MDNS.begin(tname);
+          Serial.println ("");
+          Serial.print   ("WiFi Connected: ");
+          Serial.println (ssid);
+          // Find the index number of the actually used SSID, use that as prefered ref to server index
+          for (preferRef=255, index = 0; index < WIFINETS && preferRef == 255; index++) {
+            sprintf (paramName, "wifissid_%d", index); // NB do not replace live SSID while doing the comparison, use local password variable instead
+            if (index == 0) nvs_get_string (paramName, password, MYSSID, sizeof(password));  // ssid has a different default to all others
+            else nvs_get_string (paramName, password, "none", sizeof(ssid));
+            if (strcmp (ssid, password) == 0) preferRef = index;
+          }
+        }
+        else {
+          net_single_connect();
         }
       }
-      else delay (1000);
+      else {
+        Serial.println ("Polling for first available WiFi connection");
+        net_single_connect();
+      }
+      delay (1000);
     }
     // if Wifi connected but server not connected
     if (WiFi.status() == WL_CONNECTED && !client.connected()) {
@@ -68,6 +82,9 @@ void connectionManager(void *pvParameters)
       trackPower = false;
       #ifdef TRACKPWR
       digitalWrite(TRACKPWR, LOW);
+      #endif
+      #ifdef TRACKPWRINV
+      digitalWrite(TRACKPWRINV, HIGH);
       #endif
       // first check our preferred connection index, ie the one with the same index ID as the connected network
       if (preferRef < WIFINETS) {  // should not be "not found", but just in case of a bug...
@@ -92,7 +109,62 @@ void connectionManager(void *pvParameters)
 }
 
 
-void connect2server (char *server, int port) {
+bool net_single_connect()
+{
+  bool net_connected = false;
+  char msgBuffer[40];
+  char wifi_passwd[WIFINETS][SSIDLENGTH];
+  char wifi_ssid[WIFINETS][SSIDLENGTH];
+
+  if (WiFi.status() == WL_CONNECTED) return (true);
+  for (uint8_t n = 0; n < WIFINETS; n++) {
+    sprintf (msgBuffer, "wifissid_%d", index);
+    // use a different default for ssid for wifi 0 to other wifi
+    if (n == 0) nvs_get_string (msgBuffer, wifi_ssid[n], MYSSID, sizeof(wifi_ssid[0]));
+    else nvs_get_string (msgBuffer, wifi_ssid[n], "none", sizeof(wifi_ssid[0]));
+    if (strcmp (wifi_ssid[n], "none") != 0) {
+      sprintf (msgBuffer, "wifipass_%d", index);
+      nvs_get_string (msgBuffer, wifi_passwd[n], "none", sizeof(wifi_passwd[0]));
+    }
+  }
+  for (int loops = 3; loops>0 && !net_connected; loops--) {
+    for (uint8_t n=0; n<WIFINETS && !net_connected; n++) {
+      if (strcmp (wifi_ssid[n], "none") != 0) {
+        if (strcmp (wifi_passwd[n], "none") == 0) WiFi.begin(wifi_ssid[n], NULL);
+        else WiFi.begin(wifi_ssid[n], wifi_passwd[n]);
+        WiFi.setHostname(tname);
+        delay (1000);
+        for (uint8_t z=0; z<14 && WiFi.status() != WL_CONNECTED; z++) delay (1000);
+        if (WiFi.status() == WL_CONNECTED) net_connected = true;
+        if (net_connected) {
+          // wifi_initiated = true;
+          MDNS.begin(tname);
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            Serial.print   ("\nWiFi connected: ");
+            Serial.println (wifi_ssid[n]);
+            xSemaphoreGive(displaySem);
+          }
+          strcpy (ssid, wifi_ssid[n]);
+        }
+        else {
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            Serial.print   ("\nNot connecting to WiFi network: ");
+            Serial.print   (wifi_ssid[n]);
+            Serial.println (" - Reattempt pending.");
+            xSemaphoreGive(displaySem);
+          }
+        }
+      }
+    }
+  }
+  if (WiFi.status() == WL_CONNECTED) net_connected = true;
+  else net_connected = false;
+  return (net_connected);
+}
+
+
+void connect2server (char *server, int port)
+{
   if (strcmp (server, "none") == 0) return;
   if (client.connect(server, port)) {
     if (strlen(server) < sizeof(remServerNode)-1) strcpy (remServerNode, server);

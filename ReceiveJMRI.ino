@@ -13,11 +13,17 @@ void processJmriPacket (char *packet)
       #ifdef TRACKPWR
       digitalWrite(TRACKPWR, HIGH);
       #endif
+      #ifdef TRACKPWRINV
+      digitalWrite(TRACKPWRINV, LOW);
+      #endif
     }
     else {
       trackPower = false;
       #ifdef TRACKPWR
       digitalWrite(TRACKPWR, LOW);  // Off or unknown
+      #endif
+      #ifdef TRACKPWRINV
+      digitalWrite(TRACKPWRINV, HIGH);  // Off or unknown
       #endif
     }
   }
@@ -30,18 +36,18 @@ void processJmriPacket (char *packet)
     if (state == '2' || state == '4') {
       // first attempt to find by name
       for (ptr=0; ptr<switchCount && !found; ptr++) {
-        if (strcmp (switchList[ptr].sysName, &packet[4]) == 0) found = true;
+        if (strcmp (turnoutList[ptr].sysName, &packet[4]) == 0) found = true;
       }
       if (!found) {
         //char *tptr;
         //int devNumber = strtol (&packet[4], &tptr, 10);
         for (ptr=0; ptr<switchCount && !found; ptr++) {
-          if (strcmp (switchList[ptr].userName, &packet[4])) found = true;
+          if (strcmp (turnoutList[ptr].userName, &packet[4])) found = true;
         }
       }
       if (found) {
         if (ptr > 0) ptr--; // the for loop should have incremented ptr past the found spot.
-        switchList[ptr].state = state - '0';
+        turnoutList[ptr].state = state - '0';
       }
     }
   }
@@ -269,8 +275,8 @@ void processJmriPacket (char *packet)
     //
     else if (strcmp (packet, "PTT") == 0) {
       memBlock = malloc (sizeof(struct turnoutState_s) * (tokenTally - 1));
-      struct turnoutState_s *switchStateData = (struct turnoutState_s*) memBlock;
-      switchStateCount = 0;
+      struct turnoutState_s *turnoutStateData = (struct turnoutState_s*) memBlock;
+      turnoutStateCount = 0;
       for (tokenPtr=1; tokenPtr<tokenTally; tokenPtr++) {
         workingToken = majToken[tokenPtr];
         tgtLength = strlen(workingToken);
@@ -282,12 +288,12 @@ void processJmriPacket (char *packet)
           }
         }
         if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0';   // Allow up to 16 chars in a name
-        strcpy (switchStateData[tokenPtr-1].name, workingToken);
-        switchStateData[tokenPtr-1].state = subToken[0][0] - '0'; // Assume single digit, and nor white space
+        strcpy (turnoutStateData[tokenPtr-1].name, workingToken);
+        turnoutStateData[tokenPtr-1].state = subToken[0][0] - '0'; // Assume single digit, and nor white space
       }
-      if (switchState != NULL) free(switchState);
-      switchState      = switchStateData;
-      switchStateCount = tokenTally - 1;
+      if (turnoutState != NULL) free(turnoutState);
+      turnoutState      = turnoutStateData;
+      turnoutStateCount = tokenTally - 1;
     }
     //
     // turnout list
@@ -313,8 +319,8 @@ void processJmriPacket (char *packet)
         strcpy (switchData[tokenPtr].userName, subToken[0]);
         switchData[tokenPtr].state = subToken[1][0] - '0'; // Assume single digit, and nor white space
       }
-      if (switchList != NULL) free(switchList);
-      switchList  = switchData;
+      if (turnoutList != NULL) free(turnoutList);
+      turnoutList  = switchData;
       switchCount = tokenTally;
     }
     //

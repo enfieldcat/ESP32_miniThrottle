@@ -33,7 +33,8 @@
 // Define application things
 #define MAXFUNCTIONS   30   // only expect 28 supported, but simplifies coding of F2 button
 #define MAXCONSISTSIZE  4   // max number of locomotives to drive in one session
-#define NAMELENGTH     16   // Length of names for locos, switches, routes etc
+#define NAMELENGTH     16   // Length of names for locos, turnoutss, routes etc
+#define SSIDLENGTH     33   // Length to permit SSIDs and passwords
 
 // Select one CPU board type, adjust pin mappings as most convienent
 //#define WEMOS 1
@@ -65,8 +66,14 @@
 /*
  * **********  KEYPAD CONFIG  *******************************************************************
  */
-// Define keypad things
+// Define keypad things, Define one type of keypad
+//#define keynone
+//#define key1x5
 #define key3x4
+//#define key4x4
+//#define key4x5
+//
+//
 #ifdef key4x5
 #define COLCOUNT        4
 #define ROWCOUNT        5
@@ -133,9 +140,10 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 
 // Define Pin Assignments
 // Manually check before compiling that pins are not duplicated
-#define SDA_PIN        22   // i2c SDA pin, normally 21, built-in uses 5
-#define SCK_PIN        23   // i2c SCK pin, normally 22, built-in uses 4
-#define TRACKPWR       02   // track power indicator, 2 = devkit on-board, 5 = lolin on-board
+#define SDA_PIN        22   // i2c SDA pin, normally 21, built-in display uses 5
+#define SCK_PIN        23   // i2c SCK pin, normally 22, built-in display uses 4
+#define TRACKPWR       02   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
+//#define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
 #define ENCODE_UP      36   // encoder up bounce
 #define ENCODE_DN      39   // encoder down bounce
 #define ENCODE_SW      34   // encoder switch
@@ -152,6 +160,10 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 #ifdef key3x4
 #define MEMBR_COLS     17,16,04
 #define MEMBR_ROWS     05,18,19,21
+#endif
+#ifdef key1x5
+#define MEMBR_COLS     15,26,23,17,05
+#define MEMBR_ROWS     17
 #endif
 // To configure a speedometer, use one of the 2 DAC pins to drive a 3v voltmeter
 #define SPEEDOPIN      25

@@ -23,6 +23,9 @@ void receiveNetData(void *pvParameters)
   #ifdef TRACKPWR
   digitalWrite(TRACKPWR, LOW);
   #endif
+  #ifdef TRACKPWRINV
+  digitalWrite(TRACKPWRINV, HIGH);
+  #endif
   cmdProtocol = UNDEFINED;
   initialDataSent = false;
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {

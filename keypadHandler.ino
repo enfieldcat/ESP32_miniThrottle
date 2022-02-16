@@ -1,3 +1,4 @@
+#ifndef keynone
 void keypadMonitor(void *pvParameters)
 // This is the keypad monitor task.
 // Read a keypad char, and place it in a keyboard queue
@@ -57,3 +58,4 @@ void keypadMonitor(void *pvParameters)
   }
   vTaskDelete( NULL );
 }
+#endif

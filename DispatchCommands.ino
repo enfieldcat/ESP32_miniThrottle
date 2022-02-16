@@ -42,7 +42,7 @@ void setTurnout (uint8_t turnoutNr, char desiredState)
   //char string[6];
   uint8_t reqState;
  
-  reqState = switchState[desiredState].state;
+  reqState = turnoutState[desiredState].state;
   if (cmdProtocol == JMRI) {
     strcpy (outPacket, "PTA");
     if (reqState == 2) outPacket[3] = 'C';
@@ -50,11 +50,11 @@ void setTurnout (uint8_t turnoutNr, char desiredState)
     else outPacket[3] = '2';
     outPacket[4] = '\0';
     //if (nvs_get_int ("switchRef", 0) == 1) { //Reference by Name
-    //  strcat (outPacket, switchList[turnoutNr].userName);
+    //  strcat (outPacket, turnoutList[turnoutNr].userName);
     //}
     //else {                                   // Reference by numeric ID
-      //sprintf (string, "%d", switchList[turnoutNr].id);
-      strcat (outPacket, switchList[turnoutNr].sysName);
+      //sprintf (string, "%d", turnoutList[turnoutNr].id);
+      strcat (outPacket, turnoutList[turnoutNr].sysName);
     //}
     txPacket (outPacket);
   }

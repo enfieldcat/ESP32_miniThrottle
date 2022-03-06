@@ -29,9 +29,11 @@ void setTrackPower (uint8_t desiredState)
   switch (desiredState) {
     case 1:
       if (cmdProtocol == JMRI) txPacket ("PPA1");
+      else if (cmdProtocol == DCCPLUS) txPacket ("<1>");
       break;
     case 2:
       if (cmdProtocol == JMRI) txPacket ("PPA0");
+      else if (cmdProtocol == DCCPLUS) txPacket ("<0>");
       break;
   }
 }
@@ -74,9 +76,14 @@ void setLocoFunction (uint8_t locoIndex, uint8_t funcIndex, bool set)
   char commandPacket[40];
   if (cmdProtocol == JMRI) {
     char setVal = '0';
-
     if (set) setVal = '1';
     sprintf (commandPacket, "M%cA%c%d<;>F%c%d", locoRoster[locoIndex].throttleNr, locoRoster[locoIndex].type, locoRoster[locoIndex].id, setVal, funcIndex);
+    txPacket (commandPacket);
+  }
+  else if (cmdProtocol == DCCPLUS) {
+    char setVal = '0';
+    if (set) setVal = '1';
+    sprintf (commandPacket, "<F %d %d %d>", locoRoster[locoIndex].id, funcIndex, setVal);
     txPacket (commandPacket);
   }
 }
@@ -103,13 +110,19 @@ void setStealLoco(uint8_t locoIndex)
 }
 
 
-void setLocoSpeed (uint8_t locoIndex, uint8_t speed)
+void setLocoSpeed (uint8_t locoIndex, uint8_t speed, uint8_t direction)
 {
   char commandPacket[40];
   if (cmdProtocol == JMRI) {
     sprintf (commandPacket, "M%cA%c%d<;>V%d", locoRoster[locoIndex].throttleNr, locoRoster[locoIndex].type, locoRoster[locoIndex].id, speed);
     txPacket (commandPacket);
-  }  
+  }
+  else if (cmdProtocol == DCCPLUS) {
+    uint8_t tdir = 0;
+    if (direction == FORWARD) tdir = 1;
+    sprintf (commandPacket, "<t 1 %d %d %d>", locoRoster[locoIndex].id, speed, tdir);
+    txPacket (commandPacket);
+  }
 }
 
 

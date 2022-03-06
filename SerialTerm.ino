@@ -72,6 +72,7 @@ void process (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "nvs") == 0)           mt_dump_nvs         (nparam, param);
   else if (nparam==1 && strcmp (param[0], "pins")  == 0)         showPinConfig       ();
   else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
+  else if (nparam<=2 && strcmp (param[0], "speedstep") == 0)     mt_set_speedStep    (nparam, param);
   else if (nparam==1 && strcmp (param[0], "restart") == 0)       mt_sys_restart      ("command line request");
   else if (nparam<=4 && strcmp (param[0], "wifi") == 0)          mt_set_wifi         (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "wifiscan") == 0)      mt_set_wifiscan     (nparam, param);
@@ -269,6 +270,39 @@ void mt_set_name (int nparam, char **param)   // Set name of throttle
     if (strlen (param[1]) > (sizeof(tname)-1)) param[1][sizeof(tname)-1] = '\0';
     strcpy (tname, param[1]);
     nvs_put_string ("tname", tname);
+  }
+}
+
+
+void mt_set_speedStep(int nparam, char **param)
+{
+  uint8_t speedStep = 4;
+
+  if (nparam==1) {
+    speedStep = nvs_get_int ("speedStep", 4);
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.print ("Speed adjust per click: ");
+      Serial.println (speedStep);
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else if (util_str_isa_int(param[1])) {
+    speedStep = util_str2int(param[1]);
+    if (speedStep > 0 && speedStep < 10) {
+      nvs_put_int ("speedStep", speedStep);
+    }
+    else {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.print ("Speed adjust per click must be  between 1 and 9");
+        xSemaphoreGive(displaySem);
+      }
+    }
+  }
+  else {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.print ("Speed adjust per click must be numeric");
+      xSemaphoreGive(displaySem);
+    }    
   }
 }
 
@@ -713,6 +747,9 @@ void help()  // show help data
     Serial.println ((const char*) "    temporary setting");
     Serial.println ((const char*) "server [<index> <IP-address|DNS-name> [<port-number>]]");
     Serial.println ((const char*) "    Set the server address and port");
+    Serial.println ((const char*) "    permanent setting");
+    Serial.println ((const char*) "speedstep [<1-9>]");
+    Serial.println ((const char*) "    Set the speed change set be each thottle click");
     Serial.println ((const char*) "    permanent setting");
     Serial.println ((const char*) "[no]showkeepalive");
     Serial.println ((const char*) "    Show network packets received and transmitted");

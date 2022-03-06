@@ -187,11 +187,13 @@ void connect2server (char *server, int port)
       delay (1000);   // wait to get some data back, then check we not on unknown protocol
     }
     if (cmdProtocol == UNDEFINED) {  // probe with JMRI if nothing received
+      cmdProtocol = nvs_get_int ("defaultProto", JMRI);
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        Serial.println ("Timeout on protocol identification: defaulting to JMRI protocol");
+        Serial.print   ("Timeout on protocol identification: defaulting to ");
+        Serial.print   (protoList[cmdProtocol]);
+        Serial.println (" protocol");
         xSemaphoreGive(displaySem);
       }
-      cmdProtocol = JMRI;
       setInitialData();
     }
   }

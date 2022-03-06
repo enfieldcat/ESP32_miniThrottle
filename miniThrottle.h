@@ -54,13 +54,9 @@
 #ifdef SSD1306
 // #define SCREENINVERT
 #define DISPLAYADDR  0x3c   // i2c display addr
-#define FONTWIDTH       8   // per char font width
-#define FONTHEIGHT     16   // per char font height
 #endif
 #ifdef SSD1327
 #define DISPLAYADDR  0x3c   // i2c display addr
-#define FONTWIDTH       8   // per char font width
-#define FONTHEIGHT     16   // per char font height
 #endif
 
 /*
@@ -179,7 +175,7 @@ char keymap[ROWCOUNT][COLCOUNT] = {
  */
 // enumerations
 enum directionInd { FORWARD = 0, STOP = 1, REVERSE = 2 };
-enum ctrlProtocol { UNDEFINED = 0, JMRI = 1, SRCP = 2, DCCPLUS = 3 };
+enum ctrlProtocol { UNDEFINED = 0, JMRI = 1, DCCPLUS = 2 };
 
 /*
  * ***********  STRUCTURES  ***********************************************************************

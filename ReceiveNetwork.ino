@@ -9,8 +9,9 @@ void receiveNetData(void *pvParameters)
   while (WiFi.status() == WL_CONNECTED) {
     while (client.available()) {
       inChar = client.read();
-      if (inChar == '\r' || inChar == '\n' || bufferPtr == (NETWBUFFSIZE-1)) {
+      if (inChar == '\r' || inChar == '\n' || (cmdProtocol==DCCPLUS && inChar=='>') || bufferPtr == (NETWBUFFSIZE-1)) {
         if (bufferPtr > 0) {
+          if (cmdProtocol==DCCPLUS && inChar=='>') inBuffer[bufferPtr++] = '>';
           inBuffer[bufferPtr] = '\0';
           processPacket (inBuffer);
           bufferPtr = 0;
@@ -61,12 +62,19 @@ void processPacket (char *packet)
     setInitialData();
   }
   else {
-    if (cmdProtocol == JMRI) processJmriPacket (packet);
-    else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        Serial.println ("Warning: Received packet for unknown protocol.");
-        xSemaphoreGive(displaySem);
-      }
+    switch (cmdProtocol) {
+      case JMRI:
+        processJmriPacket (packet);
+        break;
+      case DCCPLUS:
+        processDccPacket (packet);
+        break;
+      default:
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          Serial.println ("Warning: Received packet for unknown protocol.");
+          xSemaphoreGive(displaySem);
+        }
+        break;
     }
   }
 }

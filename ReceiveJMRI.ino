@@ -8,26 +8,9 @@ void processJmriPacket (char *packet)
 {
   if (strncmp (packet, "PPA", 3) == 0) { // Track power
     // Power status
-    if (packet[3] == '1') {
-      trackPower = true;
-      #ifdef TRACKPWR
-      digitalWrite(TRACKPWR, HIGH);
-      #endif
-      #ifdef TRACKPWRINV
-      digitalWrite(TRACKPWRINV, LOW);
-      #endif
-    }
-    else {
-      trackPower = false;
-      #ifdef TRACKPWR
-      digitalWrite(TRACKPWR, LOW);  // Off or unknown
-      #endif
-      #ifdef TRACKPWRINV
-      digitalWrite(TRACKPWRINV, HIGH);  // Off or unknown
-      #endif
-    }
+    dccPowerChange(packet[3]);
   }
-  else if (strncmp (packet, "PTA", 3) == 0) { // Change of switch
+  else if (strncmp (packet, "PTA", 3) == 0) { // Change of turnout
     uint8_t state = packet[3];
     uint8_t ptr = 0;
     bool found = false;

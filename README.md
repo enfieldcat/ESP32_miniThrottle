@@ -23,7 +23,10 @@ In trainset mode, the mid point of the potentiometer slider is stop, down is rev
 
 Future Works:
 -------------
-* testing and debugging
+* testing and debugging, including testing on more display types
 * Add documentation to https://conferre.cf
+* Add configuration options to device menu.
 * Support for protocols other than JMRI: SRCP, DCC++ (?)
 * Support for consisting
+
+

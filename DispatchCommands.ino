@@ -81,8 +81,8 @@ void setLocoFunction (uint8_t locoIndex, uint8_t funcIndex, bool set)
     txPacket (commandPacket);
   }
   else if (cmdProtocol == DCCPLUS) {
-    char setVal = '0';
-    if (set) setVal = '1';
+    char setVal = 0;
+    if (set) setVal = 1;
     sprintf (commandPacket, "<F %d %d %d>", locoRoster[locoIndex].id, funcIndex, setVal);
     txPacket (commandPacket);
   }

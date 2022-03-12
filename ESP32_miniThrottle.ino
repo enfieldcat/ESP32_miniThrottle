@@ -94,6 +94,16 @@ void setup()  {
   // load initial settings from Non Volatile Storage (NVS)
   nvs_init();
   nvs_get_string ("tname", tname, NAME, sizeof(tname));
+  // Print a diagnostic to the console, Prior to starting tasks no semaphore required
+  Serial.print   (PRODUCTNAME);
+  Serial.print   (" ");
+  Serial.println (VERSION);
+  Serial.print   ("Compile time: ");
+  Serial.print   (__DATE__);
+  Serial.print   (" ");
+  Serial.println (__TIME__);
+  Serial.print   ("Throttle Name: ");
+  Serial.println (tname);
   debounceTime = nvs_get_int ("debounceTime", DEBOUNCEMS);
   if (nvs_get_int ("trainSetMode", 0) == 1) trainSetMode = true;;
   #ifdef SHOWPACKETSONSTART
@@ -126,19 +136,6 @@ void setup()  {
   if (trainSetMode) digitalWrite(TRAINSETLED, HIGH);
   else digitalWrite(TRAINSETLED, LOW);
   #endif
-  // Print a diagnostic to the console, Prior to starting tasks no semaphore required
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-    Serial.print   (PRODUCTNAME);
-    Serial.print   (" ");
-    Serial.println (VERSION);
-    Serial.print   ("Compile time: ");
-    Serial.print   (__DATE__);
-    Serial.print   (" ");
-    Serial.println (__TIME__);
-    Serial.print   ("Throttle Name: ");
-    Serial.println (tname);
-    xSemaphoreGive(displaySem);
-  }
   // Use tasks to process various input and output streams
   xTaskCreate(serialConsole, "serialConsole", 8192, NULL, 4, NULL);
   #ifdef DELAYONSTART
@@ -170,7 +167,9 @@ void loop()
   uint8_t answer;
   char commandKey;
   char commandStr[2];
-  char *baseMenu[] = { "Locomotives", "Turnouts", "Routes", "Track Power", "Configuration", "Info", "Restart" };
+  const char *baseMenu[]  = { "Locomotives", "Turnouts", "Routes", "Track Power", "Configuration" };
+  const char txtWarning[] = { "Warning" };
+  const char txtNoPower[] = { "Track power off. Turn power on to enable function." };
   
   display.begin();
   #ifdef SCREENINVERT
@@ -207,6 +206,7 @@ void loop()
         display.printFixed((6 * selFontWidth), 0, tname, STYLE_BOLD);
         display.printFixed(0, (selFontWidth+selFontHeight), "WiFi: ", STYLE_NORMAL);
         if (WiFi.status() == WL_CONNECTED) {
+          delay (1200);
           display.printFixed((6 * selFontWidth),(selFontWidth+selFontHeight), ssid, STYLE_BOLD);
           display.printFixed(0, 2*(selFontWidth+selFontHeight), "Svr:  ", STYLE_NORMAL);
           display.printFixed((6 * selFontWidth),2*(selFontWidth+selFontHeight), "Connecting", STYLE_BOLD);
@@ -216,7 +216,7 @@ void loop()
     }
     else {
       if (connectState < 3) {
-        displayTempMessage ("Connected", "Id. Protocol", false);
+        displayTempMessage ("Connected", "Waiting for response.", false);
         connectState = 3;
         menuId = 0;
         for (uint8_t n=0; n<INITWAIT && cmdProtocol==UNDEFINED; n++) {
@@ -225,34 +225,26 @@ void loop()
         while (xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {} // clear keyboard buffer
       }
       while (client.connected()) {
-        answer = displayMenu (baseMenu, 7, lastMainMenuOption);
+        answer = displayMenu ((char**)baseMenu, 5, lastMainMenuOption);
         if (answer > 0) lastMainMenuOption = answer - 1;
         switch (answer) {
           case 1:
             if (trackPower) mkLocoMenu ();
-            else displayTempMessage ("Warning:", "Track power off", true);
+            else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
             break;
           case 2:
             if (trackPower) mkSwitchMenu ();
-            else displayTempMessage ("Warning:", "Track power off", true);
+            else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
             break;
           case 3:
-            mkRouteMenu();
+            if (trackPower) mkRouteMenu();
+            else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
             break;
           case 4:
             mkPowerMenu();
             break;
           case 5:
             mkConfigMenu();
-            break;
-          case 6:
-            displayInfo();
-            xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(30000)); // 30 second timeout
-            break;
-          case 7: 
-            setDisconnected();
-            displayTempMessage ("Rebooting", "Press any key to reboot or wait 30 seconds", true);
-            ESP.restart();
             break;
         }
       }

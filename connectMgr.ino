@@ -49,30 +49,29 @@ void connectionManager(void *pvParameters)
       #endif
       if (use_multiwifi == 1) {
         Serial.println ("Will search for strongest WiFi signal");
-        if (wifiMulti.run() == WL_CONNECTED) {
-          // Place name of actually selected SSID in ssid variable
-          WiFi.SSID().toCharArray(ssid, sizeof(ssid));
-          MDNS.begin(tname);
-          Serial.println ("");
-          Serial.print   ("WiFi Connected: ");
-          Serial.println (ssid);
-          // Find the index number of the actually used SSID, use that as prefered ref to server index
-          for (preferRef=255, index = 0; index < WIFINETS && preferRef == 255; index++) {
-            sprintf (paramName, "wifissid_%d", index); // NB do not replace live SSID while doing the comparison, use local password variable instead
-            if (index == 0) nvs_get_string (paramName, password, MYSSID, sizeof(password));  // ssid has a different default to all others
-            else nvs_get_string (paramName, password, "none", sizeof(ssid));
-            if (strcmp (ssid, password) == 0) preferRef = index;
-          }
-        }
-        else {
-          net_single_connect();
-        }
+        wifiMulti.run();
       }
       else {
         Serial.println ("Polling for first available WiFi connection");
         net_single_connect();
       }
-      delay (1000);
+      if (WiFi.status() != WL_CONNECTED) {
+        delay (10000);
+      }
+      else {
+        // Place name of actually selected SSID in ssid variable
+        WiFi.SSID().toCharArray(ssid, sizeof(ssid));
+        MDNS.begin(tname);
+        Serial.print   ("WiFi Connected: ");
+        Serial.println (ssid);        
+        // Find the index number of the actually used SSID, use that as prefered ref to server index
+        for (preferRef=255, index = 0; index < WIFINETS && preferRef == 255; index++) {
+          sprintf (paramName, "wifissid_%d", index); // NB do not replace live SSID while doing the comparison, use local password variable instead
+          if (index == 0) nvs_get_string (paramName, password, MYSSID, sizeof(password));  // ssid has a different default to all others
+          else nvs_get_string (paramName, password, "none", sizeof(ssid));
+          if (strcmp (ssid, password) == 0) preferRef = index;
+        }
+      }
     }
     // if Wifi connected but server not connected
     if (WiFi.status() == WL_CONNECTED && !client.connected()) {
@@ -115,43 +114,41 @@ bool net_single_connect()
   char msgBuffer[40];
   char wifi_passwd[WIFINETS][SSIDLENGTH];
   char wifi_ssid[WIFINETS][SSIDLENGTH];
-
+  
   if (WiFi.status() == WL_CONNECTED) return (true);
-  for (uint8_t n = 0; n < WIFINETS; n++) {
-    sprintf (msgBuffer, "wifissid_%d", index);
+  for (uint8_t n=0; n<WIFINETS; n++) {
+    sprintf (msgBuffer, "wifissid_%d", n);
     // use a different default for ssid for wifi 0 to other wifi
-    if (n == 0) nvs_get_string (msgBuffer, wifi_ssid[n], MYSSID, sizeof(wifi_ssid[0]));
+    if (n==0) nvs_get_string (msgBuffer, wifi_ssid[n], MYSSID, sizeof(wifi_ssid[0]));
     else nvs_get_string (msgBuffer, wifi_ssid[n], "none", sizeof(wifi_ssid[0]));
     if (strcmp (wifi_ssid[n], "none") != 0) {
-      sprintf (msgBuffer, "wifipass_%d", index);
+      sprintf (msgBuffer, "wifipass_%d", n);
       nvs_get_string (msgBuffer, wifi_passwd[n], "none", sizeof(wifi_passwd[0]));
     }
   }
+  WiFi.setHostname(tname);
   for (int loops = 3; loops>0 && !net_connected; loops--) {
     for (uint8_t n=0; n<WIFINETS && !net_connected; n++) {
       if (strcmp (wifi_ssid[n], "none") != 0) {
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          Serial.print   ("Polling network: ");
+          Serial.println (wifi_ssid[n]);
+          xSemaphoreGive (displaySem);
+        }
         if (strcmp (wifi_passwd[n], "none") == 0) WiFi.begin(wifi_ssid[n], NULL);
         else WiFi.begin(wifi_ssid[n], wifi_passwd[n]);
-        WiFi.setHostname(tname);
-        delay (1000);
+        delay (2000);
         for (uint8_t z=0; z<14 && WiFi.status() != WL_CONNECTED; z++) delay (1000);
-        if (WiFi.status() == WL_CONNECTED) net_connected = true;
-        if (net_connected) {
-          // wifi_initiated = true;
+        if (WiFi.status() == WL_CONNECTED) {
+          net_connected = true;
           MDNS.begin(tname);
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-            Serial.print   ("\nWiFi connected: ");
-            Serial.println (wifi_ssid[n]);
-            xSemaphoreGive(displaySem);
-          }
           strcpy (ssid, wifi_ssid[n]);
         }
         else {
           if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-            Serial.print   ("\nNot connecting to WiFi network: ");
-            Serial.print   (wifi_ssid[n]);
-            Serial.println (" - Reattempt pending.");
-            xSemaphoreGive(displaySem);
+            Serial.print   ("Not connecting to WiFi network: ");
+            Serial.println (wifi_ssid[n]);
+            xSemaphoreGive (displaySem);
           }
         }
       }
@@ -188,6 +185,7 @@ void connect2server (char *server, int port)
     }
     if (cmdProtocol == UNDEFINED) {  // probe with JMRI if nothing received
       cmdProtocol = nvs_get_int ("defaultProto", JMRI);
+      if (cmdProtocol==DCCPLUS) dccPopulateLoco();
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
         Serial.print   ("Timeout on protocol identification: defaulting to ");
         Serial.print   (protoList[cmdProtocol]);

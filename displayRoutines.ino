@@ -138,23 +138,33 @@ void mkPowerMenu()
 
 void mkConfigMenu()
 {
-  const char *configMenu[] = {"Speed Step", "Font", "CPU Speed", "Protocol", "Prev. Menu"};
+  const char *configMenu[] = {"CPU Speed", "Font", "Info", "Protocol", "Restart", "Speed Step", "Prev. Menu"};
   uint8_t result = 1;
+  char commandKey;
 
   while (result != 0) {
-    result = displayMenu ((char**) configMenu, 5, (result-1));
+    result = displayMenu ((char**) configMenu, 7, (result-1));
     switch (result) {
       case 1:
-        mkSpeedStepMenu();
+        mkCpuSpeedMenu();
         break;
       case 2:
         mkFontMenu();
         break;
       case 3:
-        mkCpuSpeedMenu();
+        displayInfo();
+        xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(30000)); // 30 second timeout
         break;
       case 4:
         mkProtoPref();
+        break;
+      case 5:
+        setDisconnected();
+        displayTempMessage ("Restarting", "Press any key to reboot or wait 30 seconds", true);
+        ESP.restart();
+        break;
+      case 6:
+        mkSpeedStepMenu();
         break;
       default:
         result = 0;
@@ -232,7 +242,9 @@ void mkCpuSpeedMenu()
 void mkProtoPref()
 {
   char *protoMenu[] = {"JMRI", "DCC++", "Prev. Menu"};
-  uint8_t result = displayMenu (protoMenu, 3, (cmdProtocol-1));
+  int defProto = cmdProtocol - 1;
+  if (defProto < 0) defProto = 0;
+  uint8_t result = displayMenu (protoMenu, 3, defProto);
   if (result > 0 && result<3) {
     cmdProtocol = result;
     nvs_put_int ("defaultProto", result);
@@ -281,6 +293,7 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
               locoRoster[option].id = tLoco;
               if (locoRoster[option].id < 128) locoRoster[option].type = 'S';
               else locoRoster[option].type = 'L';
+              if (cmdProtocol==DCCPLUS) locoRoster[option].owned = true;
             }
           }
         }
@@ -294,7 +307,7 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
         locoRoster[option].throttleNr = nextThrottle++;
         if (nextThrottle > 'Z') nextThrottle = '0';
         setLocoOwnership (option, true);
-        while (locoRoster[option].steal == '?') delay (100);
+        while (cmdProtocol==JMRI && locoRoster[option].steal == '?') delay (100);
         if (locoRoster[option].steal == 'Y') {
           sprintf (displayLine, "Steal loco %s?", locoRoster[option].name);
           if (displayYesNo (displayLine)) {
@@ -329,29 +342,38 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
 
 void displayInfo()
 {
-  const char *protocolName[] = { "Unknown", "JMRI", "SRCP" };
   char outData[50];
   uint8_t lineNr = 0;
   
   display.clear();
+  sprintf (outData, "%s %s", PRODUCTNAME, VERSION);
+  displayScreenLine (outData, lineNr++, false);
+  if (lineNr >= linesPerScreen) return;
   sprintf (outData, "Name: %s", tname);
   displayScreenLine (outData, lineNr++, false);
-  sprintf (outData, "SSID: %s", ssid);
-  displayScreenLine (outData, lineNr++, false);
-  sprintf (outData, "Proto: %s", protocolName[cmdProtocol]);
+  if (lineNr >= linesPerScreen) return;
+  if (ssid[0]!='\0') {
+    sprintf (outData, "SSID: %s", ssid);
+    displayScreenLine (outData, lineNr++, false);
+  }
+  if (lineNr >= linesPerScreen) return;
+  sprintf (outData, "Proto: %s", protoList[cmdProtocol]);
   displayScreenLine (outData, lineNr++, false);
   if (lineNr >= linesPerScreen) return;
   if (strlen (remServerNode) > 0) {
     sprintf (outData, "Svr: %s", remServerNode);
     displayScreenLine (outData, lineNr++, false);
+    if (lineNr >= linesPerScreen) return;
   }
   if (strlen (remServerDesc) > 0) {
     sprintf (outData, "Desc: %s", remServerDesc);
     displayScreenLine (outData, lineNr++, false);
+    if (lineNr >= linesPerScreen) return;
   }
   if (strlen (remServerType) > 0) {
     sprintf (outData, "Type: %s", remServerType);
     displayScreenLine (outData, lineNr++, false);
+    if (lineNr >= linesPerScreen) return;
   }
   if (strlen (lastMessage) > 0) {
     sprintf (outData, "Msg: %s", lastMessage);

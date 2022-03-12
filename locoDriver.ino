@@ -32,15 +32,19 @@ void locomotiveDriver()
   locoRoster[initialLoco].speed = 0;
   locoRoster[initialLoco].throttleNr = nextThrottle++;
   setLocoOwnership (initialLoco, true);
-  // Serial.println ("Wait for steal flag");
-  while (locoRoster[initialLoco].steal == '?') delay (100);
-  if (locoRoster[initialLoco].steal == 'Y') {
-    sprintf (displayLine, "Steal loco %s?", locoRoster[initialLoco].name);
-    if (displayYesNo (displayLine)) {
-      // Serial.println (displayLine);
-      setStealLoco (initialLoco);
+  if (cmdProtocol == JMRI) {
+    while (locoRoster[initialLoco].steal == '?') delay (100);
+    if (locoRoster[initialLoco].steal == 'Y') {
+      sprintf (displayLine, "Steal loco %s?", locoRoster[initialLoco].name);
+      if (displayYesNo (displayLine)) {
+        setStealLoco (initialLoco);
+      }
+      else locoCount = 0;
     }
-    else locoCount = 0;
+  }
+  else {
+    locoRoster[initialLoco].steal = 'N';
+    locoRoster[initialLoco].owned = true;
   }
   // else Serial.println ("No steal");
   int maxLocoArray = locomotiveCount + MAXCONSISTSIZE;
@@ -286,6 +290,7 @@ void locomotiveDriver()
   }
   for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
     setLocoOwnership (n, false);
+    if (cmdProtocol==DCCPLUS) locoRoster[n].owned = false;
   }
   drivingLoco = false;
 }

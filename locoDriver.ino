@@ -84,10 +84,15 @@ void locomotiveDriver()
       // Show speed
       if (trainSetMode) m = 1;
       else m = 0;
-      if (locoRoster[initialLoco].steps > 0)
-        sprintf (displayLine, "%s %3d%% %8s", dirString[locoRoster[initialLoco].direction], ((locoRoster[initialLoco].speed * 100) / locoRoster[initialLoco].steps), trainModeString[m]);
-      else
-        sprintf (displayLine, "%s %3d %9s", dirString[locoRoster[initialLoco].direction], locoRoster[initialLoco].speed, trainModeString[m]);
+      if (locoRoster[initialLoco].speed == -1) {
+        sprintf (displayLine, "%s BRAKE %7s", dirString[locoRoster[initialLoco].direction], locoRoster[initialLoco].speed, trainModeString[m]);
+      }
+      else {
+        if (locoRoster[initialLoco].steps > 0)
+          sprintf (displayLine, "%s %3d%% %8s", dirString[locoRoster[initialLoco].direction], ((locoRoster[initialLoco].speed * 100) / locoRoster[initialLoco].steps), trainModeString[m]);
+        else
+          sprintf (displayLine, "%s %3d %9s", dirString[locoRoster[initialLoco].direction], locoRoster[initialLoco].speed, trainModeString[m]);
+      }
       displayScreenLine (displayLine, speedLine, false);
       // Display graph line if available
       if (graphLine>0 && locoRoster[initialLoco].steps>0) {
@@ -138,11 +143,11 @@ void locomotiveDriver()
             }
             speedChange = true;
           }
-          else if (locoRoster[initialLoco].speed < (locoRoster[initialLoco].steps - 1)) {
+          else if (locoRoster[initialLoco].speed < (locoRoster[initialLoco].steps - 2)) {
             speedChange = true;
             locoRoster[initialLoco].speed = locoRoster[initialLoco].speed + speedStep;
-            if (locoRoster[initialLoco].speed > (locoRoster[initialLoco].steps - 1)) {
-              locoRoster[initialLoco].speed = locoRoster[initialLoco].steps - 1;
+            if (locoRoster[initialLoco].speed > (locoRoster[initialLoco].steps - 2)) {
+              locoRoster[initialLoco].speed = locoRoster[initialLoco].steps - 2;
             }
             setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
           }
@@ -167,11 +172,11 @@ void locomotiveDriver()
               setLocoDirection (initialLoco, REVERSE);
               dirChange = true;
             }
-            else if (locoRoster[initialLoco].speed < (locoRoster[initialLoco].steps - 1)) {
+            else if (locoRoster[initialLoco].speed < (locoRoster[initialLoco].steps - 2)) {
               speedChange = true;
               locoRoster[initialLoco].speed = locoRoster[initialLoco].speed + speedStep;
-              if (locoRoster[initialLoco].speed > (locoRoster[initialLoco].steps - 1)) {
-                locoRoster[initialLoco].speed = locoRoster[initialLoco].steps - 1;
+              if (locoRoster[initialLoco].speed > (locoRoster[initialLoco].steps - 2)) {
+                locoRoster[initialLoco].speed = locoRoster[initialLoco].steps - 2;
               }
               setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
             }
@@ -202,7 +207,7 @@ void locomotiveDriver()
             if (locoRoster[n].speed > 0) {
               locoRoster[n].speed = 0;
               speedChange = true;
-              setLocoSpeed (n, 0, locoRoster[n].direction);
+              setLocoSpeed (n, -1, locoRoster[n].direction);
             }
           }
           break;
@@ -276,7 +281,7 @@ void locomotiveDriver()
     }
     // Don't escape if speed is non zero
     if (commandChar == 'E') {
-      for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && locoRoster[n].speed != 0) {
+      for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && locoRoster[n].speed > 0) {
         commandChar = 'Z';
         if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
           Serial.print ("No escape permitted, loco speed not zero: ");

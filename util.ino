@@ -23,3 +23,21 @@ bool util_str_isa_int (char *inString)
   }
   return (retval);
 }
+
+
+/*
+ * Homespun float to string function with dp decimal points
+ */
+char* util_ftos (float value, int dp)
+{
+  static char retval[32];
+  //float mult;
+  //int ws;
+  //int64_t intPart;
+  char format[15];
+
+  if (dp<=0) sprintf(format, "%%1.0lf");
+  else sprintf (format, "%%%d.%dlf", (dp+2), dp);
+  sprintf (retval, format, value);
+  return (retval);
+}

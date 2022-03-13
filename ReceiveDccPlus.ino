@@ -24,6 +24,7 @@ void dccSpeedChange(char* speedSet)
   dccSpeed = util_str2int(token);
   token = strtok_r (remain, " ", &remain);
   dccDirection = util_str2int(token);
+  if (dccSpeed>127) dccSpeed = -1;
   for (uint8_t ptr=0; ptr<maxLocoArray; ptr++) {
     if (locoRoster[ptr].owned) {
       locoRoster[ptr].speed = dccSpeed;

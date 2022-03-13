@@ -50,6 +50,9 @@
 #define INITWAIT        5   // seconds to wait for first packet from server to ID protocol
 #define BUMPCOUNT     100   // re-evalute loco count every N times through loco control routine
 
+// Divisor for converting uSeconds to Seconds
+#define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
+
 // Define display things
 #ifdef SSD1306
 // #define SCREENINVERT
@@ -185,8 +188,8 @@ struct locomotive_s {
   uint16_t id;                    // DCC address
   char type;                      // Long or short addr. 127 and below should be short, 128 and above should be long
   uint8_t throttleNr;             // Throttle Number
-  uint8_t direction;              // FORWARD, STOP or REVERSE
-  uint8_t speed;                  // 128 steps
+  int8_t direction;               // FORWARD, STOP or REVERSE
+  int8_t speed;                   // 128 steps, -1, 0-126
   uint8_t steps;                  // Steps to use when updating speed
   bool owned;                     // Is loco owned y this throttle?
   char steal;                     // Is a steal required?

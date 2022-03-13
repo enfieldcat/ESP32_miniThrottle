@@ -50,7 +50,7 @@ void mkLocoMenu()
           if (tLoco < 128) locoRoster[locomotiveCount].type = 'S';
           else             locoRoster[locomotiveCount].type = 'L';
           locoRoster[locomotiveCount].direction = STOP;
-          locoRoster[locomotiveCount].speed     = 0;
+          locoRoster[locomotiveCount].speed     = -1;
           locoRoster[locomotiveCount].steps     = 128;
           locoRoster[locomotiveCount].id        = tLoco;
           locoRoster[locomotiveCount].function  = 0;
@@ -76,7 +76,7 @@ void mkSwitchMenu()
   uint8_t option = 0;
 
   if (switchCount == 0 || turnoutStateCount == 0) {
-    displayTempMessage ("Warning:", "No switches or switch states defined", true);
+    displayTempMessage ((char*)txtWarning, "No switches or switch states defined", true);
     return;
   }
   for (uint8_t n=0; n<switchCount; n++) switchMenu[n] = turnoutList[n].userName;
@@ -286,7 +286,7 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
             for (option=locomotiveCount; option<limit && !locoRoster[option].owned; option++);
             if (option == limit) {
               option = 255;
-              displayTempMessage ("Warning:", "unable to add loco to roster", true);
+              displayTempMessage ((char*)txtWarning, "unable to add loco to roster", true);
             }
             else {
               // update the slot with our data
@@ -294,6 +294,11 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
               if (locoRoster[option].id < 128) locoRoster[option].type = 'S';
               else locoRoster[option].type = 'L';
               if (cmdProtocol==DCCPLUS) locoRoster[option].owned = true;
+              locoRoster[option].direction = STOP;
+              locoRoster[option].speed     = -1;
+              locoRoster[option].steps     = 128;
+              locoRoster[option].id        = tLoco;
+              locoRoster[option].function  = 0;
             }
           }
         }

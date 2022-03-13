@@ -78,6 +78,8 @@ const uint8_t fontHeight[] = { 8,16,20,18 };
 static uint8_t selFontWidth  = 8;
 static uint8_t selFontHeight = 16;
 
+const char txtWarning[] = { "Warning" };
+
 
 /*
  * Set up steps
@@ -168,7 +170,6 @@ void loop()
   char commandKey;
   char commandStr[2];
   const char *baseMenu[]  = { "Locomotives", "Turnouts", "Routes", "Track Power", "Configuration" };
-  const char txtWarning[] = { "Warning" };
   const char txtNoPower[] = { "Track power off. Turn power on to enable function." };
   
   display.begin();

@@ -1,9 +1,16 @@
 ESP32 based JMRI miniThrottle
 =============================
+Development for model train throttle controller.
 
 Status:
 -------
-Massively unstable and mostly untested (Feb 2022)
+Massively unstable and mostly untested (Mar 2022). Do not use this code:
+* At best it will do something unexpected
+* At worst it will damage something
+
+You have been warned.
+
+This project is on its early development stages and subject to change. Functions and structure may be added or removed without notice.
 
 Description:
 ------------

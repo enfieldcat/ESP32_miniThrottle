@@ -110,7 +110,7 @@ void setStealLoco(uint8_t locoIndex)
 }
 
 
-void setLocoSpeed (uint8_t locoIndex, uint8_t speed, uint8_t direction)
+void setLocoSpeed (uint8_t locoIndex, int8_t speed, int8_t direction)
 {
   char commandPacket[40];
   if (cmdProtocol == JMRI) {

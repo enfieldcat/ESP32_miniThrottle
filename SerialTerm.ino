@@ -69,6 +69,7 @@ void process (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "detentcount") == 0)   mt_set_detentCount  (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "dump") == 0)          mt_dump_data        (nparam, param);
   else if (nparam==1 && strcmp (param[0], "help") == 0)          help                ();
+  else if (nparam==1 && strcmp (param[0], "memory") == 0)        showMemory          ();
   else if (nparam<=2 && strcmp (param[0], "nvs") == 0)           mt_dump_nvs         (nparam, param);
   else if (nparam==1 && strcmp (param[0], "pins")  == 0)         showPinConfig       ();
   else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
@@ -709,6 +710,19 @@ void showPinConfig()  // Display pin out selection
   }
 }
 
+void showMemory()
+{
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.print ("     Free Heap: "); Serial.print (util_ftos (ESP.getFreeHeap(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getFreeHeap()*100.0)/ESP.getHeapSize(), 1)); Serial.println ("%");
+    Serial.print (" Min Free Heap: "); Serial.print (util_ftos (ESP.getMinFreeHeap(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getMinFreeHeap()*100.0)/ESP.getHeapSize(), 1)); Serial.println ("%");
+    Serial.print ("     Heap Size: "); Serial.print (util_ftos (ESP.getHeapSize(), 0)); Serial.println (" bytes");
+    Serial.print ("NVS Free Space: "); Serial.print (nvs_get_freeEntries()); Serial.println (" entries");
+    Serial.print ("        Uptime: "); Serial.print (util_ftos (esp_timer_get_time() / (uS_TO_S_FACTOR * 60.0), 2)); Serial.println (" mins");
+    Serial.print ("      CPU Freq: "); Serial.print (util_ftos (ESP.getCpuFreqMHz(), 0)); Serial.println (" MHz");
+    Serial.print ("  Crystal Freq: "); Serial.print (util_ftos (getXtalFrequencyMhz(), 0)); Serial.println (" MHz");
+    xSemaphoreGive(displaySem);
+  }
+}
 
 void help()  // show help data
 {
@@ -732,6 +746,9 @@ void help()  // show help data
     Serial.println ((const char*) "    info only");
     Serial.println ((const char*) "locos|turnouts");
     Serial.println ((const char*) "    List known locomotives or turnouts");
+    Serial.println ((const char*) "    info only");
+    Serial.println ((const char*) "memory");
+    Serial.println ((const char*) "    Show system meory usage");
     Serial.println ((const char*) "    info only");
     Serial.println ((const char*) "name [<name>]");
     Serial.println ((const char*) "    Set the name of the throttle");

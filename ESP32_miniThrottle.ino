@@ -30,7 +30,7 @@ static int screenHeight     = 0;
 static int keepAliveTime    = 10;
 static uint16_t initialLoco = 3;
 static uint8_t locomotiveCount      = 0;
-static uint8_t switchCount          = 0;
+static uint8_t turnoutCount         = 0;
 static uint8_t turnoutStateCount    = 0;
 static uint8_t routeCount           = 0;
 static uint8_t routeStateCount      = 0;
@@ -182,15 +182,7 @@ void loop()
   screenWidth    = display.width();
   screenHeight   = display.height();
   setupFonts();
-/*
-  #ifdef SSD1306
-  display.setFixedFont( ssd1306xled_font8x16 );
-  #else
-  #ifdef SSD1327
-  display.setFixedFont( ssd1306xled_font8x16 );
-  #endif
-  #endif
-  */
+
   while (xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {} // clear keyboard buffer
   while (true) {
     if (!client.connected()) {

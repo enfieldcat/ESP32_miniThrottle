@@ -51,13 +51,11 @@ void setTurnout (uint8_t turnoutNr, char desiredState)
     else if (reqState == 4) outPacket[3] = 'T';
     else outPacket[3] = '2';
     outPacket[4] = '\0';
-    //if (nvs_get_int ("switchRef", 0) == 1) { //Reference by Name
-    //  strcat (outPacket, turnoutList[turnoutNr].userName);
-    //}
-    //else {                                   // Reference by numeric ID
-      //sprintf (string, "%d", turnoutList[turnoutNr].id);
-      strcat (outPacket, turnoutList[turnoutNr].sysName);
-    //}
+    strcat (outPacket, turnoutList[turnoutNr].sysName);
+    txPacket (outPacket);
+  }
+  else if (cmdProtocol == DCCPLUS) {
+    sprintf (outPacket, "<T %s %c>", turnoutList[turnoutNr].sysName, desiredState);
     txPacket (outPacket);
   }
 }

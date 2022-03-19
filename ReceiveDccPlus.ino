@@ -73,16 +73,86 @@ void dccComment(char* comment)
   strcpy (lastMessage, &comment[len]);
 }
 
+/*
+ * Populate locomotive structure for DCC++
+ * Not really about receiving packets, but primes memory for use
+ */
 void dccPopulateLoco()
 {
-  for (uint8_t tokenPtr=0; tokenPtr<MAXCONSISTSIZE; tokenPtr++) {
-    sprintf (locoRoster[tokenPtr].name, "ad-hoc-%d", tokenPtr+1);
-    locoRoster[tokenPtr].direction = STOP;
-    locoRoster[tokenPtr].speed     = 0;
-    locoRoster[tokenPtr].steps     = 128;
-    locoRoster[tokenPtr].id        = 0;
-    locoRoster[tokenPtr].owned     = false;
-    locoRoster[tokenPtr].function  = 0;
-    locoRoster[tokenPtr].throttleNr= 255;
+  int numEntries = nvs_count ("loco", "String");
+
+  if (numEntries > 0) {
+    char *rawData  = (char*) nvs_extractStr ("loco", numEntries, NAMELENGTH);
+    char *curData;
+    struct locomotive_s *locoData = (struct locomotive_s*) malloc ((MAXCONSISTSIZE + numEntries) * sizeof(struct locomotive_s));
+
+    curData = rawData;
+    for (int n=0; n<numEntries; n++) {
+      locoData[n].id = util_str2int (curData);
+      curData = curData + 16;
+      if (locoData[n].id > 127) locoData[n].type = 'L';
+      else locoData[n].type = 'S';
+      strcpy (locoData[n].name, curData);
+      curData = curData + NAMELENGTH;
+      locoData[n].direction = STOP;
+      locoData[n].speed     = 0;
+      locoData[n].steps     = 128;
+      locoData[n].owned     = false;
+      locoData[n].function  = 0;
+      locoData[n].throttleNr= 255;
+    }
+    if (rawData != NULL) {
+      free (rawData);
+      if (locoRoster != NULL) free (locoRoster);
+      locoRoster = locoData;
+      locomotiveCount = numEntries;
+    }
+    if (locoRoster != NULL) for (uint8_t tokenPtr=numEntries, n=0; n<MAXCONSISTSIZE; tokenPtr++, n++) {
+      sprintf (locoRoster[tokenPtr].name, "ad-hoc-%d", n+1);
+      locoRoster[tokenPtr].direction = STOP;
+      locoRoster[tokenPtr].speed     = 0;
+      locoRoster[tokenPtr].steps     = 128;
+      locoRoster[tokenPtr].id        = 0;
+      locoRoster[tokenPtr].owned     = false;
+      locoRoster[tokenPtr].function  = 0;
+      locoRoster[tokenPtr].throttleNr= 255;
+    }
+  }
+}
+
+void dccPopulateTurnout()
+{
+  int numEntries = nvs_count ("turnout", "String");
+
+  if (numEntries > 0) {
+    char *rawData  = (char*) nvs_extractStr ("turnout", numEntries, 2*NAMELENGTH);
+    char *curData;
+    struct turnout_s *turnoutData = (struct turnout_s*) malloc (numEntries * sizeof(struct turnout_s));
+    char commandBuffer[3*NAMELENGTH]; 
+    
+    if (turnoutState != NULL) free (turnoutState);
+    turnoutState = (struct turnoutState_s*) malloc (2 * sizeof(struct turnoutState_s));
+    turnoutState[0].state = 'C';
+    turnoutState[1].state = 'T';
+    strcpy (turnoutState[0].name, "Closed");
+    strcpy (turnoutState[1].name, "Thrown");
+    turnoutStateCount = 2;
+
+   curData = rawData;
+    for (int n=0; n<numEntries; n++) {
+      turnoutData[n].state = 'C';
+      sprintf (turnoutData[n].sysName, "%d", (20+n));
+      strcpy (turnoutData[n].userName, curData);
+      curData = curData + 16;
+      sprintf (commandBuffer, "<T %s %s>", turnoutData[n].sysName, curData);
+      curData = curData + (2*NAMELENGTH);
+      txPacket (commandBuffer);
+    }
+    if (rawData != NULL) {
+      free (rawData);
+      if (turnoutList != NULL) free (turnoutList);
+      turnoutList = turnoutData;
+      turnoutCount = numEntries;
+    }
   }
 }

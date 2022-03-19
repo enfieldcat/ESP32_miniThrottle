@@ -18,13 +18,13 @@ void processJmriPacket (char *packet)
      // only update if in known state
     if (state == '2' || state == '4') {
       // first attempt to find by name
-      for (ptr=0; ptr<switchCount && !found; ptr++) {
+      for (ptr=0; ptr<turnoutCount && !found; ptr++) {
         if (strcmp (turnoutList[ptr].sysName, &packet[4]) == 0) found = true;
       }
       if (!found) {
         //char *tptr;
         //int devNumber = strtol (&packet[4], &tptr, 10);
-        for (ptr=0; ptr<switchCount && !found; ptr++) {
+        for (ptr=0; ptr<turnoutCount && !found; ptr++) {
           if (strcmp (turnoutList[ptr].userName, &packet[4])) found = true;
         }
       }
@@ -232,7 +232,7 @@ void processJmriPacket (char *packet)
             subToken[subTokenCnt++] = &(workingToken[subTokenPtr+1]);
           }
         }
-        if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0'; // Allow up to 16 chars in a name
+        if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0'; // Allow up to 32 chars in a name
         strcpy (locoData[tokenPtr].name, workingToken);  // Name is in first part - pointed by by workingToken
         locoData[tokenPtr].type      = subToken[1][0];
         locoData[tokenPtr].direction = STOP;
@@ -270,7 +270,7 @@ void processJmriPacket (char *packet)
             subToken[subTokenCnt++] = &(workingToken[subTokenPtr+1]);
           }
         }
-        if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0';   // Allow up to 16 chars in a name
+        if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0';   // Allow up to 32 chars in a name
         strcpy (turnoutStateData[tokenPtr-1].name, workingToken);
         turnoutStateData[tokenPtr-1].state = subToken[0][0] - '0'; // Assume single digit, and nor white space
       }
@@ -284,7 +284,7 @@ void processJmriPacket (char *packet)
     else if (strcmp (packet, "PTL") == 0) {
       memBlock = malloc (sizeof(struct turnout_s) * tokenTally);
       struct turnout_s *switchData = (struct turnout_s*) memBlock;
-      switchCount = 0;
+      turnoutCount = 0;
       for (tokenPtr=0; tokenPtr<tokenTally; tokenPtr++) {
         workingToken = majToken[tokenPtr];
         tgtLength = strlen(workingToken);
@@ -298,13 +298,13 @@ void processJmriPacket (char *packet)
         if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0';
         strcpy (switchData[tokenPtr].sysName, workingToken);
         // switchData[tokenPtr].id = (int) strtol ((const char*)workingToken, &tptr, 10);
-        if (strlen(subToken[0]) > (NAMELENGTH-1)) subToken[0][NAMELENGTH-1] = '\0'; // Allow up to 16 chars in a name
+        if (strlen(subToken[0]) > (NAMELENGTH-1)) subToken[0][NAMELENGTH-1] = '\0'; // Allow up to 32 chars in a name
         strcpy (switchData[tokenPtr].userName, subToken[0]);
         switchData[tokenPtr].state = subToken[1][0] - '0'; // Assume single digit, and nor white space
       }
       if (turnoutList != NULL) free(turnoutList);
       turnoutList  = switchData;
-      switchCount = tokenTally;
+      turnoutCount = tokenTally;
     }
     //
     // Route states, very similar structure to turnout states
@@ -323,7 +323,7 @@ void processJmriPacket (char *packet)
             subToken[subTokenCnt++] = &(workingToken[subTokenPtr+1]);
           }
         }
-        if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0';   // Allow up to 16 chars in a name
+        if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0';   // Allow up to 32 chars in a name
         strcpy (routeStateData[tokenPtr-1].name, workingToken);
         routeStateData[tokenPtr-1].state = subToken[0][0] - '0'; // Assume single digit, and nor white space
       }

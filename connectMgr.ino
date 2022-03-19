@@ -170,12 +170,11 @@ void connect2server (char *server, int port)
       remServerNode[sizeof(remServerNode)-1] = '\0';
     }
     // Once connected, we can listen for returning packets
-    xTaskCreate(receiveNetData, "JRMI_In", 4096, NULL, 4, NULL);
+    xTaskCreate(receiveNetData, "Network_In", 4096, NULL, 4, NULL);
     // Print diagnostic
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
       Serial.println ("");
       Serial.print   ("Connected to server: ");
-      Serial.print   (server);
       Serial.print   (":");
       Serial.println (port);
       xSemaphoreGive(displaySem);
@@ -185,12 +184,15 @@ void connect2server (char *server, int port)
     }
     if (cmdProtocol == UNDEFINED) {  // probe with JMRI if nothing received
       cmdProtocol = nvs_get_int ("defaultProto", JMRI);
-      if (cmdProtocol==DCCPLUS) dccPopulateLoco();
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
         Serial.print   ("Timeout on protocol identification: defaulting to ");
         Serial.print   (protoList[cmdProtocol]);
         Serial.println (" protocol");
         xSemaphoreGive(displaySem);
+      }
+      if (cmdProtocol==DCCPLUS) {
+        dccPopulateLoco();
+        dccPopulateTurnout();
       }
       setInitialData();
     }

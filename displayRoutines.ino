@@ -69,22 +69,22 @@ void mkLocoMenu()
 
 void mkSwitchMenu()
 {
-  char *switchMenu[switchCount + 1];
+  char *switchMenu[turnoutCount + 1];
   char *stateMenu[turnoutStateCount];
   uint8_t result = 255;
   uint8_t reqState = 255;
   uint8_t option = 0;
 
-  if (switchCount == 0 || turnoutStateCount == 0) {
+  if (turnoutCount == 0 || turnoutStateCount == 0) {
     displayTempMessage ((char*)txtWarning, "No switches or switch states defined", true);
     return;
   }
-  for (uint8_t n=0; n<switchCount; n++) switchMenu[n] = turnoutList[n].userName;
-  switchMenu[switchCount] = (char*) prevMenuOption;
+  for (uint8_t n=0; n<turnoutCount; n++) switchMenu[n] = turnoutList[n].userName;
+  switchMenu[turnoutCount] = (char*) prevMenuOption;
   for (uint8_t n=0; n<turnoutStateCount; n++) stateMenu[n] = turnoutState[n].name;
   while (result!=0) {
-    result = displayMenu (switchMenu, switchCount+1, lastSwitchMenuOption);
-    if (result == (switchCount+1)) result = 0;  // give option to go to previous menu
+    result = displayMenu (switchMenu, turnoutCount+1, lastSwitchMenuOption);
+    if (result == (turnoutCount+1)) result = 0;  // give option to go to previous menu
     if (result > 0) {
       lastSwitchMenuOption = result - 1;
       if (turnoutList[result-1].state == turnoutState[0].state) option = 0;
@@ -110,7 +110,7 @@ void mkRouteMenu()
     return;
   }
   for (uint8_t n=0; n<routeCount; n++) routeMenu[n] = routeList[n].userName;
-  routeMenu[switchCount] = (char*) prevMenuOption;
+  routeMenu[turnoutCount] = (char*) prevMenuOption;
   while (result!=0) {
     result = displayMenu (routeMenu, routeCount+1, lastRouteMenuOption);
     if (result == (routeCount+1)) result = 0;  // give option to go to previous menu
@@ -138,12 +138,14 @@ void mkPowerMenu()
 
 void mkConfigMenu()
 {
-  const char *configMenu[] = {"CPU Speed", "Font", "Info", "Protocol", "Restart", "Speed Step", "Prev. Menu"};
+  const char *configMenu[] = {"CPU Speed", "Font", "Info", "Protocol", "Restart", "Server IP", "Server Port", "Speed Step", "Prev. Menu"};
   uint8_t result = 1;
   char commandKey;
+  char paramName[8];
+  int portNum;
 
   while (result != 0) {
-    result = displayMenu ((char**) configMenu, 7, (result-1));
+    result = displayMenu ((char**) configMenu, 9, (result-1));
     switch (result) {
       case 1:
         mkCpuSpeedMenu();
@@ -163,7 +165,12 @@ void mkConfigMenu()
         displayTempMessage ("Restarting", "Press any key to reboot or wait 30 seconds", true);
         ESP.restart();
         break;
-      case 6:
+      case 7:
+        portNum = enterNumber("Server Port:");
+        sprintf (paramName, "port_%d", (WIFINETS-1));
+        nvs_put_int (paramName, portNum);
+        break;
+      case 8:
         mkSpeedStepMenu();
         break;
       default:
@@ -308,16 +315,22 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
         char displayLine[40];
         locoRoster[option].steal = '?';
         locoRoster[option].direction = locoRoster[initialLoco].direction;
-        locoRoster[option].speed = 0;
-        locoRoster[option].throttleNr = nextThrottle++;
-        if (nextThrottle > 'Z') nextThrottle = '0';
-        setLocoOwnership (option, true);
-        while (cmdProtocol==JMRI && locoRoster[option].steal == '?') delay (100);
-        if (locoRoster[option].steal == 'Y') {
-          sprintf (displayLine, "Steal loco %s?", locoRoster[option].name);
-          if (displayYesNo (displayLine)) {
-            setStealLoco (option);
+        locoRoster[option].speed = -1;
+        if (cmdProtocol==JMRI) {
+          locoRoster[option].throttleNr = nextThrottle++;
+          if (nextThrottle > 'Z') nextThrottle = '0';
+          setLocoOwnership (option, true);
+          while (cmdProtocol==JMRI && locoRoster[option].steal == '?') delay (100);
+          if (locoRoster[option].steal == 'Y') {
+            sprintf (displayLine, "Steal loco %s?", locoRoster[option].name);
+            if (displayYesNo (displayLine)) {
+              setStealLoco (option);
+            }
           }
+        }
+        else if (cmdProtocol==DCCPLUS) {
+          locoRoster[option].steal = 'N';
+          locoRoster[option].owned = true;
         }
       }
     }

@@ -9,7 +9,13 @@ void serialConsole(void *pvParameters)
   uint8_t inChar;
   uint8_t bufferPtr = 0;
   uint8_t inBuffer[BUFFSIZE];
-  
+
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.println ("Console ready");
+    Serial.println ("Type \"help\" for more information.");
+    Serial.println ("");
+    xSemaphoreGive(displaySem);
+  }
   // Serial.print ("> ");
   while ( true ) {
     if (Serial.available()) {
@@ -38,7 +44,10 @@ void serialConsole(void *pvParameters)
     }
     delay(debounceTime);
   }
-  Serial.println ("All console services stopping");
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.println ("All console services stopping");
+    xSemaphoreGive(displaySem);
+  }
   vTaskDelete( NULL );
 }
 
@@ -62,8 +71,10 @@ void process (uint8_t *inBuffer)
   }
   for (n=nparam; n<MAXPARAMS; n++) param[n] = NULL;
   if (strlen(param[0]) == 0) return;
+  else if (nparam>=4 && strcmp (param[0], "add") == 0)           mt_add_gadget       (nparam, param);
   else if (nparam==1 && strcmp (param[0], "config")  == 0)       mt_sys_config       ();
   else if (nparam<=2 && strcmp (param[0], "cpuspeed") == 0)      mt_set_cpuspeed     (nparam, param);
+  else if (nparam==3 && (strcmp (param[0], "del") == 0 || strcmp (param[0], "delete") == 0)) mt_del_gadget (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "name") == 0)          mt_set_name         (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "debouncetime") == 0)  mt_set_debounceTime (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "detentcount") == 0)   mt_set_detentCount  (nparam, param);
@@ -72,6 +83,7 @@ void process (uint8_t *inBuffer)
   else if (nparam==1 && strcmp (param[0], "memory") == 0)        showMemory          ();
   else if (nparam<=2 && strcmp (param[0], "nvs") == 0)           mt_dump_nvs         (nparam, param);
   else if (nparam==1 && strcmp (param[0], "pins")  == 0)         showPinConfig       ();
+  else if (nparam<=2 && strcmp (param[0], "protocol") == 0)      mt_set_protocol     (nparam, param);
   else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "speedstep") == 0)     mt_set_speedStep    (nparam, param);
   else if (nparam==1 && strcmp (param[0], "restart") == 0)       mt_sys_restart      ("command line request");
@@ -91,6 +103,67 @@ void process (uint8_t *inBuffer)
   else Serial.println ("Command not recognised.");
 }
 
+void mt_add_gadget (int nparam, char **param)
+{
+  char dataBuffer[256];
+  
+  if (strcmp (param[1], "loco") == 0) {
+    if (util_str_isa_int(param[2]) && util_str2int(param[2])<=10239 && util_str2int(param[2])>0) {
+      strcpy (dataBuffer, param[3]);
+      for (uint8_t n=4; n<nparam && strlen(dataBuffer)<(NAMELENGTH-1); n++) {
+        strcat (dataBuffer, " ");
+        strcat (dataBuffer, param[n]);
+      }
+      dataBuffer[NAMELENGTH-1] = '\0';
+      nvs_put_string (param[1], param[2], dataBuffer);
+    }
+    else {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.print   ("Error: ");
+        Serial.print   (param[1]);
+        Serial.println (" number must be between 1 and 10239");
+        xSemaphoreGive(displaySem);
+      }
+    }
+  }
+  else if (strcmp (param[1], "turnout") == 0) {
+    if (strlen(param[2]) > 15) param[2][15] = '\0';
+    if (strcmp(param[3], "DCC") == 0 || strcmp(param[3], "SERVO") == 0 || strcmp (param[3], "VPIN") == 0) {
+      strcpy (dataBuffer, param[3]);
+      for (uint8_t n=4; n<nparam; n++) {
+        strcat (dataBuffer, " ");
+        strcat (dataBuffer, param[n]);
+      }
+      nvs_put_string (param[1], param[2], dataBuffer);
+    }
+    else {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.print   ("Error: ");
+        Serial.print   (param[1]);
+        Serial.println (" control method must be one of DCC, SERVO, VPIN");
+        xSemaphoreGive(displaySem);
+      }
+    }
+  }
+}
+
+void mt_del_gadget (int nparam, char **param)
+{
+  if (strcmp (param[1], "loco") == 0 || strcmp (param[1], "turnout") == 0) {
+    if (util_str_isa_int(param[2]) && util_str2int(param[2])<=10239 && util_str2int(param[2])>0) {
+      nvs_del_key (param[1], param[2]);
+    }
+    else {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.print   ("Error: ");
+        Serial.print   (param[1]);
+        Serial.println (" number must be between 1 and 10239");
+        xSemaphoreGive(displaySem);
+      }
+    }
+  }
+}
+
 void mt_dump_nvs (int nparam, char **param)
 {
   if (nparam==1) nvs_dumper ("Throttle");
@@ -107,20 +180,37 @@ void mt_sys_config()   // display all known configuration data
     xSemaphoreGive(displaySem);
   }
   mt_set_name         (1, NULL);
-  mt_set_wifi         (1, NULL);
   mt_set_server       (1, NULL);
+  mt_set_wifi         (1, NULL);
   mt_set_debounceTime (1, NULL);
   mt_set_detentCount  (1, NULL);
   showPinConfig       ();
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
     Serial.println("--- Server side data ------------------------");
+    if (strlen(remServerType)>0) {
+      Serial.print   ("   Server Type: ");
+      Serial.println (remServerType);      
+    }
+    if (strlen(remServerType)>0) {
+      Serial.print   ("Server Descrip: ");
+      Serial.println (remServerDesc);      
+    }
     Serial.print  ("Track Power is: O");
     if (trackPower) Serial.println ("n");
     else Serial.println ("ff");
+    if (strlen(lastMessage )>0) {
+      Serial.print   ("Server Message: ");
+      Serial.println (lastMessage);
+    }
     Serial.println("--- Local mode data -------------------------");
     Serial.print  ("Train Set Mode: O");
     if (trainSetMode) Serial.println ("n");
-    else Serial.println ("ff");    
+    else Serial.println ("ff");
+    xSemaphoreGive(displaySem);
+  }
+  mt_set_protocol (1, NULL);
+  mt_set_speedStep (1, NULL);
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
     Serial.println("---------------------------------------------");
     xSemaphoreGive(displaySem);
   }
@@ -356,9 +446,9 @@ void displayLocos()  // display locomotive data
 
 void displayTurnouts()  // display known data about switches / points
 {
-  char outBuffer[40];
+  char outBuffer[50];
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-    Serial.print   ("Switch (turnout/point) statuses = ");
+    Serial.print   ("TurnOut (switch/point) statuses = ");
     Serial.println (turnoutStateCount);
     if (turnoutStateCount>0) {
       Serial.println ("   ID | State");
@@ -367,12 +457,12 @@ void displayTurnouts()  // display known data about switches / points
         Serial.println (outBuffer);
       }
     }
-    Serial.print   ("Switch (turnout/point) count = ");
-    Serial.println (switchCount);
-    if (switchCount > 0) {
+    Serial.print   ("Turnout (switch/point) count = ");
+    Serial.println (turnoutCount);
+    if (turnoutCount > 0) {
       sprintf (outBuffer, "%-16s | %-16s | %s", "System-Name", "User-Name", "State");
       Serial.println (outBuffer);
-      for (uint8_t n=0; n<switchCount; n++) {
+      for (uint8_t n=0; n<turnoutCount; n++) {
         sprintf (outBuffer, "%-16s | %-16s | %d", turnoutList[n].sysName, turnoutList[n].userName, turnoutList[n].state);
         Serial.println (outBuffer);
       }
@@ -439,13 +529,9 @@ void mt_set_server (int nparam, char **param)  // set details about remote serve
         else sprintf (outBuffer, "%5d | none", index);
         Serial.println (outBuffer);
       }
-      if (WiFi.status() == WL_CONNECTED) {
-        Serial.println ("Connected to server: ");
-        /*Serial.print (ssid);
-        Serial.print (", IP: ");
-        Serial.println (WiFi.localIP()); */
+      if (WiFi.status() != WL_CONNECTED) {
+        Serial.println ("--- Server not connected ---");
       }
-      else Serial.println ("Server not connected");
       xSemaphoreGive(displaySem);
     }
   return;
@@ -504,7 +590,7 @@ void mt_dump_data (int nparam, char **param)  // set details about remote server
     }
     else if (strcmp (param[1], "turnout") == 0) {
       blk_size = sizeof(struct turnout_s);
-      blk_count = switchCount;
+      blk_count = turnoutCount;
       blk_start = (char*) turnoutList;
     }
     else if (strcmp (param[1], "turnoutstate") == 0) {
@@ -710,16 +796,42 @@ void showPinConfig()  // Display pin out selection
   }
 }
 
+
+void mt_set_protocol(int nparam, char **param)
+{
+  if (nparam==1) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.print ("Default protocol is ");
+      if (nvs_get_int ("defaultProto", JMRI) == JMRI) Serial.println ("JMRI");
+      else Serial.println ("DCC++");
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else {
+    if (strcmp (param[1], "jmri") == 0 || strcmp (param[1], "dcc++") == 0) {
+      if (strcmp (param[1], "jmri") == 0) nvs_put_int ("defaultProto", JMRI);
+      else nvs_put_int ("defaultProto", DCCPLUS);
+    }
+    else {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.println ("protocol should be one of: jmri, dcc++");
+        xSemaphoreGive(displaySem);
+      }
+    }
+  }
+}
+
 void showMemory()
 {
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-    Serial.print ("     Free Heap: "); Serial.print (util_ftos (ESP.getFreeHeap(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getFreeHeap()*100.0)/ESP.getHeapSize(), 1)); Serial.println ("%");
-    Serial.print (" Min Free Heap: "); Serial.print (util_ftos (ESP.getMinFreeHeap(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getMinFreeHeap()*100.0)/ESP.getHeapSize(), 1)); Serial.println ("%");
-    Serial.print ("     Heap Size: "); Serial.print (util_ftos (ESP.getHeapSize(), 0)); Serial.println (" bytes");
-    Serial.print ("NVS Free Space: "); Serial.print (nvs_get_freeEntries()); Serial.println (" entries");
-    Serial.print ("        Uptime: "); Serial.print (util_ftos (esp_timer_get_time() / (uS_TO_S_FACTOR * 60.0), 2)); Serial.println (" mins");
-    Serial.print ("      CPU Freq: "); Serial.print (util_ftos (ESP.getCpuFreqMHz(), 0)); Serial.println (" MHz");
-    Serial.print ("  Crystal Freq: "); Serial.print (util_ftos (getXtalFrequencyMhz(), 0)); Serial.println (" MHz");
+    Serial.print   ("     Free Heap: "); Serial.print (util_ftos (ESP.getFreeHeap(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getFreeHeap()*100.0)/ESP.getHeapSize(), 1)); Serial.println ("%");
+    Serial.print   (" Min Free Heap: "); Serial.print (util_ftos (ESP.getMinFreeHeap(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getMinFreeHeap()*100.0)/ESP.getHeapSize(), 1)); Serial.println ("%");
+    Serial.print   ("     Heap Size: "); Serial.print (util_ftos (ESP.getHeapSize(), 0)); Serial.println (" bytes");
+    Serial.print   ("NVS Free Space: "); Serial.print (nvs_get_freeEntries()); Serial.println (" entries");
+    Serial.println ("NB: NVS Entries = a block count, first block holds name/id, plus 1 block for each 32 bytes data");
+    Serial.print   ("        Uptime: "); Serial.print (util_ftos (esp_timer_get_time() / (uS_TO_S_FACTOR * 60.0), 2)); Serial.println (" mins");
+    Serial.print   ("      CPU Freq: "); Serial.print (util_ftos (ESP.getCpuFreqMHz(), 0)); Serial.println (" MHz");
+    Serial.print   ("  Crystal Freq: "); Serial.print (util_ftos (getXtalFrequencyMhz(), 0)); Serial.println (" MHz");
     xSemaphoreGive(displaySem);
   }
 }
@@ -728,17 +840,34 @@ void help()  // show help data
 {
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
     Serial.println ((const char*) "Running permanent settings without parameters prints current settings:");
+    Serial.println ((const char*) "add loco <dcc-address> <description>");
+    Serial.println ((const char*) "add turnout <name> {DCC|SERVO|VPIN} <dcc-definition>");
+    Serial.println ((const char*) "add route <name> {<turnout-name> <state>} {<turnout-name> <state>}...");
+    Serial.println ((const char*) "    Add a locomotive, turnout or route to DCC++ roster");
+    Serial.println ((const char*) "    where definitions may be:");
+    Serial.println ((const char*) "       DCC <linear-address>");
+    Serial.println ((const char*) "       DCC <address> <sub-address>");
+    Serial.println ((const char*) "       SERVO <pin> <throw-posn> <closed-posn> <profile>");
+    Serial.println ((const char*) "       VPIN <pin-number>");
+    Serial.println ((const char*) "    Servo profile: 0=immediate, 1=0.5 secs, 2=1 sec, 3=2 secs, 4=bounce");
+    Serial.println ((const char*) "    And where turn-out state is one of:");
+    Serial.println ((const char*) "       C - Closed");
+    Serial.println ((const char*) "       T - Thrown");
+    Serial.println ((const char*) "    permanent settingi, DCC++ only, restart required");
     Serial.println ((const char*) "config");
     Serial.println ((const char*) "    Show current configuration settings");
     Serial.println ((const char*) "    info only");
-    Serial.println ((const char*) "cpuspeed [240|160|80|0]");
+    Serial.println ((const char*) "cpuspeed [{240|160|80|0}]");
     Serial.println ((const char*) "    Set CPU speed in MHz, try to use the lowest viable to save power consumption");
     Serial.println ((const char*) "    Use zero to use factory default speed");
     Serial.println ((const char*) "    permanent setting, restart required");
+    Serial.println ((const char*) "del {loco|turnout} <dcc-address|name>");
+    Serial.println ((const char*) "    Delete a locomotive or turnout from DCC++ roster");
+    Serial.println ((const char*) "    permanent setting, DCC++ only, restart required");
     Serial.println ((const char*) "detentcount [<n>]");
     Serial.println ((const char*) "    Set the number or rotary encoder clicks per up/down movement");
     Serial.println ((const char*) "    permanent setting");
-    Serial.println ((const char*) "dump [loco|turnout|turnoutstate|route|routestate]");
+    Serial.println ((const char*) "dump {loco|turnout|turnoutstate|route|routestate}");
     Serial.println ((const char*) "    Dump memory structures of objects");
     Serial.println ((const char*) "    info only");
     Serial.println ((const char*) "help");
@@ -748,17 +877,20 @@ void help()  // show help data
     Serial.println ((const char*) "    List known locomotives or turnouts");
     Serial.println ((const char*) "    info only");
     Serial.println ((const char*) "memory");
-    Serial.println ((const char*) "    Show system meory usage");
+    Serial.println ((const char*) "    Show system memory usage");
     Serial.println ((const char*) "    info only");
     Serial.println ((const char*) "name [<name>]");
     Serial.println ((const char*) "    Set the name of the throttle");
     Serial.println ((const char*) "    permanent setting");
-    Serial.println ((const char*) "nvs [<namespace>|*]");
+    Serial.println ((const char*) "nvs [{<namespace>|*}]");
     Serial.println ((const char*) "    Show contents of Non-Volatile-Storage (NVS) namespace(s)");
     Serial.println ((const char*) "    info only");
     Serial.println ((const char*) "pins");
     Serial.println ((const char*) "    Show processor pin assignment");
     Serial.println ((const char*) "    info only");
+    Serial.println ((const char*) "protocol {jrmi|dcc++}");
+    Serial.println ((const char*) "    Select default protocol to use");
+    Serial.println ((const char*) "    permanent setting");
     Serial.println ((const char*) "restart");
     Serial.println ((const char*) "    Restart throttle");
     Serial.println ((const char*) "    temporary setting");

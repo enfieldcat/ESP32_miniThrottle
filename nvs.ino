@@ -106,6 +106,193 @@ int nvs_get_freeEntries()
   return (prefs.freeEntries());
 }
 
+void nvs_put_string (char* nameSpace, char* key, char* value)
+{
+  Preferences tpref;
+
+  tpref.begin(nameSpace);
+  tpref.putString (key, value);
+  tpref.end();
+}
+
+void nvs_get_string (char* nameSpace, char *strName, char *strDest, char *strDefault, int strSize)
+{
+  Preferences tpref;
+
+  tpref.begin(nameSpace);
+  if (tpref.getString(strName, strDest, strSize) == 0) {
+    strcpy (strDest, strDefault);
+  }  
+  tpref.end();
+}
+
+void nvs_del_key (char* nameSpace, char* key)
+{
+  Preferences tpref;
+
+  tpref.begin(nameSpace);
+  tpref.remove (key);
+  tpref.end();
+}
+
+// return a pointer to an array of num_entries structures with key[16], value[data_size]
+void* nvs_extractStr (char *nameSpace, int numEntries, int dataSize)
+{
+  int   readCnt = 0;
+  int   retOffset = 0;
+  int   entrySize = dataSize + 16;
+  char* retVal = (char*) malloc (numEntries * entrySize);
+  char* retPtr = retVal;
+  nvs_page *nsbuff = NULL;
+  nvs_page *dabuff = NULL;
+  esp_partition_iterator_t partIt;
+  const esp_partition_t* part;
+  uint32_t nsoffset = 0;
+  uint32_t daoffset = 0;
+  uint8_t targType = 0x21;
+  uint8_t i, j;
+  uint8_t bitmap;
+  uint8_t targetns = 0;
+  
+  nsbuff = (nvs_page*) malloc (sizeof (nvs_page));
+  dabuff = (nvs_page*) malloc (sizeof (nvs_page));
+  if (nsbuff == NULL || dabuff == NULL) {
+    if (nsbuff != NULL) free (nsbuff);
+    if (dabuff != NULL) free (dabuff);
+    if (retVal != NULL) free (retVal);
+    return(NULL);  // No space for data buffers
+  }
+  partIt = esp_partition_find (ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, (const char*) "nvs");
+  if (partIt) {
+    part = esp_partition_get (partIt);
+    esp_partition_iterator_release (partIt);
+    while (nsoffset < part->size) {
+      if (esp_partition_read (part, nsoffset, nsbuff, sizeof(nvs_page)) != ESP_OK) {
+        if (nsbuff != NULL) free (nsbuff);
+        if (dabuff != NULL) free (dabuff);
+        if (retVal != NULL) free (retVal);
+        return(NULL); // Cannot read namespace data
+      }
+      i = 0 ;
+      while (i < 126) {
+        bitmap = ( nsbuff->Bitmap[i/4] >> ( ( i % 4 ) * 2 ) ) & 0x03 ;  // Get bitmap for this NameSpace entry
+        if ( bitmap == 2 ) {
+          if (nsbuff->Entry[i].Ns == 0 && strcmp(nameSpace, nsbuff->Entry[i].Key)==0) {
+            targetns = (uint8_t) (nsbuff->Entry[i].Data.sixFour & 0xFF);
+            daoffset = 0;
+            while (daoffset < part->size) {
+              if (esp_partition_read (part, daoffset, dabuff, sizeof(nvs_page)) != ESP_OK) {
+                if (nsbuff != NULL) free (nsbuff);
+                if (dabuff != NULL) free (dabuff);
+                if (retVal != NULL) free (retVal);
+                return(NULL);  // No space for content
+              }
+              j = 0;
+              while (j < 126) {
+                bitmap = ( dabuff->Bitmap[j/4] >> ( ( j % 4 ) * 2 ) ) & 0x03 ;  // Get bitmap for this Data entry
+                if ( bitmap == 2 ) {
+                  if (dabuff->Entry[j].Ns == targetns && dabuff->Entry[j].Type == targType && numEntries>readCnt++) {
+                    strcpy (retPtr, dabuff->Entry[j].Key);
+                    strcpy (retPtr+16, (char*) &(dabuff->Entry[j+1].Ns));
+                    retPtr = retPtr + entrySize;
+                  }
+                j += dabuff->Entry[j].Span ;                                    // Next Data entry
+                }
+                else j++;
+              }
+              daoffset += sizeof(nvs_page) ;                                    // Prepare to read next Data page in nvs
+            }
+          }
+          i += nsbuff->Entry[i].Span ;                                          // Next NameSpace entry          
+        }
+        else i++ ;
+      }
+      nsoffset += sizeof(nvs_page) ;                                            // Prepare to read next NameSpace page in nvs
+    }
+  }
+  if (nsbuff != NULL) free (nsbuff);
+  if (dabuff != NULL) free (dabuff);
+  if (targetns == 0) {
+    if (retVal != NULL) free (retVal);
+    return(NULL);  // Name space not found
+  }
+  return (retVal);
+}
+
+// Count the number of entries in an NVS partition of a certain type
+// type may be "all" to count all entries
+int nvs_count (char* target, char* type)
+{
+  nvs_page *nsbuff = NULL;
+  nvs_page *dabuff = NULL;
+  esp_partition_iterator_t partIt;
+  const esp_partition_t* part;
+  uint32_t nsoffset = 0;
+  uint32_t daoffset = 0;
+  int retVal = 0;
+  uint8_t targType = 255;
+  uint8_t i, j;
+  uint8_t bitmap;
+  uint8_t targetns = 0;
+  
+  for (uint8_t n=0;n<sizeof(nvs_index_ref); n++) if (strcmp(type, nvs_descrip[n]) == 0) targType = nvs_index_ref[n];
+  nsbuff = (nvs_page*) malloc (sizeof (nvs_page));
+  dabuff = (nvs_page*) malloc (sizeof (nvs_page));
+  if (nsbuff == NULL || dabuff == NULL) {
+    if (nsbuff != NULL) free (nsbuff);
+    if (dabuff != NULL) free (dabuff);
+    return(-1);  // No space for data buffers
+  }
+  partIt = esp_partition_find (ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, (const char*) "nvs");
+  if (partIt) {
+    part = esp_partition_get (partIt);
+    esp_partition_iterator_release (partIt);
+    while (nsoffset < part->size) {
+      if (esp_partition_read (part, nsoffset, nsbuff, sizeof(nvs_page)) != ESP_OK) {
+        if (nsbuff != NULL) free (nsbuff);
+        if (dabuff != NULL) free (dabuff);
+        return(-2); // Cannot read namespace data
+      }
+      i = 0 ;
+      while (i < 126) {
+        bitmap = ( nsbuff->Bitmap[i/4] >> ( ( i % 4 ) * 2 ) ) & 0x03 ;  // Get bitmap for this NameSpace entry
+        if ( bitmap == 2 ) {
+          if (nsbuff->Entry[i].Ns == 0 && (target==NULL || strcmp(target, nsbuff->Entry[i].Key)==0)) {
+            targetns = (uint8_t) (nsbuff->Entry[i].Data.sixFour & 0xFF);
+            daoffset = 0;
+            while (daoffset < part->size) {
+              if (esp_partition_read (part, daoffset, dabuff, sizeof(nvs_page)) != ESP_OK) {
+                if (nsbuff != NULL) free (nsbuff);
+                if (dabuff != NULL) free (dabuff);
+                return(-3);  // No space for content
+              }
+              j = 0;
+              while (j < 126) {
+                bitmap = ( dabuff->Bitmap[j/4] >> ( ( j % 4 ) * 2 ) ) & 0x03 ;  // Get bitmap for this Data entry
+                if ( bitmap == 2 ) {
+                  if (dabuff->Entry[j].Ns == targetns && (dabuff->Entry[j].Type == targType || strcmp(type, "all") == 0)) {
+                    retVal++;
+                  }
+                j += dabuff->Entry[j].Span ;                                    // Next Data entry
+                }
+                else j++;
+              }
+              daoffset += sizeof(nvs_page) ;                                    // Prepare to read next Data page in nvs
+            }
+          }
+          i += nsbuff->Entry[i].Span ;                                          // Next NameSpace entry          
+        }
+        else i++ ;
+      }
+      nsoffset += sizeof(nvs_page) ;                                            // Prepare to read next NameSpace page in nvs
+    }
+  }
+  if (nsbuff != NULL) free (nsbuff);
+  if (dabuff != NULL) free (dabuff);
+  if (targetns == 0) return(-4);  // Name space not found
+  return (retVal);
+}
+
 
 /*
  * Inspired by https://github.com/Edzelf/ESP32-Show_nvs_keys/blob/master/Show_nvs_keys.ino

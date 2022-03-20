@@ -145,11 +145,65 @@ void mt_add_gadget (int nparam, char **param)
       }
     }
   }
+  else if (strcmp (param[1], "route") == 0) {
+    bool isOK = true;
+    if ((nparam%2) == 1) {
+      if (strlen(param[2]) > 15) param[2][15] = '\0';
+      for (uint8_t n=3; n<nparam; n=n+2) {
+        if (param[n+1][0] == 'c' || param[n+1][0] == '0') param[n+1][0] = 'C';
+        if (param[n+1][0] == 't' || param[n+1][0] == '1') param[n+1][0] = 'T';
+        if (strcmp (param[n+1], "C") == 0 || strcmp (param[n+1], "T") == 0) {
+          nvs_get_string ("turnout", param[n], dataBuffer, "not found", sizeof(dataBuffer));
+          if (strcmp (dataBuffer, "not found") == 0) {
+            isOK = false;
+            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+              Serial.print   ("Error: ");
+              Serial.print   (param[n]);
+              Serial.println (" does not match any defined turnout name, names are case sensitive");
+              xSemaphoreGive(displaySem);
+            }
+          }
+        }
+        else {
+          isOK = false;
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            Serial.print   ("Error: Turnout state should be either C or T, found ");
+            Serial.print   (param[n+1]);
+            Serial.println ("instead");
+            xSemaphoreGive(displaySem);
+          }
+        }
+      }
+      if (isOK) {
+        strcpy (dataBuffer, param[3]);
+        for (uint8_t n=4; n<nparam; n++) {
+          strcat (dataBuffer, " ");
+          strcat (dataBuffer, param[n]);
+        }
+        nvs_put_string (param[1], param[2], dataBuffer);
+      }
+    }
+    else {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.println ("Route definition should be followed by turnout-name and state pairs");
+        xSemaphoreGive(displaySem);
+      }
+    }
+  }
+  else {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.print   ("Error: ");
+      Serial.print   (param[1]);
+      Serial.println (" not a recognised parameter, should be: loco, turnout, route");
+      xSemaphoreGive(displaySem);
+    }
+  }
 }
+
 
 void mt_del_gadget (int nparam, char **param)
 {
-  if (strcmp (param[1], "loco") == 0 || strcmp (param[1], "turnout") == 0) {
+  if (strcmp (param[1], "loco") == 0 || strcmp (param[1], "turnout") == 0 || strcmp (param[1], "route") == 0) {
     if (util_str_isa_int(param[2]) && util_str2int(param[2])<=10239 && util_str2int(param[2])>0) {
       nvs_del_key (param[1], param[2]);
     }
@@ -160,6 +214,14 @@ void mt_del_gadget (int nparam, char **param)
         Serial.println (" number must be between 1 and 10239");
         xSemaphoreGive(displaySem);
       }
+    }
+  }
+  else {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.print   ("Error: ");
+      Serial.print   (param[1]);
+      Serial.println (" not a recognised parameter, should be: loco, turnout, route");
+      xSemaphoreGive(displaySem);
     }
   }
 }

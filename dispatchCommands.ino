@@ -62,10 +62,42 @@ void setTurnout (uint8_t turnoutNr, char desiredState)
 
 void setRoute (uint8_t routeNr)
 {
-  char outPacket[21];
+  char outPacket[BUFFSIZE];
+  char message[40];
   if (cmdProtocol == JMRI) {
     sprintf (outPacket, "PRA2%s", routeList[routeNr].sysName);
     txPacket (outPacket);
+  }
+  else if (cmdProtocol == DCCPLUS) {
+    char route[BUFFSIZE];
+    const uint16_t routeDelay[] = {0, 500, 1000, 2000, 4000};
+    uint16_t pause = routeDelay[nvs_get_int("routeDelay", 2)];
+    nvs_get_string ("route", routeList[routeNr].userName, route, "not found", BUFFSIZE);
+    if (strcmp (route, "not found") != 0) {
+      int limit = strlen (route);
+      int turnoutNr;
+      char *start = route;
+      for (int n=0; n<limit; n++) {
+        while (route[n] != ' ' && n<limit) n++;
+        route[n] = '\0';
+        turnoutNr = 1024;
+        for (uint8_t j=0; j<turnoutCount; j++) {
+          if (strcmp (turnoutList[j].userName, start) == 0) turnoutNr = j;
+        }
+        if (turnoutNr < 1024) {
+          setTurnout (turnoutNr, route[n+1]);
+          if (pause>0) {
+            if (route[n+1] == 'C') strcpy (message, "Close ");
+            else strcpy (message, "Throw ");
+            strcat (message, start);
+            displayTempMessage (NULL, message, false);
+            delay (pause);
+          }
+        }
+        n += 2;
+        start = route + n;
+      }
+    }
   }
 }
 

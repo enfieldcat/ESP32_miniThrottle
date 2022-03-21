@@ -105,7 +105,7 @@ void process (uint8_t *inBuffer)
 
 void mt_add_gadget (int nparam, char **param)
 {
-  char dataBuffer[256];
+  char dataBuffer[BUFFSIZE];
   
   if (strcmp (param[1], "loco") == 0) {
     if (util_str_isa_int(param[2]) && util_str2int(param[2])<=10239 && util_str2int(param[2])>0) {

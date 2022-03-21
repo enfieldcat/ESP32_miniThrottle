@@ -138,7 +138,7 @@ void dccPopulateTurnout()
     strcpy (turnoutState[1].name, "Thrown");
     turnoutStateCount = 2;
 
-   curData = rawData;
+    curData = rawData;
     for (int n=0; n<numEntries; n++) {
       turnoutData[n].state = 'C';
       sprintf (turnoutData[n].sysName, "%d", (20+n));
@@ -153,6 +153,38 @@ void dccPopulateTurnout()
       if (turnoutList != NULL) free (turnoutList);
       turnoutList = turnoutData;
       turnoutCount = numEntries;
+    }
+  }
+}
+
+
+void dccPopulateRoutes()
+{
+  int numEntries = nvs_count ("route", "String");
+
+  if (numEntries > 0) {
+    char *rawData  = (char*) nvs_extractStr ("turnout", numEntries, BUFFSIZE);
+    char *curData;
+    struct route_s *rData = (struct route_s*) malloc (numEntries * sizeof(struct route_s));
+
+    if (routeState != NULL) free (routeState);
+    routeState = (struct routeState_s*) malloc (sizeof(struct routeState_s));
+    routeState[0].state = 'V';
+    strcpy (routeState[0].name, "Valid");
+    routeStateCount = 1;
+
+    curData = rawData;
+    for (int n=0; n<numEntries; n++) {
+      rData[n].state = 'V';
+      sprintf (rData[n].sysName, "r%d", 100+n);
+      strcpy  (rData[n].userName, curData);
+      curData = curData + (16 + BUFFSIZE);
+    }
+    if (rawData != NULL) {
+      free (rawData);
+      if (routeList != NULL) free (routeList);
+      routeList = rData;
+      routeCount = numEntries;
     }
   }
 }

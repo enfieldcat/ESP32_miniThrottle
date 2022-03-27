@@ -180,6 +180,68 @@ void mkConfigMenu()
   }
 }
 
+void mkCVMenu()
+{
+  const char *cvMenu[] = {"Read Loco Addr", "Read CV Byte", "Write Loco Addr", "Write CV Byte", "Write CV Bit", "Prev. Menu"};
+  static uint8_t lastCvMenuOption = 0;
+  uint8_t result = 1;
+  int16_t requestCV = 0;
+  int16_t queryCV = 0;
+  char message[20];
+
+  if (cmdProtocol == DCCPLUS) {
+    while (result!=0) {
+      result = displayMenu ((char**)cvMenu, 6, lastCvMenuOption);
+      if (result > 0) lastCvMenuOption = result - 1;
+      switch (result) {
+        case 1:
+          while (xQueueReceive(cvQueue, &requestCV, pdMS_TO_TICKS(0)) == pdPASS); // clear the buffer of anything that got there
+          getAddress();
+          displayTempMessage (NULL, "Reading data", false);
+          if (xQueueReceive(cvQueue, &requestCV, pdMS_TO_TICKS(30000)) == pdPASS) { // 30 second timeout
+            if (requestCV >= 0) sprintf (message, "Address = %d", requestCV);
+            else strcpy(message, "Error reading address");
+            displayTempMessage (NULL, message, true);
+          }
+          else displayTempMessage ((char*)txtWarning, "Timed out waiting for address", true);
+          break;
+        case 2:
+          while (xQueueReceive(cvQueue, &requestCV, pdMS_TO_TICKS(0)) == pdPASS); // clear the buffer of anything that got there
+          queryCV = enterNumber("Enter CV to read");
+          if (queryCV<1024) {
+            getCV(queryCV);
+            displayTempMessage (NULL, "Reading data", false);
+            if (xQueueReceive(cvQueue, &requestCV, pdMS_TO_TICKS(30000)) == pdPASS) { // 30 second timeout
+              if (requestCV >= 0) {
+                display.clear();
+                sprintf (message, "CV %d (0x%03x):", requestCV);
+                displayScreenLine (message, 0, false);
+                sprintf (message, "Dec: %d", requestCV);
+                displayScreenLine (message, 1, false);
+                sprintf (message, "Hex: 0x%02x", requestCV);
+                displayScreenLine (message, 2, false);
+                xQueueReceive(keyboardQueue, &queryCV, pdMS_TO_TICKS(30000)); // 30 second timeout
+              }
+              else {
+                sprintf (message, "Error reading CV %d", requestCV);
+                displayTempMessage (NULL, message, true);
+              }
+            }
+            else displayTempMessage ((char*)txtWarning, "Timed out reading CV", true);
+          }
+          else {
+            displayTempMessage ((char*)txtWarning, "CV number should be less than 1024", true);
+          }
+          break;
+        default:
+          result = 0;
+         break;
+      }
+    }
+  }
+  else displayTempMessage ((char*)txtWarning, "CV programming requires use of DCC++ protocol", true);
+}
+
 void mkFontMenu()
 {
   char fontMenu[sizeof(fontWidth) + 1][32];
@@ -465,6 +527,19 @@ void displayScreenLine (char *menuItem, uint8_t lineNr, bool inverted)
   if (inverted) display.invertColors();
   display.printFixed(0, (lineNr*selFontHeight), linedata, STYLE_NORMAL);
   if (inverted) display.invertColors();
+}
+
+// wait for up to 30 seconds to read CV data
+int16_t wait4cv()
+{
+  int16_t retVal = -1;
+  
+  display.clear();
+  displayScreenLine ("Wait for data", 1, false);
+  if (xQueueReceive(cvQueue, &retVal, pdMS_TO_TICKS(30000)) != pdPASS) {
+    retVal = -1;
+  }
+  return (retVal);
 }
 
 

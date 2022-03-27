@@ -42,6 +42,13 @@ void connectionManager(void *pvParameters)
       ssid[0] = '\0';
       trackPower = false;
       #ifdef TRACKPWR
+      digitalWrite(TRACKPWR, HIGH);
+      #endif
+      #ifdef TRACKPWRINV
+      digitalWrite(TRACKPWRINV, LOW);
+      #endif
+      delay (500);
+      #ifdef TRACKPWR
       digitalWrite(TRACKPWR, LOW);
       #endif
       #ifdef TRACKPWRINV
@@ -127,7 +134,7 @@ bool net_single_connect()
     }
   }
   WiFi.setHostname(tname);
-  for (int loops = 3; loops>0 && !net_connected; loops--) {
+  for (int loops = 1; loops>0 && !net_connected; loops--) {
     for (uint8_t n=0; n<WIFINETS && !net_connected; n++) {
       if (strcmp (wifi_ssid[n], "none") != 0) {
         if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
@@ -175,6 +182,7 @@ void connect2server (char *server, int port)
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
       Serial.println ("");
       Serial.print   ("Connected to server: ");
+      Serial.print   (server);
       Serial.print   (":");
       Serial.println (port);
       xSemaphoreGive(displaySem);
@@ -193,6 +201,12 @@ void connect2server (char *server, int port)
       if (cmdProtocol==DCCPLUS) {
         dccPopulateLoco();
         dccPopulateTurnout();
+        dccPopulateRoutes();
+        if (nvs_get_int("sortData", SORTDATA) == 1) {
+          sortLoco();
+          sortTurnout();
+          sortRoute();
+        }
       }
       setInitialData();
     }

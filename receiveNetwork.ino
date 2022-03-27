@@ -48,10 +48,11 @@ void processPacket (char *packet)
     }
   }
   // First handle some simple things
-  if (strncmp (packet, "VN", 2) == 0) {  // protocol version
+  if (strncmp (packet, "VN", 2) == 0 || strncmp (packet, "PFC", 3) == 0) {  // protocol version
     // Version number
     cmdProtocol = JMRI;
-    if (strcmp (packet, "VN2.0") != 0) {
+    setInitialData();
+    if (strncmp (packet, "VN", 2) == 0 && strcmp (packet, "VN2.0") != 0) {
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
         Serial.println ("Warning: Unexpected JMRI JThrottle protocol version not supported.");
         Serial.print   ("         Expected VN2.0, found ");
@@ -59,7 +60,6 @@ void processPacket (char *packet)
         xSemaphoreGive(displaySem);
       }
     }
-    setInitialData();
   }
   else {
     switch (cmdProtocol) {

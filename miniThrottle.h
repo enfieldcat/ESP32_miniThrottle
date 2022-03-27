@@ -17,8 +17,8 @@
 #define VERSION     "0.1a"         // Version string
 
 // Select one display board type
-#define SSD1306
-//#define SSD1327
+//#define SSD1306
+#define SSD1327
 
 // Default settings
 #define MYSSID  "DCC_ESP"
@@ -35,6 +35,7 @@
 #define MAXCONSISTSIZE  4   // max number of locomotives to drive in one session
 #define NAMELENGTH     32   // Length of names for locos, turnoutss, routes etc
 #define SSIDLENGTH     33   // Length to permit SSIDs and passwords
+#define SORTDATA        1   // 0 = unsorted, 1 = sorted lists of data
 
 // Select one CPU board type, adjust pin mappings as most convienent
 //#define WEMOS 1
@@ -52,6 +53,10 @@
 
 // Divisor for converting uSeconds to Seconds
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
+
+// DCC++ Values
+#define CALLBACKNUM 10812
+#define CALLBACKSUB 22112
 
 // Define display things
 #ifdef SSD1306
@@ -139,8 +144,8 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 
 // Define Pin Assignments
 // Manually check before compiling that pins are not duplicated
-#define SDA_PIN        5    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
-#define SCK_PIN        4    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
+#define SDA_PIN        22    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
+#define SCK_PIN        23    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
 #define TRACKPWR       02   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
 //#define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
 #define ENCODE_UP      36   // encoder up bounce

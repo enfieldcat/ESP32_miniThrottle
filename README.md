@@ -15,6 +15,7 @@ This project is on its early development stages and subject to change. Functions
 Description:
 ------------
 Uses a esp32 module as the core for a JMRI (Java Model Railroad Interface) throttle using the WiThrotttle protocol.
+It has some limited DCC++ support, to communicate directly to DCC++ without the need of a control station.
 It can use one of several display types. The prototype tests against SSD106 and SSD1327 over I2C interface.
 The supported display should be any supported by the lcdgfx library, although a minimum display width of 128 pixels is recommended.
 Rotary encoder support is provided using the ESP32Encoder library.
@@ -37,3 +38,9 @@ Future Works:
 * Support for consisting
 
 
+Tested interfaces:
+------------------
+* JMRI: ESP_DCC https://www.instructables.com/DCC-Controller-2-Boards-1-PSU-No-Soldering/
+* DCC++ : https://github.com/DccPlusPlus/BaseStation/wiki
+
+It is expected to work but NOT TESTED using JRMI https://www.jmri.org/ and Digitrax LNWI (LocoNet WiFi Interface)/

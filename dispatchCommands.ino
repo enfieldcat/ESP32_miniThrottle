@@ -177,3 +177,20 @@ void setDisconnected()
     txPacket ("Q"); // quit
   }
 }
+
+
+void getAddress()
+{
+  if (cmdProtocol == DCCPLUS) {
+    txPacket ("<R>");
+  }
+}
+
+void getCV(int16_t cv)
+{
+  if (cmdProtocol == DCCPLUS) {
+    char packette[32];
+    sprintf (packette, "<R %d %d %d>", cv, CALLBACKNUM, CALLBACKSUB);
+    txPacket (packette);
+  }  
+}

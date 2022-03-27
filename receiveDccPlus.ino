@@ -4,6 +4,7 @@ void processDccPacket (char *packet)
   else if (strncmp (packet, "PPA", 3) == 0) dccPowerChange (packet[3]);
   else if (strncmp (packet, "<p",  2) == 0) dccPowerChange (packet[2]);
   else if (strncmp (packet, "<* ", 3) == 0) dccComment (&packet[3]);
+  else if (strncmp (packet, "<r",  2) == 0) dccCV (&packet[2]);
 }
 
 void dccSpeedChange(char* speedSet)
@@ -34,6 +35,9 @@ void dccSpeedChange(char* speedSet)
   }
 }
 
+/*
+ * Power on/off to track
+ */
 void dccPowerChange(char state)
 {
   if (state == '1') {
@@ -56,6 +60,9 @@ void dccPowerChange(char state)
   }
 }
 
+/*
+ * Accept a comment from DCC
+ */
 void dccComment(char* comment)
 {
   int len = strlen (comment);
@@ -71,6 +78,25 @@ void dccComment(char* comment)
   else len = 0;
   // copy to lastMessage buffer
   strcpy (lastMessage, &comment[len]);
+}
+
+/*
+ * Take a CV value and place it on a queue for display processing
+ * <r10812|22112|56 -1>
+ * <r -1>
+ */
+void dccCV(char* cv)
+{
+  int16_t result;
+  char *start = NULL;
+
+  if (cv[0] == ' ') start = cv + 1;
+  else {
+    for (uint8_t n=strlen(cv)-1; n>0 && start==NULL; n--) if (!((cv[n]<='9' && cv[n]>='0') || cv[n]=='>' || cv[n]=='-')) start = cv + n + 1;
+  }
+  for (uint8_t n=0; n<strlen(start); n++) if (start[n]==' ' || start[n]=='>') start[n]='\0';
+  result = util_str2int(start);
+  xQueueSend (cvQueue, &result, 0);
 }
 
 /*

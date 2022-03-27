@@ -18,6 +18,7 @@ DisplaySSD1327_128x128_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, -1});
 WiFiClient client;
 static SemaphoreHandle_t transmitSem = xSemaphoreCreateMutex();
 static SemaphoreHandle_t displaySem  = xSemaphoreCreateMutex();
+static QueueHandle_t cvQueue         = xQueueCreate (2, sizeof(int16_t));
 static QueueHandle_t keyboardQueue   = xQueueCreate (10, sizeof(char));   // Queue for keyboard type of events
 static QueueHandle_t keyReleaseQueue = xQueueCreate (10, sizeof(char));   // Queue for keyboard release type of events
 static struct locomotive_s   *locoRoster   = (struct locomotive_s*) malloc (sizeof(struct locomotive_s) * MAXCONSISTSIZE);
@@ -41,7 +42,7 @@ static uint8_t lastRouteMenuOption  = 0;
 static uint8_t charsPerLine;
 static uint8_t linesPerScreen;
 static uint8_t debounceTime = DEBOUNCEMS;
-static uint8_t cmdProtocol = UNDEFINED;
+static uint8_t cmdProtocol  = UNDEFINED;
 static uint8_t nextThrottle = 'A';
 static char ssid[SSIDLENGTH];
 static char tname[SSIDLENGTH];
@@ -169,7 +170,7 @@ void loop()
   uint8_t answer;
   char commandKey;
   char commandStr[2];
-  const char *baseMenu[]  = { "Locomotives", "Turnouts", "Routes", "Track Power", "Configuration" };
+  const char *baseMenu[]  = { "Locomotives", "Turnouts", "Routes", "Track Power", "CV Programming", "Configuration" };
   const char txtNoPower[] = { "Track power off. Turn power on to enable function." };
   
   display.begin();
@@ -218,7 +219,7 @@ void loop()
         while (xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {} // clear keyboard buffer
       }
       while (client.connected()) {
-        answer = displayMenu ((char**)baseMenu, 5, lastMainMenuOption);
+        answer = displayMenu ((char**)baseMenu, 6, lastMainMenuOption);
         if (answer > 0) lastMainMenuOption = answer - 1;
         switch (answer) {
           case 1:
@@ -237,6 +238,10 @@ void loop()
             mkPowerMenu();
             break;
           case 5:
+            if (trackPower) mkCVMenu ();
+            else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
+            break;
+          case 6:
             mkConfigMenu();
             break;
         }

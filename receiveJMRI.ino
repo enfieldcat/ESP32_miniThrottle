@@ -252,6 +252,7 @@ void processJmriPacket (char *packet)
       if (locoRoster != NULL) free(locoRoster);   // free space if we had previously allocated it
       locoRoster      = locoData;
       locomotiveCount = tokenTally;
+      if (nvs_get_int("sortData", SORTDATA) == 1) sortLoco();
     }
     //
     // Turnout states
@@ -283,7 +284,7 @@ void processJmriPacket (char *packet)
     //
     else if (strcmp (packet, "PTL") == 0) {
       memBlock = malloc (sizeof(struct turnout_s) * tokenTally);
-      struct turnout_s *switchData = (struct turnout_s*) memBlock;
+      struct turnout_s *turnoutData = (struct turnout_s*) memBlock;
       turnoutCount = 0;
       for (tokenPtr=0; tokenPtr<tokenTally; tokenPtr++) {
         workingToken = majToken[tokenPtr];
@@ -296,15 +297,15 @@ void processJmriPacket (char *packet)
           }
         }
         if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0';
-        strcpy (switchData[tokenPtr].sysName, workingToken);
-        // switchData[tokenPtr].id = (int) strtol ((const char*)workingToken, &tptr, 10);
+        strcpy (turnoutData[tokenPtr].sysName, workingToken);
         if (strlen(subToken[0]) > (NAMELENGTH-1)) subToken[0][NAMELENGTH-1] = '\0'; // Allow up to 32 chars in a name
-        strcpy (switchData[tokenPtr].userName, subToken[0]);
-        switchData[tokenPtr].state = subToken[1][0] - '0'; // Assume single digit, and nor white space
+        strcpy (turnoutData[tokenPtr].userName, subToken[0]);
+        turnoutData[tokenPtr].state = subToken[1][0] - '0'; // Assume single digit, and nor white space
       }
       if (turnoutList != NULL) free(turnoutList);
-      turnoutList  = switchData;
+      turnoutList  = turnoutData;
       turnoutCount = tokenTally;
+      if (nvs_get_int("sortData", SORTDATA) == 1) sortTurnout();
     }
     //
     // Route states, very similar structure to turnout states
@@ -334,5 +335,30 @@ void processJmriPacket (char *packet)
     //
     // Route List
     //
+    else if (strcmp (packet, "PRL") == 0) {
+      memBlock = malloc (sizeof(struct route_s) * tokenTally);
+      struct route_s *routeData = (struct route_s*) memBlock;
+      routeCount = 0;
+      for (tokenPtr=0; tokenPtr<tokenTally; tokenPtr++) {
+        workingToken = majToken[tokenPtr];
+        tgtLength = strlen(workingToken);
+        for (subTokenPtr=0, subTokenCnt=0; subTokenPtr<tgtLength && subTokenCnt<MAXSUBTOKEN; subTokenPtr++) {
+          if (workingToken[subTokenPtr] == '}' && workingToken[subTokenPtr+1] == '|' && workingToken[subTokenPtr+2] == '{') {
+            workingToken[subTokenPtr] = '\0';
+            subTokenPtr+=2;
+            subToken[subTokenCnt++] = &(workingToken[subTokenPtr+1]);
+          }
+        }
+        if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0';
+        strcpy (routeData[tokenPtr].sysName, workingToken);
+        if (strlen(subToken[0]) > (NAMELENGTH-1)) subToken[0][NAMELENGTH-1] = '\0'; // Allow up to 32 chars in a name
+        strcpy (routeData[tokenPtr].userName, subToken[0]);
+        routeData[tokenPtr].state = subToken[1][0] - '0'; // Assume single digit, and nor white space
+      }
+      if (routeList != NULL) free(routeList);
+      routeList  = routeData;
+      routeCount = tokenTally;
+      if (nvs_get_int("sortData", SORTDATA) == 1) sortRoute();
+    }
   }
 }

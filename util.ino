@@ -43,6 +43,22 @@ char* util_ftos (float value, int dp)
 }
 
 /*
+ * Return a string value of uint8_t
+ */
+char* util_bin2str (uint8_t inVal)
+{
+  static char retVal[10];
+
+  retVal[0] = '\0';
+  for (uint8_t mask=128; mask>0; mask = mask >> 1) {
+    if ((inVal & mask) > 0) strcat (retVal, "1");
+    else strcat (retVal, "0");
+    if (mask == 16) strcat (retVal, "-");
+  }
+  return (retVal);
+}
+
+/*
  * Simple swap routine for sorting
  */
 void swapRecord (void *lowRec, void *hiRec, int recSize)

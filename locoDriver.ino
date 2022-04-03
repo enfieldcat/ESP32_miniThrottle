@@ -261,10 +261,25 @@ void locomotiveDriver()
           break;
         }
       if (commandChar >= '0' && commandChar <= '9') {
+        funcChange = true;
         functPrefix += (commandChar - '0');
+        uint16_t mask = 1 << functPrefix;
         inFunct = true;
-        //funcChange = true;
-        for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) setLocoFunction (n, functPrefix, true);
+        for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
+          if (cmdProtocol==JMRI) setLocoFunction (n, functPrefix, true);
+          else if ((mask & locoRoster[n].function) == 0) { // set if not yet set
+            locoRoster[n].function = locoRoster[n].function | mask;
+            setLocoFunction (n, functPrefix, true);
+          }
+          else {  // unset function
+            locoRoster[n].function = locoRoster[n].function & (~mask);
+            setLocoFunction (n, functPrefix, false);
+          }
+        }
+        if (cmdProtocol!=JMRI) {
+          functPrefix = 0;
+          inFunct = false;
+        }
         #ifdef F1LED
         digitalWrite(F1LED, LOW);
         #endif
@@ -274,8 +289,8 @@ void locomotiveDriver()
       }
     }
     if (inFunct && xQueueReceive(keyReleaseQueue, &releaseChar, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
+      funcChange = true;
       inFunct = false;
-      //funcChange = true;
       for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) setLocoFunction (n, functPrefix, false);
       functPrefix = 0;
     }

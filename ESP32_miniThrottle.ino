@@ -47,7 +47,7 @@ static uint8_t nextThrottle = 'A';
 static char ssid[SSIDLENGTH];
 static char tname[SSIDLENGTH];
 static char remServerType[10] = { "" };  // eg: JMRI
-static char remServerDesc[32] = { "" };  // eg: JMRI My whizzbang server v 1.0.4
+static char remServerDesc[64] = { "" };  // eg: JMRI My whizzbang server v 1.0.4
 static char remServerNode[32] = { "" };  // eg: 192.168.6.1
 static char lastMessage[40]   = { "" };  // eg: JMRI: address 'L23' not allowed as Long
 static bool configHasChanged = false;

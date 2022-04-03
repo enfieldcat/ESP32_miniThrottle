@@ -14,6 +14,9 @@ void setInitialData()
       txPacket (myID);
       txPacket ("N", tname);
     }
+    else if (cmdProtocol == DCCPLUS) {
+      txPacket ("<s>");
+    }
   }
 }
 

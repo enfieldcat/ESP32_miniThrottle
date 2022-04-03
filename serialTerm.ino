@@ -256,7 +256,7 @@ void mt_sys_config()   // display all known configuration data
       Serial.print   ("   Server Type: ");
       Serial.println (remServerType);      
     }
-    if (strlen(remServerType)>0) {
+    if (strlen(remServerDesc)>0) {
       Serial.print   ("Server Descrip: ");
       Serial.println (remServerDesc);      
     }

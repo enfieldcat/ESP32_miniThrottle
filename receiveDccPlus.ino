@@ -5,6 +5,7 @@ void processDccPacket (char *packet)
   else if (strncmp (packet, "<p",  2) == 0) dccPowerChange (packet[2]);
   else if (strncmp (packet, "<* ", 3) == 0) dccComment (&packet[3]);
   else if (strncmp (packet, "<r",  2) == 0) dccCV (&packet[2]);
+  else if (strncmp (packet, "<i",  2) == 0) dccInfo (&packet[2]);
 }
 
 void dccSpeedChange(char* speedSet)
@@ -97,6 +98,15 @@ void dccCV(char* cv)
   for (uint8_t n=0; n<strlen(start); n++) if (start[n]==' ' || start[n]=='>') start[n]='\0';
   result = util_str2int(start);
   xQueueSend (cvQueue, &result, 0);
+}
+
+/*
+ * Copy info string
+ */
+void dccInfo(char *cv)
+{
+  if (strlen(cv)>=sizeof(remServerDesc)) cv[sizeof(remServerDesc)-1] = '\0';
+  strcpy (remServerDesc, cv);
 }
 
 /*

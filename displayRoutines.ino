@@ -185,9 +185,10 @@ void mkCVMenu()
   const char *cvMenu[] = {"Read Loco Addr", "Read CV Byte", "Write Loco Addr", "Write CV Byte", "Write CV Bit", "Prev. Menu"};
   static uint8_t lastCvMenuOption = 0;
   uint8_t result = 1;
+  uint8_t bitval = 1;
   int16_t requestCV = 0;
   int16_t queryCV = 0;
-  char message[20];
+  char message[64];
 
   if (cmdProtocol == DCCPLUS) {
     while (result!=0) {
@@ -207,19 +208,23 @@ void mkCVMenu()
           break;
         case 2:
           while (xQueueReceive(cvQueue, &requestCV, pdMS_TO_TICKS(0)) == pdPASS); // clear the buffer of anything that got there
-          queryCV = enterNumber("Enter CV to read");
+          queryCV = enterNumber("Enter CV to read (1-1024)");
           if (queryCV<1024) {
             getCV(queryCV);
             displayTempMessage (NULL, "Reading data", false);
             if (xQueueReceive(cvQueue, &requestCV, pdMS_TO_TICKS(30000)) == pdPASS) { // 30 second timeout
               if (requestCV >= 0) {
                 display.clear();
-                sprintf (message, "CV %d (0x%03x):", requestCV);
+                sprintf (message, "CV %d (0x%03x):", queryCV, queryCV);
                 displayScreenLine (message, 0, false);
                 sprintf (message, "Dec: %d", requestCV);
                 displayScreenLine (message, 1, false);
                 sprintf (message, "Hex: 0x%02x", requestCV);
                 displayScreenLine (message, 2, false);
+                if (requestCV < 256) {
+                  sprintf (message, "Bin: %s", util_bin2str ((uint8_t)(requestCV & 0xff)));
+                  displayScreenLine (message, 3, false);
+                }
                 xQueueReceive(keyboardQueue, &queryCV, pdMS_TO_TICKS(30000)); // 30 second timeout
               }
               else {
@@ -231,6 +236,48 @@ void mkCVMenu()
           }
           else {
             displayTempMessage ((char*)txtWarning, "CV number should be less than 1024", true);
+          }
+          break;
+        case 3:
+          requestCV = enterNumber ("New loco address (1-10239)");
+          if (requestCV > 0 && requestCV < 10240) {
+            sprintf (message, "Set loco address to %d?", requestCV);
+            if (displayYesNo (message)) {
+              sprintf (message, "<W %d>", requestCV);
+              txPacket (message);
+            }
+          }
+          break;
+        case 4:
+          requestCV = enterNumber ("CV number (1-1024)");
+          if (requestCV > 0 && requestCV <= 1024) {
+            sprintf (message, "Value of CV %d (0-255)", requestCV);
+            queryCV = enterNumber (message);
+            if (queryCV>=0 && queryCV<=255) {
+              sprintf (message, "Set CV %d = %d?", requestCV, queryCV);
+              if (displayYesNo (message)) {
+                sprintf (message, "<W %d %d %d %d>", requestCV, queryCV, CALLBACKNUM, CALLBACKSUB); 
+                txPacket (message);
+              }
+            }
+          }
+          break;
+        case 5:
+          requestCV = enterNumber ("CV number (1-1024)");
+          if (requestCV > 0 && requestCV <= 1024) {
+            sprintf (message, "Bit number of CV %d (0-7)", requestCV);
+            queryCV = enterNumber (message);
+            if (queryCV>=0 && queryCV<8) {
+              sprintf (message, "value of CV %d, bit %d (0-1)", requestCV, queryCV);
+              bitval = enterNumber (message);
+              if (bitval==0 || bitval == 1) {
+                sprintf (message, "Set CV %d, bit %d = %d?", requestCV, queryCV, bitval);
+                if (displayYesNo (message)) {
+                  sprintf (message, "<W %d %d %d %d %d>", requestCV, queryCV, bitval, CALLBACKNUM, CALLBACKSUB); 
+                  txPacket (message);
+                }
+              }
+            }
           }
           break;
         default:
@@ -422,7 +469,7 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
 
 void displayInfo()
 {
-  char outData[50];
+  char outData[80];
   uint8_t lineNr = 0;
   
   display.clear();

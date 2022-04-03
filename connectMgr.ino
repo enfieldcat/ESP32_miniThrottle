@@ -199,6 +199,7 @@ void connect2server (char *server, int port)
         xSemaphoreGive(displaySem);
       }
       if (cmdProtocol==DCCPLUS) {
+        strcpy (remServerType, "DCC++");
         dccPopulateLoco();
         dccPopulateTurnout();
         dccPopulateRoutes();

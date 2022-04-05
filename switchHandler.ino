@@ -33,7 +33,7 @@ void switchMonitor(void *pvParameters)
   #ifdef POTTHROTPIN
   analogReadResolution(12);
   adcAttachPin(POTTHROTPIN);
-  analogSetPinAttenuation(POTTHROTPIN, 3);  // param 2 = attenuation, range 0-3 sets FSD: 0=800mV, 1=1.1V, 2=1.35V, 3=2.6V
+  analogSetPinAttenuation(POTTHROTPIN, ADC_11db);  // param 2 = attenuation, range 0-3 sets FSD: 0:ADC_0db=800mV, 1:ADC_2_5db=1.1V, 2:ADC_6db=1.35V, 3:ADC_11db=2.6V
   #endif
   // now initialise other switches
   for (uint8_t n=0; n<sizeof(toggleSwitch); n++) {
@@ -95,15 +95,15 @@ void switchMonitor(void *pvParameters)
     if (lastPotReading != potReading) {
       lastPotReading = potReading;
       if (trainSetMode) {
-        if (potReading < 128) {
-          sendPotThrot (REVERSE, abs(potReading-128);
+        if (potReading < 127) {
+          sendPotThrot (REVERSE, abs(potReading-127));
         }
         else {
           sendPotThrot (FORWARD, potReading-128);
         }
       }
       else {
-        sendPotThrot (BRAKE, potReading>>1);
+        sendPotThrot (UNCHANGED, potReading>>1);
       }
     }
     #endif
@@ -144,11 +144,15 @@ void sendPotThrot (int8_t dir, int8_t speed)
   int16_t tSpeed;
 
   for (int8_t n=0; n<limit; n++) if (locoRoster[n].owned) {
-    tSpeed = (speed<<7)/locoRoster[n].steps;
-    if (tSpeed >= locoRoster[n].steps) tSpeed = locoRoster[n].steps - 1;
-    if (locoRoster[n].speed != tSpeed) setLocoSpeed (n, tSpeed);
-    if (dir != BRAKE) {
-      if (locoRoster[n].direction != dir) setLocoDirection (n, dir);
+    tSpeed = ((speed<<7)/locoRoster[n].steps) -1;
+    if (tSpeed >= locoRoster[n].steps - 1) tSpeed = locoRoster[n].steps - 2;
+    if (locoRoster[n].speed != tSpeed) {
+      if (tSpeed < 0) setLocoSpeed (n, tSpeed, STOP);
+      else if (dir!=UNCHANGED) setLocoSpeed (n, tSpeed, dir);
+      else setLocoSpeed (n, tSpeed, locoRoster[n].direction);
+    }
+    if (dir!=UNCHANGED && dir!=locoRoster[n].direction) {
+      setLocoDirection (n, dir);
     }
   }
 }

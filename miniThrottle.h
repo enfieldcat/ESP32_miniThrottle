@@ -126,7 +126,7 @@ char keymap[ROWCOUNT][COLCOUNT] = {
  *
  * NB: pins 34 and above are read only, do not use them for outputs, assign to switches and rotary encoders
  * 
- * ADC is used for Potentiometer throttle (Pot-Throt)
+ * ADC is used for Potentiometer throttle (Pot-Throt / POTTHROTPIN)
  *     ADC1_CH0 - GPIO36
  *     ADC1_CH1 - GPIO37
  *     ADC1_CH2 - GPIO38
@@ -146,6 +146,7 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 // Manually check before compiling that pins are not duplicated
 #define SDA_PIN        22    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
 #define SCK_PIN        23    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
+// define either of TRACKPWR or TRACKPWRINV or neither. do not set both
 #define TRACKPWR       02   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
 //#define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
 #define ENCODE_UP      36   // encoder up bounce
@@ -153,6 +154,7 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 #define ENCODE_SW      34   // encoder switch
 #define DIRFWDPIN      32   // Direction sw spdt center off LOW active
 #define DIRREVPIN      33   // Direction sw spdt center off LOW active
+#define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float
 #ifdef key4x5
 #define MEMBR_COLS     21,19,18,05
 #define MEMBR_ROWS     17,16,04,26,15
@@ -182,7 +184,7 @@ char keymap[ROWCOUNT][COLCOUNT] = {
  * **********  ENUMERATIONS  *********************************************************************
  */
 // enumerations
-enum directionInd { FORWARD = 0, STOP = 1, REVERSE = 2 };
+enum directionInd { FORWARD = 0, STOP = 1, REVERSE = 2, UNCHANGED = 9 };
 enum ctrlProtocol { UNDEFINED = 0, JMRI = 1, DCCPLUS = 2 };
 
 /*

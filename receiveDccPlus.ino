@@ -1,6 +1,7 @@
 void processDccPacket (char *packet)
 {
   if (strncmp (packet, "<t ", 3) == 0) dccSpeedChange (&packet[3]);
+  else if (strncmp (packet, "<l ", 3) == 0) dccLocoStatus  (&packet[3]);
   else if (strncmp (packet, "PPA", 3) == 0) dccPowerChange (packet[3]);
   else if (strncmp (packet, "<p",  2) == 0) dccPowerChange (packet[2]);
   else if (strncmp (packet, "<* ", 3) == 0) dccComment (&packet[3]);
@@ -8,7 +9,51 @@ void processDccPacket (char *packet)
   else if (strncmp (packet, "<i",  2) == 0) dccInfo (&packet[2]);
 }
 
-void dccSpeedChange(char* speedSet)
+/*
+ * LocoStatus update
+ * <l 31 1 231 33>
+ * ID, void?, speed 0-255, functions bit map
+ */
+void dccLocoStatus (char* locoStatus)
+{
+   int locoID;
+   int locoVoid;
+   int locoSpeed;
+   int locoFunc;
+   uint8_t next, maxIdx, curIdx;
+   char *ptr;
+
+   maxIdx = strlen(locoStatus);
+   for (uint8_t n=(strlen(locoStatus)-1); n<0 && locoStatus[n]!=' ' && locoStatus[n]!='>'; n--) locoStatus[n] = '\0'; // truncate trailing chars
+   for (next=0; locoStatus[next]!=' ' && next<strlen(locoStatus); next++);  // extract loco id
+   locoStatus[next++] = '\0';
+   curIdx = next;
+   locoID = util_str2int(locoStatus);
+   ptr = locoStatus + next;
+   for (next=0; ptr[next]!=' ' && next<strlen(ptr); next++);  // extract loco void
+   curIdx = curIdx + next + 1;
+   if (curIdx > maxIdx) return;
+   ptr[next++] = '\0';
+   locoVoid = util_str2int(ptr);
+   ptr = ptr + next;
+   for (next=0; ptr[next]!=' ' && next<strlen(ptr); next++);  // extract loco speed
+   curIdx = curIdx + next + 1;
+   if (curIdx > maxIdx) return;
+   ptr[next++] = '\0';
+   locoSpeed = util_str2int(ptr);
+   ptr = ptr + next;
+   for (next=0; ptr[next]!=' ' && next<strlen(ptr); next++);  // extract loco functions
+   curIdx = curIdx + next + 1;
+   if (curIdx > maxIdx) return;
+   ptr[next++] = '\0';
+   locoFunc = util_str2int(ptr);
+   for (next=0; next<locomotiveCount+MAXCONSISTSIZE && locoRoster[next].id!=locoID; next++);
+   if (next==locomotiveCount+MAXCONSISTSIZE) return;
+   locoRoster[next].function = locoFunc;
+   if (locoRoster[next].steps > 126) locoRoster[next].speed = (locoSpeed >> 1) -1;
+}
+
+void dccSpeedChange (char* speedSet)
 {
   int dccRegister = 1;
   int dccSpeed = 0;

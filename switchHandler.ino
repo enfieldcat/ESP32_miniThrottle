@@ -21,8 +21,10 @@ void switchMonitor(void *pvParameters)
   bool changed = false;
   uint8_t readChar;
   #ifdef POTTHROTPIN
-  uint16_t potReading;
+  uint16_t potReading = 0;
   uint16_t lastPotReading = 0;
+  const uint8_t potLoopLimit = 10;
+  uint8_t potLoopCount = 0;
   #endif
 
   // deal with the encoder first
@@ -31,7 +33,8 @@ void switchMonitor(void *pvParameters)
   encoder.setFilter(1023);
   encoder.setCount (100);
   #ifdef POTTHROTPIN
-  analogReadResolution(12);
+  // We only need 8 bit resolution, higher resolution is wasted compute power
+  analogReadResolution(10);
   adcAttachPin(POTTHROTPIN);
   analogSetPinAttenuation(POTTHROTPIN, ADC_11db);  // param 2 = attenuation, range 0-3 sets FSD: 0:ADC_0db=800mV, 1:ADC_2_5db=1.1V, 2:ADC_6db=1.35V, 3:ADC_11db=2.6V
   #endif
@@ -91,19 +94,31 @@ void switchMonitor(void *pvParameters)
       }
     }
     #ifdef POTTHROTPIN
-    potReading = analogRead(POTTHROTPIN) / (4096/256);
-    if (lastPotReading != potReading) {
-      lastPotReading = potReading;
-      if (trainSetMode) {
-        if (potReading < 127) {
-          sendPotThrot (REVERSE, abs(potReading-127));
+    if (drivingLoco && enablePot) { // Ignore potentiometer if not actually driving loco
+      // Oversample to get a more stable average
+      potReading += analogRead(POTTHROTPIN);
+      if (++potLoopCount >= potLoopLimit) {
+        potReading = (potReading / potLoopCount) >> 2;
+        if (abs (lastPotReading - potReading) > 1) {  // ignore changes teetering on the cusp of change
+          lastPotReading = potReading;
+          if (trainSetMode) {
+            if (potReading <= 127) {
+              sendPotThrot (REVERSE, 127-potReading);
+              Serial.printf ("reverse %d\n", 127-potReading);
+            }
+            else {
+              sendPotThrot (FORWARD, potReading-128);
+              Serial.printf ("forward %d\n", potReading-128);
+            }
+          }
+          else {
+            sendPotThrot (UNCHANGED, potReading>>1);
+            Serial.printf ("unchanged %d\n", potReading>>1);
+          }
+          // speedChange = true;
         }
-        else {
-          sendPotThrot (FORWARD, potReading-128);
-        }
-      }
-      else {
-        sendPotThrot (UNCHANGED, potReading>>1);
+        potReading = 0;
+        potLoopCount = 0;
       }
     }
     #endif
@@ -142,17 +157,31 @@ void sendPotThrot (int8_t dir, int8_t speed)
 {
   int16_t limit = locomotiveCount + MAXCONSISTSIZE;
   int16_t tSpeed;
+  #ifdef BRAKEPRESPIN
+  int16_t lastSpeed;
+  #endif
 
   for (int8_t n=0; n<limit; n++) if (locoRoster[n].owned) {
-    tSpeed = ((speed<<7)/locoRoster[n].steps) -1;
+    if (locoRoster[n].steps!=128) tSpeed = ((speed<<7)/locoRoster[n].steps) -1;
+    else tSpeed = speed -1;
     if (tSpeed >= locoRoster[n].steps - 1) tSpeed = locoRoster[n].steps - 2;
     if (locoRoster[n].speed != tSpeed) {
-      if (tSpeed < 0) setLocoSpeed (n, tSpeed, STOP);
+      Serial.printf ("Set speed %d\n", tSpeed);
+      #ifdef BRAKEPRESPIN
+      lastSpeed = locoRoster[n].speed;
+      #endif
+      if (tSpeed <= 0) setLocoSpeed (n, tSpeed, STOP);
       else if (dir!=UNCHANGED) setLocoSpeed (n, tSpeed, dir);
       else setLocoSpeed (n, tSpeed, locoRoster[n].direction);
+      #ifdef BRAKEPRESPIN
+      if (lastSpeed > tSpeed && (dir==UNCHANGED || dir==locoRoster[n].direction)) brakedown(lastSpeed - tSpeed);
+      #endif
     }
     if (dir!=UNCHANGED && dir!=locoRoster[n].direction) {
       setLocoDirection (n, dir);
+      #ifdef BRAKEPRESPIN
+      brakedown(lastSpeed + tSpeed);
+      #endif
     }
   }
 }

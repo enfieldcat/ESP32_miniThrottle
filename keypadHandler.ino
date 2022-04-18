@@ -27,6 +27,7 @@ void keypadMonitor(void *pvParameters)
           case '5': inChar = 'S' ; break;  // 5 as select
           case '6': inChar = 'R' ; break;  // 6 as right
           case '0': inChar = 'E' ; break;  // 0 as escape
+          case '#': inChar = 'S' ; break;  // # as select
         }
       }
       xQueueSend (keyboardQueue, &inChar, 0);
@@ -43,6 +44,13 @@ void keypadMonitor(void *pvParameters)
           else  digitalWrite(TRAINSETLED, LOW);
           #endif
           break;
+        #ifdef POTTHROTPIN
+        case 'P':
+          if (enablePot) enablePot = false;
+          else enablePot = true;
+          speedChange = true;
+          break;
+        #endif
       }
     }
     // for function keys in driving mode we want to know if they are released

@@ -92,8 +92,20 @@ void connectionManager(void *pvParameters)
       #ifdef TRACKPWRINV
       digitalWrite(TRACKPWRINV, HIGH);
       #endif
+      // Use mdns to look up service
+      if ((!client.connected()) && nvs_get_int ("mdns", 1) == 1) {
+        server[0] = '\0';
+        port = mdnsLookup ("_withrottle", server);
+        if (port != 0 && strlen(server) > 0) {
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            Serial.printf ("MDNS look up service: %s:%d\n", server, port);
+            xSemaphoreGive (displaySem);
+          }
+          connect2server (server, port);
+        }
+      }
       // first check our preferred connection index, ie the one with the same index ID as the connected network
-      if (preferRef < WIFINETS) {  // should not be "not found", but just in case of a bug...
+      if ((!client.connected()) && preferRef < WIFINETS) {  // should not be "not found", but just in case of a bug...
         sprintf (paramName, "server_%d", preferRef);
         nvs_get_string (paramName, server, HOST, sizeof(server));
         sprintf (paramName, "port_%d", preferRef);
@@ -214,6 +226,91 @@ void connect2server (char *server, int port)
   }
 }
 
+// https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/protocols/mdns.html
+// Use this pattern to return service list
+void mdnsLookup (char *service)
+{
+  static const char * if_str[] = {"STA", "AP", "ETH", "MAX"};
+  static const char * ip_protocol_str[] = {"V4", "V6", "MAX"};
+  mdns_result_t *results = NULL;
+  mdns_result_t *r;
+  mdns_ip_addr_t * a = NULL;
+  int i = 1, t;
+
+  // esp_err_t mdns_query_ptr(const char *service_type, const char *proto, uint32_t timeout, size_t max_results, mdns_result_t **results)
+  esp_err_t err = mdns_query_ptr(service, "_tcp", 3000, 20,  &results);
+
+  if ((!err) && results != NULL && xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    r = results;
+    while (r){
+      Serial.printf("%d: Interface: %s, Type: %s\n", i++, if_str[r->tcpip_if], ip_protocol_str[r->ip_protocol]);
+      if (r->instance_name){
+        Serial.printf("  PTR : %s\n", r->instance_name);
+      }
+      if (r->hostname){
+         Serial.printf("  SRV : %s.local:%u\n", r->hostname, r->port);
+      }
+      if (r->txt_count){
+        Serial.printf("  TXT : [%u] ", r->txt_count);
+        for(t=0; t<r->txt_count; t++){
+          Serial.printf("%s=%s; ", r->txt[t].key, r->txt[t].value);
+        }
+        Serial.printf("\n");
+      }
+      a = r->addr;
+      while (a){
+        if(a->addr.type == IPADDR_TYPE_V6){
+          Serial.printf("  AAAA: " IPV6STR "\n", IPV62STR(a->addr.u_addr.ip6));
+        } else {
+          Serial.printf("  A   : " IPSTR "\n", IP2STR(&(a->addr.u_addr.ip4)));
+        }
+        a = a->next;
+      }
+      r = r->next;
+    }
+    xSemaphoreGive(displaySem);
+  }
+
+  if (results!=NULL) {
+    mdns_query_results_free (results);
+  }
+}
+
+// mdns lookup of service, returns port number and writes the IP address to the buffer pointed to by *addr
+int mdnsLookup (char *service, char *addr)
+{
+  int retVal = 0;
+
+  mdns_result_t *results = NULL;
+  mdns_result_t *r;
+  mdns_ip_addr_t * a = NULL;
+
+  addr[0] = '\0';
+  esp_err_t err = mdns_query_ptr(service, "_tcp", 3000, 20,  &results);
+  if ((!err) && results != NULL) {
+    r = results;
+    while (r && addr[0]=='\0'){
+      retVal = r->port;
+      a = r->addr;
+      while (a){
+        if(a->addr.type == IPADDR_TYPE_V6){
+          sprintf(addr, IPV6STR, IPV62STR(a->addr.u_addr.ip6));
+        } else {
+          sprintf(addr, IPSTR,   IP2STR(&(a->addr.u_addr.ip4)));
+        }
+        a = a->next;
+      }
+      r = r->next;
+    }
+  }
+
+  if (results!=NULL) {
+    mdns_query_results_free (results);
+  }
+  return (retVal);
+}
+
+// Transmit a packet
 void txPacket (char *header, char *pktData)
 {
   if (!client.connected()) return;

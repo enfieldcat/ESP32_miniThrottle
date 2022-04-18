@@ -18,9 +18,10 @@ DisplaySSD1327_128x128_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, -1});
 WiFiClient client;
 static SemaphoreHandle_t transmitSem = xSemaphoreCreateMutex();
 static SemaphoreHandle_t displaySem  = xSemaphoreCreateMutex();
-static QueueHandle_t cvQueue         = xQueueCreate (2, sizeof(int16_t));
+static QueueHandle_t cvQueue         = xQueueCreate (2, sizeof(int16_t)); // Queue for querying CV Values
 static QueueHandle_t keyboardQueue   = xQueueCreate (10, sizeof(char));   // Queue for keyboard type of events
 static QueueHandle_t keyReleaseQueue = xQueueCreate (10, sizeof(char));   // Queue for keyboard release type of events
+static QueueHandle_t dccAckQueue     = xQueueCreate (10, sizeof(char));   // Queue for dcc updates, avoid flooding of WiFi
 static struct locomotive_s   *locoRoster   = (struct locomotive_s*) malloc (sizeof(struct locomotive_s) * MAXCONSISTSIZE);
 static struct turnoutState_s *turnoutState = NULL;
 static struct turnout_s      *turnoutList  = NULL;
@@ -29,6 +30,10 @@ static struct route_s        *routeList    = NULL;
 static int screenWidth      = 0;
 static int screenHeight     = 0;
 static int keepAliveTime    = 10;
+#ifdef BRAKEPRESPIN
+static int brakePres        = 0;
+#endif
+const  uint16_t routeDelay[] = {0, 500, 1000, 2000, 3000, 4000};
 static uint16_t initialLoco = 3;
 static uint8_t locomotiveCount      = 0;
 static uint8_t turnoutCount         = 0;
@@ -61,6 +66,10 @@ static bool initialDataSent  = false;
 static bool trainSetMode     = false;
 static bool menuMode         = false;
 static bool funcChange       = true;
+static bool speedChange      = false;
+#ifdef POTTHROTPIN
+static bool enablePot        = true;
+#endif
 
 const char prevMenuOption[] = { "Prev. Menu"};
 const char *protoList[]     = { "Undefined", "JMRI", "DCC++" };
@@ -139,6 +148,13 @@ void setup()  {
   if (trainSetMode) digitalWrite(TRAINSETLED, HIGH);
   else digitalWrite(TRAINSETLED, LOW);
   #endif
+  #ifdef SPEEDOPIN
+  dacWrite (SPEEDOPIN, 0);
+  #endif
+  #ifdef BRAKEPRESPIN
+  dacWrite (BRAKEPRESPIN, 0);
+  #endif
+
   // Use tasks to process various input and output streams
   xTaskCreate(serialConsole, "serialConsole", 8192, NULL, 4, NULL);
   #ifdef DELAYONSTART
@@ -227,7 +243,7 @@ void loop()
             else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
             break;
           case 2:
-            if (trackPower) mkSwitchMenu ();
+            if (trackPower) mkTurnoutMenu ();
             else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
             break;
           case 3:

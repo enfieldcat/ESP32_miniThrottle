@@ -16,6 +16,7 @@ void setInitialData()
     }
     else if (cmdProtocol == DCCPLUS) {
       txPacket ("<s>");
+      delay(200);
     }
   }
 }
@@ -58,8 +59,15 @@ void setTurnout (uint8_t turnoutNr, char desiredState)
     txPacket (outPacket);
   }
   else if (cmdProtocol == DCCPLUS) {
-    sprintf (outPacket, "<T %s %c>", turnoutList[turnoutNr].sysName, desiredState);
+    while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS) {} // clear ack Queue
+    if (desiredState == 'T' || desiredState == 'C') {
+      sprintf (outPacket, "<T %s %c>", turnoutList[turnoutNr].sysName, desiredState);
+    }
+    else {
+      sprintf (outPacket, "<T %s %c>", turnoutList[turnoutNr].sysName, turnoutState[desiredState].state);
+    }
     txPacket (outPacket);
+    xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) == pdPASS; // wait for ack
   }
 }
 
@@ -67,38 +75,45 @@ void setRoute (uint8_t routeNr)
 {
   char outPacket[BUFFSIZE];
   char message[40];
+  
   if (cmdProtocol == JMRI) {
     sprintf (outPacket, "PRA2%s", routeList[routeNr].sysName);
     txPacket (outPacket);
   }
   else if (cmdProtocol == DCCPLUS) {
     char route[BUFFSIZE];
-    const uint16_t routeDelay[] = {0, 500, 1000, 2000, 4000};
     uint16_t pause = routeDelay[nvs_get_int("routeDelay", 2)];
+    
     nvs_get_string ("route", routeList[routeNr].userName, route, "not found", BUFFSIZE);
     if (strcmp (route, "not found") != 0) {
       int limit = strlen (route);
       int turnoutNr;
-      char *start = route;
+      char *start;
       for (int n=0; n<limit; n++) {
+        start = route + n;
         while (route[n] != ' ' && n<limit) n++;
-        route[n] = '\0';
+        route[n++] = '\0';
         turnoutNr = 1024;
-        for (uint8_t j=0; j<turnoutCount; j++) {
+        for (uint8_t j=0; j<turnoutCount && turnoutNr == 1024; j++) {
           if (strcmp (turnoutList[j].userName, start) == 0) turnoutNr = j;
         }
         if (turnoutNr < 1024) {
-          setTurnout (turnoutNr, route[n+1]);
+          if (route[n] == 'C') strcpy (message, "Close ");
+          else strcpy (message, "Throw ");
+          strcat (message, start);
+          displayTempMessage (NULL, message, false);
+          setTurnout (turnoutNr, route[n]);
           if (pause>0) {
-            if (route[n+1] == 'C') strcpy (message, "Close ");
-            else strcpy (message, "Throw ");
-            strcat (message, start);
-            displayTempMessage (NULL, message, false);
             delay (pause);
           }
         }
-        n += 2;
-        start = route + n;
+        else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          Serial.print ("route: turnout ");
+          Serial.print (start);
+          Serial.println (" not found");
+          xSemaphoreGive(displaySem);
+        }
+        n++;
       }
     }
   }
@@ -118,6 +133,7 @@ void setLocoFunction (uint8_t locoIndex, uint8_t funcIndex, bool set)
     if (set) setVal = 1;
     sprintf (commandPacket, "<F %d %d %d>", locoRoster[locoIndex].id, funcIndex, setVal);
     txPacket (commandPacket);
+    delay(100);
   }
 }
 
@@ -143,10 +159,11 @@ void setStealLoco(uint8_t locoIndex)
 }
 
 
-void setLocoSpeed (uint8_t locoIndex, int8_t speed, int8_t direction)
+void setLocoSpeed (uint8_t locoIndex, int16_t speed, int8_t direction)
 {
   char commandPacket[40];
   if (cmdProtocol == JMRI) {
+    // if (speed<0) speed = 0;
     sprintf (commandPacket, "M%cA%c%d<;>V%d", locoRoster[locoIndex].throttleNr, locoRoster[locoIndex].type, locoRoster[locoIndex].id, speed);
     txPacket (commandPacket);
   }
@@ -155,6 +172,7 @@ void setLocoSpeed (uint8_t locoIndex, int8_t speed, int8_t direction)
     if (direction == FORWARD) tdir = 1;
     sprintf (commandPacket, "<t 1 %d %d %d>", locoRoster[locoIndex].id, speed, tdir);
     txPacket (commandPacket);
+    delay (10);
   }
 }
 

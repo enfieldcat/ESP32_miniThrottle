@@ -1,12 +1,14 @@
 void processDccPacket (char *packet)
 {
-  if (strncmp (packet, "<t ", 3) == 0) dccSpeedChange (&packet[3]);
+  if (strncmp (packet, "<T ", 3) == 0) dccSpeedChange (&packet[3]);
   else if (strncmp (packet, "<l ", 3) == 0) dccLocoStatus  (&packet[3]);
   else if (strncmp (packet, "PPA", 3) == 0) dccPowerChange (packet[3]);
   else if (strncmp (packet, "<p",  2) == 0) dccPowerChange (packet[2]);
   else if (strncmp (packet, "<* ", 3) == 0) dccComment (&packet[3]);
   else if (strncmp (packet, "<r",  2) == 0) dccCV (&packet[2]);
   else if (strncmp (packet, "<i",  2) == 0) dccInfo (&packet[2]);
+  else if (strncmp (packet, "<H ", 3) == 0) dccAckTurnout (&packet[3]);
+  else if (strncmp (packet, "<O>", 3) == 0) dccAckTurnout ();
 }
 
 /*
@@ -77,8 +79,35 @@ void dccSpeedChange (char* speedSet)
       locoRoster[ptr].speed = dccSpeed;
       if (dccDirection == 1) locoRoster[ptr].direction = FORWARD;
       else locoRoster[ptr].direction = REVERSE;
+      speedChange = true;
     }
   }
+}
+
+/*
+ * Ack turnout packet
+ */
+void dccAckTurnout (char *ack)
+{
+  uint8_t result = 255;
+  for (uint8_t n=0; n<strlen(ack); n++) if (ack[n]==' ') {
+    ack[n]='\0';
+    result = ack[n+1];
+    if (result == '1') result = 'T';
+    else result = 'C';
+  }
+  for (uint8_t n=0; n<turnoutCount; n++) if (strcmp (ack, turnoutList[n].sysName) == 0) {
+    turnoutList[n].state = result;
+    n = turnoutCount;
+  }
+  result = util_str2int (ack);
+  xQueueSend (dccAckQueue, &result, 0);
+}
+
+void dccAckTurnout ()
+{
+  uint8_t result = 255;
+  xQueueSend (dccAckQueue, &result, 0);
 }
 
 /*
@@ -204,6 +233,7 @@ void dccPopulateLoco()
 void dccPopulateTurnout()
 {
   int numEntries = nvs_count ("turnout", "String");
+  uint8_t reqState;
 
   if (numEntries > 0) {
     char *rawData  = (char*) nvs_extractStr ("turnout", numEntries, 2*NAMELENGTH);
@@ -220,6 +250,7 @@ void dccPopulateTurnout()
     turnoutStateCount = 2;
 
     curData = rawData;
+    while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS) {} // clear ack Queue
     for (int n=0; n<numEntries; n++) {
       turnoutData[n].state = 'C';
       sprintf (turnoutData[n].sysName, "%d", (20+n));
@@ -228,6 +259,7 @@ void dccPopulateTurnout()
       sprintf (commandBuffer, "<T %s %s>", turnoutData[n].sysName, curData);
       curData = curData + (2*NAMELENGTH);
       txPacket (commandBuffer);
+      xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) == pdPASS; // wait for ack
     }
     if (rawData != NULL) {
       free (rawData);
@@ -244,7 +276,7 @@ void dccPopulateRoutes()
   int numEntries = nvs_count ("route", "String");
 
   if (numEntries > 0) {
-    char *rawData  = (char*) nvs_extractStr ("turnout", numEntries, BUFFSIZE);
+    char *rawData  = (char*) nvs_extractStr ("route", numEntries, BUFFSIZE);
     char *curData;
     struct route_s *rData = (struct route_s*) malloc (numEntries * sizeof(struct route_s));
 

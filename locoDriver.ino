@@ -3,7 +3,7 @@
  */
 void locomotiveDriver()
 {
-  const char *dirString[] = {">>", "||", "<<"};
+  const char *dirString[] = {">>", "||", "<<", "??"};
   const char *trainModeString[] = {"Std", "<->"};
   uint8_t locoCount = 1;
   uint8_t lineNr = 0;
@@ -15,11 +15,11 @@ void locomotiveDriver()
   uint8_t speedStep = 4;
   uint8_t bumpCount = 0;
   int16_t targetSpeed = 0;
-  bool speedChange = false;
   bool dirChange = false;
   char commandChar = 'Z';
   char releaseChar = 'Z';
-  char displayLine[40];
+  char displayLine[65];
+  char potVal[4] = "";
   bool inFunct = false;
 
   speedStep = nvs_get_int ("speedStep", 4);
@@ -28,8 +28,6 @@ void locomotiveDriver()
   nextThrottle = 'A';
   targetSpeed = 0;
   locoRoster[initialLoco].steal = '?';
-  locoRoster[initialLoco].direction = STOP;
-  locoRoster[initialLoco].speed = 0;
   locoRoster[initialLoco].throttleNr = nextThrottle++;
   setLocoOwnership (initialLoco, true);
   if (cmdProtocol == JMRI) {
@@ -46,9 +44,17 @@ void locomotiveDriver()
     locoRoster[initialLoco].steal = 'N';
     locoRoster[initialLoco].owned = true;
   }
+  if (locoCount > 0) {
+    locoRoster[initialLoco].direction = STOP;
+    locoRoster[initialLoco].speed = 0;
+    #ifdef BRAKEPRESPIN
+    brakePres = 0;
+    #endif
+  }
   // else Serial.println ("No steal");
   int maxLocoArray = locomotiveCount + MAXCONSISTSIZE;
   refreshDisplay = true;
+  speedChange = true;
   while (commandChar != 'E' && locoCount > 0) {  // Until escaped out of driving mode
     if (bumpCount > BUMPCOUNT) {
       uint8_t count = 0;
@@ -56,6 +62,9 @@ void locomotiveDriver()
       if (count != locoCount) locoCount = count;
     }
     else bumpCount++;
+    #ifdef BRAKEPRESPIN
+    if (bumpCount & 0x01 == 0x01) brakeup ();
+    #endif
     if (speedLine == 0) refreshDisplay = true;
     if (refreshDisplay) {
       refreshDisplay = false;
@@ -84,21 +93,26 @@ void locomotiveDriver()
       // Show speed
       if (trainSetMode) m = 1;
       else m = 0;
+      #ifdef POTTHROTPIN
+      if (enablePot) strcpy (potVal, "Pot");
+      else potVal[0] = '\0';
+      #endif
       if (locoRoster[initialLoco].speed == -1) {
-        sprintf (displayLine, "%s BRAKE %7s", dirString[locoRoster[initialLoco].direction], locoRoster[initialLoco].speed, trainModeString[m]);
+        sprintf (displayLine, "%s BRAKE %3s %3s", dirString[locoRoster[initialLoco].direction], 0, potVal, trainModeString[m]);
       }
       else {
         if (locoRoster[initialLoco].steps > 0)
-          sprintf (displayLine, "%s %3d%% %8s", dirString[locoRoster[initialLoco].direction], ((locoRoster[initialLoco].speed * 100) / locoRoster[initialLoco].steps), trainModeString[m]);
+          sprintf (displayLine, "%s %3d%% %3s %4s", dirString[locoRoster[initialLoco].direction], ((locoRoster[initialLoco].speed * 100) / locoRoster[initialLoco].steps), potVal, trainModeString[m]);
         else
-          sprintf (displayLine, "%s %3d %9s", dirString[locoRoster[initialLoco].direction], locoRoster[initialLoco].speed, trainModeString[m]);
+          sprintf (displayLine, "%s %3d %3s %5s", dirString[locoRoster[initialLoco].direction], locoRoster[initialLoco].speed, potVal, trainModeString[m]);
       }
       displayScreenLine (displayLine, speedLine, false);
       // Display graph line if available
       if (graphLine>0 && locoRoster[initialLoco].steps>0) {
         uint8_t temp = graphLine*selFontHeight;
-        uint8_t xpos = ((locoRoster[initialLoco].speed * (screenWidth-4)) / (locoRoster[initialLoco].steps-1)) + 2;
+        int16_t xpos = ((locoRoster[initialLoco].speed * (screenWidth-4)) / (locoRoster[initialLoco].steps-2)) + 2;
         uint16_t oldColor = display.getColor();
+        if (xpos<0) xpos = 1;
         display.drawRect(0, temp,   screenWidth-1, temp + (selFontHeight-1));
         // display.setColor (RGB_COLOR8 (128,128,128));
         display.fillRect(1, temp+2, xpos         , temp + (selFontHeight-3));
@@ -131,6 +145,9 @@ void locomotiveDriver()
               locoRoster[initialLoco].speed = locoRoster[initialLoco].speed - speedStep;
               if (locoRoster[initialLoco].speed < 0) locoRoster[initialLoco].speed = 0;
               setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+              #ifdef BRAKEPRESPIN
+              brakedown(1);
+              #endif
             }
             else if (locoRoster[initialLoco].direction == REVERSE) {
               locoRoster[initialLoco].direction = STOP;     // move from REVERSE to STOP
@@ -186,6 +203,9 @@ void locomotiveDriver()
             locoRoster[initialLoco].speed = locoRoster[initialLoco].speed - speedStep;
             if (locoRoster[initialLoco].speed < 0) locoRoster[initialLoco].speed = 0;
             setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+            #ifdef BRAKEPRESPIN
+            brakedown(1);
+            #endif
           }
           else if (trainSetMode) {            // FORWARD and speed <= 0
             locoRoster[initialLoco].direction = STOP;
@@ -312,9 +332,46 @@ void locomotiveDriver()
     setLocoOwnership (n, false);
     if (cmdProtocol==DCCPLUS) locoRoster[n].owned = false;
   }
+  #ifdef BRAKEPRESPIN
+  while (brakePres > 5) {
+    brakePres = brakePres - 5;
+    dacWrite (BRAKEPRESPIN, brakePres);
+    delay(10);
+  }
+  brakePres = 0;
+  dacWrite (BRAKEPRESPIN, 0);
+  #endif
   drivingLoco = false;
 }
 
+#ifdef BRAKEPRESPIN
+void brakeup ()
+{
+  static int brakeup = nvs_get_int ("brakeup", 1);
+
+  if (brakePres < 255) {
+    brakePres += brakeup;
+    if (brakePres > 255) brakePres = 255;
+    dacWrite (BRAKEPRESPIN, brakePres);
+  }
+}
+
+void brakedown (int steps)
+{
+  static int brakedown = nvs_get_int ("brakedown", 20);
+
+  if (brakedown < 1) brakedown = 1;
+  if (brakePres > 0) {
+    int mods = steps * (brakePres / brakedown);
+    if (mods == 0) {
+      mods = brakedown / 10;
+      if (mods == 0) mods = 1;
+    }
+    brakePres = brakePres - mods;
+    if (brakePres < 0) brakePres = 0;
+  }
+}
+#endif
 
 void displayFunctions (uint8_t lineNr, uint32_t functions)
 {

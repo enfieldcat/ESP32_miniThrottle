@@ -22,17 +22,18 @@
 
 // Default settings
 #define MYSSID  "DCC_ESP"
-#define HOST    "withrottle.local"
+#define HOST    "192.168.4.1"
 #define PORT    12090
 #define NAME    "mThrottle"
 
 // Uncomment these to enable debug options on startup
 // #define DELAYONSTART 20000
-#define SHOWPACKETSONSTART 1
+// #define SHOWPACKETSONSTART 1
 
 // Define application things
 #define MAXFUNCTIONS   30   // only expect 0-29 supported
 #define MAXCONSISTSIZE  4   // max number of locomotives to drive in one session
+#define MAXPARAMS      43   // Maximum number of parameters a serial console comand can have, 43 => route of up to 20 switches
 #define NAMELENGTH     32   // Length of names for locos, turnoutss, routes etc
 #define SSIDLENGTH     33   // Length to permit SSIDs and passwords
 #define SORTDATA        1   // 0 = unsorted, 1 = sorted lists of data
@@ -66,60 +67,12 @@
 #ifdef SSD1327
 #define DISPLAYADDR  0x3c   // i2c display addr
 #endif
-
-/*
- * **********  KEYPAD CONFIG  *******************************************************************
- */
 // Define keypad things, Define one type of keypad
 //#define keynone
 //#define key1x5
 #define key3x4
 //#define key4x4
 //#define key4x5
-//
-//
-#ifdef key4x5
-#define COLCOUNT        4
-#define ROWCOUNT        5
-// F1, F2 = X and Y
-// Arrow keys are "U"p, "D"own, "L"eft and "R"ight
-// ESC = "E" and ENT = "S"ubmit
-char keymap[ROWCOUNT][COLCOUNT] = {
-  { 'L', '0', 'R', 'S' },
-  { '7', '8', '9', 'E' },
-  { '4', '5', '6', 'D' },
-  { '1', '2', '3', 'U' },
-  { 'X', 'Y', '#', '*' }
-};
-#endif
-#ifdef key4x4
-#define COLCOUNT        4
-#define ROWCOUNT        4
-char keymap[ROWCOUNT][COLCOUNT] = {
-  { '*', '0', '#', 'S' },
-  { '7', '8', '9', 'E' },
-  { '4', '5', '6', 'Y' },
-  { '1', '2', '3', 'X' }
-};
-#endif
-#ifdef key3x4
-#define COLCOUNT        3
-#define ROWCOUNT        4
-char keymap[ROWCOUNT][COLCOUNT] = {
-  { '*', '0', '#' },
-  { '7', '8', '9' },
-  { '4', '5', '6' },
-  { '1', '2', '3' }
-};
-#endif
-#ifdef key1x5
-#define COLCOUNT        5
-#define ROWCOUNT        1
-char keymap[ROWCOUNT][COLCOUNT] = {
-  { '*', '#', 'S', 'E', 'X' }
-};
-#endif
-
 
 /*
  * **********  PIN ASSIGNMENTS  ******************************************************************
@@ -173,6 +126,8 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 #endif
 // To configure a speedometer, use one of the 2 DAC pins to drive a 3v voltmeter
 #define SPEEDOPIN      25
+// To define a brake pressure gauge using a 3V voltmeter, use BRAKEPRESPIN on one of 2 DAC pins
+#define BRAKEPRESPIN   26
 // To enable trainset mode indicator
 #define TRAINSETLED    27
 // To enable function key indicators
@@ -181,10 +136,73 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 
 
 /*
+ * **********  KEYPAD CONFIG  *******************************************************************
+ */
+
+//
+//
+#ifdef key4x5
+#define COLCOUNT        4
+#define ROWCOUNT        5
+// F1, F2 = X and Y
+// Arrow keys are "U"p, "D"own, "L"eft and "R"ight
+// ESC = "E" and ENT = "S"ubmit
+// 'P' toggle pot throttle
+// '*' toggle trainset mode
+char keymap[ROWCOUNT][COLCOUNT] = {
+  { 'L', '0', 'R', 'S' },
+  { '7', '8', '9', 'E' },
+  { '4', '5', '6', 'D' },
+  { '1', '2', '3', 'U' },
+#ifdef POTTHROTPIN
+  { 'X', 'Y', '#', 'P' }
+#else
+  { 'X', 'Y', '#', '*' }
+#endif};
+#endif
+#ifdef key4x4
+#define COLCOUNT        4
+#define ROWCOUNT        4
+char keymap[ROWCOUNT][COLCOUNT] = {
+#ifdef POTTHROTPIN
+  { 'P', '0', '#', 'S' },
+#else
+  { '*', '0', '#', 'S' },
+#endif
+  { '7', '8', '9', 'E' },
+  { '4', '5', '6', 'Y' },
+  { '1', '2', '3', 'X' }
+};
+#endif
+#ifdef key3x4
+#define COLCOUNT        3
+#define ROWCOUNT        4
+char keymap[ROWCOUNT][COLCOUNT] = {
+#ifdef POTTHROTPIN
+  { 'P', '0', '#' },
+#else
+  { 'X', '0', '#' },
+#endif
+  { '7', '8', '9' },
+  { '4', '5', '6' },
+  { '1', '2', '3' }
+};
+#endif
+#ifdef key1x5
+#define COLCOUNT        5
+#define ROWCOUNT        1
+char keymap[ROWCOUNT][COLCOUNT] = {
+  { '*', '#', 'S', 'E', 'X' }
+};
+#endif
+
+
+
+/*
  * **********  ENUMERATIONS  *********************************************************************
  */
 // enumerations
-enum directionInd { FORWARD = 0, STOP = 1, REVERSE = 2, UNCHANGED = 9 };
+enum directionInd { FORWARD = 0, STOP = 1, REVERSE = 2, UNCHANGED = 3 };
 enum ctrlProtocol { UNDEFINED = 0, JMRI = 1, DCCPLUS = 2 };
 
 /*
@@ -196,7 +214,7 @@ struct locomotive_s {
   char type;                      // Long or short addr. 127 and below should be short, 128 and above should be long
   uint8_t throttleNr;             // Throttle Number
   int8_t direction;               // FORWARD, STOP or REVERSE
-  int8_t speed;                   // 128 steps, -1, 0-126
+  int16_t speed;                  // 128 steps, -1, 0-126
   uint8_t steps;                  // Steps to use when updating speed
   bool owned;                     // Is loco owned y this throttle?
   char steal;                     // Is a steal required?

@@ -29,6 +29,7 @@ void mkLocoMenu()
   char *locoMenu[locomotiveCount+2];
   const char lastOpt[] = { "Enter loco ID" };
   uint8_t result = 255;
+  uint8_t commandKey;
 
   for (uint8_t n=0; n<locomotiveCount; n++) locoMenu[n] = locoRoster[n].name;
   locoMenu[locomotiveCount] = (char*) lastOpt;
@@ -63,11 +64,12 @@ void mkLocoMenu()
       initialLoco  = lastLocoMenuOption;
       locomotiveDriver ();
       result = 255;
+      while (xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {}
     }
   }
 }
 
-void mkSwitchMenu()
+void mkTurnoutMenu()
 {
   char *switchMenu[turnoutCount + 1];
   char *stateMenu[turnoutStateCount];
@@ -110,7 +112,7 @@ void mkRouteMenu()
     return;
   }
   for (uint8_t n=0; n<routeCount; n++) routeMenu[n] = routeList[n].userName;
-  routeMenu[turnoutCount] = (char*) prevMenuOption;
+  routeMenu[routeCount] = (char*) prevMenuOption;
   while (result!=0) {
     result = displayMenu (routeMenu, routeCount+1, lastRouteMenuOption);
     if (result == (routeCount+1)) result = 0;  // give option to go to previous menu
@@ -139,9 +141,10 @@ void mkPowerMenu()
 void mkConfigMenu()
 {
   const char *configMenu[] = {"CPU Speed", "Font", "Info", "Protocol", "Restart", "Server IP", "Server Port", "Speed Step", "Prev. Menu"};
+  char *address;
   uint8_t result = 1;
   char commandKey;
-  char paramName[8];
+  char paramName[9];
   int portNum;
 
   while (result != 0) {
@@ -165,10 +168,30 @@ void mkConfigMenu()
         displayTempMessage ("Restarting", "Press any key to reboot or wait 30 seconds", true);
         ESP.restart();
         break;
+      case 6:
+        address = enterAddress ("Server IP Address:");
+        if (strlen(address)>0) {
+          portNum = 0;
+          for (uint8_t lo=0; lo<strlen(address); lo++) if (address[lo]=='.') portNum++;
+          if (portNum==3 && address[strlen(address)-1]!='.') {
+            sprintf(paramName, "server_%d", (WIFINETS-1));
+            nvs_put_string (paramName, address);
+          }
+          else {
+            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+              Serial.print ("reject malformed address: ");
+              Serial.println (address);
+              xSemaphoreGive(displaySem);
+            }
+          }
+        }
+        break;
       case 7:
         portNum = enterNumber("Server Port:");
-        sprintf (paramName, "port_%d", (WIFINETS-1));
-        nvs_put_int (paramName, portNum);
+        if (portNum>0) {
+          sprintf (paramName, "port_%d", (WIFINETS-1));
+          nvs_put_int (paramName, portNum);
+        }
         break;
       case 8:
         mkSpeedStepMenu();
@@ -369,14 +392,14 @@ void mkProtoPref()
 
 uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
 {
-  const char *CABOptions[] = {"Add Loco", "Remove Loco", "Return"} ;
+  const char *CABOptions[] = {"Add Loco", "Remove Loco", "Turnouts", "Routes", "Return"} ;
 
   uint8_t result = 255;
   uint8_t option = 0;
   uint8_t retval = 0;
   uint8_t limit = locomotiveCount + MAXCONSISTSIZE;
 
-  result = displayMenu((char**)CABOptions , 3, 2);
+  result = displayMenu((char**)CABOptions , 5, 2);
   if (result == 1) {     // Add loco, should only show locos we don't yet own
     char *addOpts [locomotiveCount+1];
     for (uint8_t n = 0; n<locomotiveCount; n++) if (!locoRoster[n].owned) addOpts[option++] = locoRoster[n].name;
@@ -462,6 +485,12 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
         }
       }
     }
+  }
+  else if (result == 3) {
+    mkTurnoutMenu();
+  }
+  else if (result == 4) {
+    mkRouteMenu();
   }
   for (uint8_t n = 0; n<limit; n++) if (locoRoster[n].owned) retval++;
   return (retval);
@@ -651,13 +680,13 @@ int enterNumber(char *prompt)
   char inKey = 'Z';
   char dispNum[8];
   char inBuffer[7];
-  uint8_t charPosition = 0;
-  uint8_t x, y;
+  uint16_t charPosition = 0; // use uint16_t - some displays will have more than 256 pixels width/height
+  uint16_t x, y;
 
   x = 4 * selFontWidth;
-  y = 1.5 * selFontHeight;
+  // y = 1.5 * selFontHeight;
   display.clear();
-  displayTempMessage (NULL, prompt, false);
+  y = (displayTempMessage (NULL, prompt, false)) + (1.5 * selFontHeight);
   while (inKey != 'S' && inKey != 'E' && inKey != '#' && inKey != '*') {
     inBuffer[charPosition] = '\0';
     if (inBuffer[0] == '\0') retVal = 0;
@@ -668,10 +697,58 @@ int enterNumber(char *prompt)
       if (charPosition < (sizeof (inBuffer) - 1) && inKey >= '0' && inKey <= '9') {
         inBuffer[charPosition++] = inKey;
       }
-      if ((inKey == 'L' || inKey == 'R') && charPosition>0) charPosition--;
+      else if ((inKey == 'L' || inKey == 'R') && charPosition>0) charPosition--;
     }
     else inKey = 'E';
   }
   if (inKey == 'E') retVal = -1;
+  return (retVal);
+}
+
+char* enterAddress(char *prompt)
+{
+  static char retVal[16];
+  char displayVal[17];
+  uint16_t x,y;
+  uint16_t tVal = 0;
+  uint8_t tPtr = 0;
+  uint8_t dotCount = 0;
+  char inKey = 'Z';
+  
+  x = 0;
+  display.clear();
+  y = displayTempMessage (NULL, prompt, false) + (2 * selFontHeight);
+  while (inKey != 'S' && inKey != 'E' && inKey != '#' && tPtr<sizeof(retVal)) {
+    retVal[tPtr] = '\0';
+    sprintf (displayVal, "%s ", retVal);
+    display.printFixed (x, y, displayVal, STYLE_NORMAL);
+    if (xQueueReceive(keyboardQueue, &inKey, pdMS_TO_TICKS(30000)) == pdPASS) {
+      if (tPtr < (sizeof (retVal) - 1) && inKey >= '0' && inKey <= '9' && (tVal+(inKey-'0'))<256) {
+        retVal[tPtr++] = inKey;
+        tVal = (tVal+(inKey-'0')) * 10;
+        if (tVal>255 && dotCount<3) {
+          retVal[tPtr++] = '.';
+          dotCount++;
+          tVal = 0;
+        }
+      }
+      else if (inKey == '*' && tPtr > 0 && retVal[tPtr-1] != '.' && dotCount < 3) {
+        retVal[tPtr++] = '.';
+        dotCount++;
+        tVal = 0;
+      }
+      else if ((inKey == 'L' || inKey == 'R') && tPtr>0) {
+        tPtr--;
+        if (retVal[tPtr]=='.') {
+          tPtr--;
+          dotCount--;
+        }
+        else tVal = tVal/10;
+      }
+    }
+    else inKey = 'E';
+  }
+  if (inKey == 'E') retVal[0] = '\0';
+  else retVal[tPtr] = '\0';
   return (retVal);
 }

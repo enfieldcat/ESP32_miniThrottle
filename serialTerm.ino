@@ -1,6 +1,4 @@
 
-#define MAXPARAMS 10
-
 
 void serialConsole(void *pvParameters)
 // This is the console task.
@@ -20,10 +18,10 @@ void serialConsole(void *pvParameters)
   while ( true ) {
     if (Serial.available()) {
       inChar = Serial.read();
-      if (inChar == 7 || inChar == 127) {
+      if (inChar == 8 || inChar == 127) {
         if (bufferPtr > 0) {
           bufferPtr--;
-          Serial.print (7);
+          Serial.print (0x08);
         }
       }
       else {
@@ -72,21 +70,28 @@ void process (uint8_t *inBuffer)
   for (n=nparam; n<MAXPARAMS; n++) param[n] = NULL;
   if (strlen(param[0]) == 0) return;
   else if (nparam>=4 && strcmp (param[0], "add") == 0)           mt_add_gadget       (nparam, param);
+  #ifdef BRAKEPRESPIN
+  else if ((nparam==1 || nparam==3) && strcmp (param[0], "brake") == 0) mt_brake     (nparam, param);
+  #endif
   else if (nparam==1 && strcmp (param[0], "config")  == 0)       mt_sys_config       ();
   else if (nparam<=2 && strcmp (param[0], "cpuspeed") == 0)      mt_set_cpuspeed     (nparam, param);
   else if (nparam==3 && (strcmp (param[0], "del") == 0 || strcmp (param[0], "delete") == 0)) mt_del_gadget (nparam, param);
-  else if (nparam<=2 && strcmp (param[0], "name") == 0)          mt_set_name         (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "debouncetime") == 0)  mt_set_debounceTime (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "detentcount") == 0)   mt_set_detentCount  (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "dump") == 0)          mt_dump_data        (nparam, param);
+  else if (nparam==1 && strcmp (param[0], "export") == 0)        mt_export           ();
   else if (nparam<=2 && strcmp (param[0], "help") == 0)          help                (nparam, param);
+  else if (nparam<=2 && strcmp (param[0], "mdns") == 0)          set_mdns            (nparam, param);
   else if (nparam==1 && strcmp (param[0], "memory") == 0)        showMemory          ();
+  else if (nparam<=2 && strcmp (param[0], "name") == 0)          mt_set_name         (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "nvs") == 0)           mt_dump_nvs         (nparam, param);
   else if (nparam==1 && strcmp (param[0], "pins")  == 0)         showPinConfig       ();
   else if (nparam<=2 && strcmp (param[0], "protocol") == 0)      mt_set_protocol     (nparam, param);
-  else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
-  else if (nparam<=2 && strcmp (param[0], "speedstep") == 0)     mt_set_speedStep    (nparam, param);
   else if (nparam==1 && strcmp (param[0], "restart") == 0)       mt_sys_restart      ("command line request");
+  else if (nparam<=2 && strcmp (param[0], "routedelay") == 0)    mt_set_routedelay   (nparam, param);
+  else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
+  else if (nparam>=2 && strcmp (param[0], "sendcmd") == 0)       mt_sendcmd          (nparam, param);
+  else if (nparam<=2 && strcmp (param[0], "speedstep") == 0)     mt_set_speedStep    (nparam, param);
   else if (nparam<=4 && strcmp (param[0], "wifi") == 0)          mt_set_wifi         (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "wifiscan") == 0)      mt_set_wifiscan     (nparam, param);
   else if (nparam==1 && strcmp (param[0], "locos") == 0)         displayLocos        ();
@@ -102,9 +107,140 @@ void process (uint8_t *inBuffer)
   else if (nparam==1 && strcmp (param[0], "notrainsetmode")  == 0) mt_settrainset (false);
   else if (nparam==1 && strcmp (param[0], "sortdata")        == 0) nvs_put_int    ("sortData", 1);
   else if (nparam==1 && strcmp (param[0], "nosortdata")      == 0) nvs_put_int    ("sortData", 0);
-  else Serial.println ("Command not recognised.");
+  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.println ("Command not recognised.");
+    xSemaphoreGive(displaySem);
+  }
 }
 
+#ifdef BRAKEPRESPIN
+void mt_brake (int nparam, char **param)
+{
+  if (nparam==1) {
+    int brakeup = nvs_get_int ("brakeup", 1);
+    int brakedown = nvs_get_int ("brakedown", 20);
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.print ("brake-up = ");
+      Serial.print (brakeup);
+      Serial.print (", brake-down = ");
+      Serial.println (brakedown);
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else if (nparam == 3) {
+    if (util_str_isa_int(param[1]) && util_str_isa_int(param[2])) {
+      int val = util_str2int(param[1]);
+      if (val > 0 && val<10) nvs_put_int ("brakeup", val);
+      val = util_str2int(param[2]);
+      if (val > 0 && val<100) nvs_put_int ("brakedown", val);
+    }
+    else {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.println ("brake-up and brake-down values should both be integer");
+        xSemaphoreGive(displaySem);
+      }
+    }
+  }
+}
+#endif
+
+/*
+ * Export config data
+ */
+void mt_export()
+{
+  const char *namespaces[] = {"loco", "turnout", "route"};
+  int count;
+  char *nvsData, *nvsPtr;
+  char varName[16];
+  char msgBuffer[BUFFSIZE];
+
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    nvs_get_string ("tname", msgBuffer, "none", sizeof(msgBuffer));
+    if (strcmp (msgBuffer, "none") != 0) {
+      Serial.printf ("name %s\n", msgBuffer);
+    }
+    count = nvs_get_int ("defaultProto", -1);
+    if (count >= 0) {
+      Serial.print ("protocol ");
+      if (count == JMRI) Serial.println ("jmri");
+      else Serial.println ("dcc++");
+    }
+    count = nvs_get_int ("routedelay", -1);
+    if (count >= 0) Serial.printf ("routedelay %d", count);
+    for (uint8_t n=0; n<WIFINETS; n++) {
+      sprintf (varName, "server_%d", n);
+      nvs_get_string (varName, msgBuffer, "none", sizeof(msgBuffer));
+      if (strcmp (msgBuffer, "none") != 0) {
+        sprintf (varName, "port_%d", n);
+        count = nvs_get_int (varName, 1080);
+        Serial.printf ("server %d %s %d\n", n, msgBuffer, count);
+      }
+    }
+    count = nvs_get_int ("speedstep", -1);
+    if (count >= 0) Serial.printf ("speedstep %d", count);
+    count = nvs_get_int ("sortdata", -1);
+    if (count == 0) Serial.println ("nosortdata");
+    else if (count == 1) Serial.println ("sortdata");
+    count = nvs_get_int ("trainsetmode", -1);
+    if (count == 0) Serial.println ("notrainsetmode");
+    else if (count == 1) Serial.println ("trainsetmode");
+    for (uint8_t n=0; n<WIFINETS; n++) {
+      sprintf (varName, "wifissid_%d", n);
+      nvs_get_string (varName, msgBuffer, "none", sizeof(msgBuffer));
+      if (strcmp (msgBuffer, "none") != 0) {
+        Serial.printf ("wifi %d %s", n, msgBuffer);
+        sprintf (varName, "wifipass_%d", n);
+        nvs_get_string (varName, msgBuffer, "none", sizeof(msgBuffer));
+        if (strcmp (msgBuffer, "none") != 0) Serial.printf (" %s\n", msgBuffer);
+        else Serial.printf ("\n");
+      }
+    }
+    xSemaphoreGive(displaySem);
+  }
+  for (uint8_t n=0; n<3; n++) {
+    count = nvs_count ((char*)namespaces[n], "all");
+    if (count > 0) {
+      nvsData = (char*) nvs_extractStr ((char*)namespaces[n], count, BUFFSIZE);
+      nvsPtr = nvsData;
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        for (int j=0; j<count; j++) {
+          Serial.print ("add ");
+          Serial.print (namespaces[n]);
+          Serial.print (" ");
+          Serial.print (nvsPtr);
+          Serial.print (" ");
+          nvsPtr += 16;
+          Serial.println (nvsPtr);
+          nvsPtr += BUFFSIZE;
+        }
+        xSemaphoreGive(displaySem);
+      }
+      free (nvsData);
+    }
+  }
+}
+
+/*
+ * Use to send arbitrary commands to the CS
+ * For diagnostic use only
+ */
+void mt_sendcmd (int nparam, char **param)
+{
+  char cmdBuffer[BUFFSIZE];
+
+  strcpy (cmdBuffer, param[1]);
+  for (uint8_t n=2; n<nparam; n++) {
+    strcat (cmdBuffer, " ");
+    strcat (cmdBuffer, param[n]);
+  }
+  txPacket (cmdBuffer);
+}
+
+
+/*
+ * When running DCC++ use this to add Loco,turnout or route
+ */
 void mt_add_gadget (int nparam, char **param)
 {
   char dataBuffer[BUFFSIZE];
@@ -188,6 +324,8 @@ void mt_add_gadget (int nparam, char **param)
     else {
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
         Serial.println ("Route definition should be followed by turnout-name and state pairs");
+        Serial.print   ("Maximum pair count is: ");
+        Serial.println ((MAXPARAMS - 3) / 2);
         xSemaphoreGive(displaySem);
       }
     }
@@ -493,6 +631,33 @@ void mt_set_wifiscan(int nparam, char **param)
   }
 }
 
+void set_mdns(int nparam, char **param)
+{
+  if (nparam==1) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.print ("mDNS lookup: O");
+      if (nvs_get_int ("mdns", 1) == 1) Serial.println ("n");
+      else Serial.println ("ff");
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else if (strcmp (param[1], "on") == 0) {
+    nvs_put_int ("mdns", 1);
+  }
+  else if (strcmp (param[1], "off") == 0) {
+    nvs_put_int ("mdns", 0);
+  }
+  else {
+    if (param[1][0] != '_') {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.println ("if searching for service prefix service name with \"_\".");
+        xSemaphoreGive(displaySem);
+      }
+    }
+    else mdnsLookup (param[1]);
+  }
+}
+
 void displayLocos()  // display locomotive data
 {
   const static char dirIndic[3][5] = { "Fwd", "Stop", "Rev" };
@@ -563,6 +728,46 @@ void displayRoutes()  // display known data about switches / points
       }
     }
     xSemaphoreGive(displaySem);
+  }
+}
+
+void mt_set_routedelay (int nparam, char **param)
+{
+  if (nparam == 1) {
+    int dval = nvs_get_int("routeDelay", 2);
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.print ("Delay between switch changes when setting routes is option ");
+      Serial.print (dval);
+      Serial.print (" => ");
+      Serial.print (routeDelay[dval]);
+      Serial.println (" mS");
+      Serial.println ("Options are");
+      for (uint8_t n=0; n<(sizeof(routeDelay)/sizeof(uint16_t)); n++) {
+        Serial.print ("   ");
+        Serial.print (n);
+        Serial.print (" => ");
+        Serial.print (routeDelay[n]);
+        Serial.println (" mS");
+      }
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else {
+    if (util_str_isa_int (param[1])) {
+      int dval = util_str2int (param[1]);
+      if (dval>=0 && dval<(sizeof(routeDelay)/sizeof(uint16_t))) {
+        nvs_put_int ("routeDelay", dval);
+      }
+      else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.print ("routedelay value should be less than ");
+        Serial.println (sizeof(routeDelay)/sizeof(uint16_t));
+        xSemaphoreGive(displaySem);
+      }
+    }
+    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println ("routedelay value should be an integer");
+      xSemaphoreGive(displaySem);
+    }
   }
 }
 
@@ -857,7 +1062,15 @@ void showPinConfig()  // Display pin out selection
     Serial.println (outBuffer);
     #endif    
     #ifdef SPEEDOPIN
-    sprintf (outBuffer, "Speedometer Out= %d", SPEEDOPIN);
+    sprintf (outBuffer, "Speedometer out= %d", SPEEDOPIN);
+    Serial.println (outBuffer);
+    #endif
+    #ifdef BRAKEPRESPIN
+    sprintf (outBuffer, "Brake pressure = %d", BRAKEPRESPIN);
+    Serial.println (outBuffer);
+    #endif
+    #ifdef POTTHROTPIN
+    sprintf (outBuffer, "Throttle poten = %d", POTTHROTPIN);
     Serial.println (outBuffer);
     #endif
     xSemaphoreGive(displaySem);
@@ -937,6 +1150,17 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    permanent setting, DCC++ only, restart required");
       }
     }
+    #ifdef BRAKEPRESPIN
+    if (all || strcmp(param[1], "brake")==0) {
+      Serial.println ((const char*) "brake [<up-rate> <down-rate>]");
+      if (!summary) {
+        Serial.println ((const char*) "    Set \"brake pressure\" increase and decrease");
+        Serial.println ((const char*) "    Increase is constant rate over time");
+        Serial.println ((const char*) "    Decrease is (1/n * pressure) per step decrease in speed");
+        Serial.println ((const char*) "    permanent setting");
+      }
+    }
+    #endif
     if (all || strcmp(param[1], "config")==0) {
       Serial.println ((const char*) "config");
       if (!summary) {
@@ -987,6 +1211,13 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    info only");
       }
     }
+    if (all || strcmp(param[1], "mdns")==0) {
+      Serial.println ((const char*) "mdns [on|off|<name>]");
+      if (!summary) {
+        Serial.println ((const char*) "    Use mDNS to search for wiThrottle on network, or locate service <name>");
+        Serial.println ((const char*) "    Permanent setting or info");
+      }
+    }
     if (all || strcmp(param[1], "memory")==0) {
       Serial.println ((const char*) "memory");
       if (!summary) {
@@ -1027,6 +1258,20 @@ void help(int nparam, char **param)  // show help data
       if (!summary) {
         Serial.println ((const char*) "    Restart throttle");
         Serial.println ((const char*) "    temporary setting");
+      }
+    }
+    if (all || strcmp(param[1], "routedelay")==0) {
+      Serial.println ((const char*) "routedelay [mS_delay]");
+      if (!summary) {
+        Serial.println ((const char*) "    Set interval between setting each turnout in a route");
+        Serial.println ((const char*) "    permanent setting");
+      }
+    }
+    if (all || strcmp(param[1], "sendcmd")==0) {
+      Serial.println ((const char*) "sendcmd <data for CS>");
+      if (!summary) {
+        Serial.println ((const char*) "    Send a packet of data to the command station");
+        Serial.println ((const char*) "    For testing and diagnotics only, use with care!");
       }
     }
     if (all || strcmp(param[1], "server")==0) {

@@ -160,14 +160,22 @@ void mt_export()
     if (strcmp (msgBuffer, "none") != 0) {
       Serial.printf ("name %s\n", msgBuffer);
     }
+    count = nvs_get_int ("detentCount", -1);
+    if (count >= 0) {
+      Serial.printf ("detentcount %d\n", count);
+    }
+    count = nvs_get_int ("debounceTime", -1);
+    if (count >= 0) {
+      Serial.printf ("debouncetime %d\n", count);
+    }
     count = nvs_get_int ("defaultProto", -1);
     if (count >= 0) {
       Serial.print ("protocol ");
       if (count == JMRI) Serial.println ("jmri");
       else Serial.println ("dcc++");
     }
-    count = nvs_get_int ("routedelay", -1);
-    if (count >= 0) Serial.printf ("routedelay %d", count);
+    count = nvs_get_int ("routeDelay", -1);
+    if (count >= 0) Serial.printf ("routedelay %d\n", count);
     for (uint8_t n=0; n<WIFINETS; n++) {
       sprintf (varName, "server_%d", n);
       nvs_get_string (varName, msgBuffer, "none", sizeof(msgBuffer));
@@ -177,12 +185,16 @@ void mt_export()
         Serial.printf ("server %d %s %d\n", n, msgBuffer, count);
       }
     }
-    count = nvs_get_int ("speedstep", -1);
-    if (count >= 0) Serial.printf ("speedstep %d", count);
-    count = nvs_get_int ("sortdata", -1);
+    count = nvs_get_int ("speedStep", -1);
+    if (count >= 0) Serial.printf ("speedstep %d\n", count);
+    count = nvs_get_int ("brakeup", -1);
+    if (count >= 0 || nvs_get_int ("brakedown", -1) >= 0){
+      Serial.printf ("brake %d %d\n", nvs_get_int ("brakeup", 1), nvs_get_int ("brakedown", 20));
+    }
+    count = nvs_get_int ("sortData", -1);
     if (count == 0) Serial.println ("nosortdata");
     else if (count == 1) Serial.println ("sortdata");
-    count = nvs_get_int ("trainsetmode", -1);
+    count = nvs_get_int ("trainSetMode", -1);
     if (count == 0) Serial.println ("notrainsetmode");
     else if (count == 1) Serial.println ("trainsetmode");
     for (uint8_t n=0; n<WIFINETS; n++) {

@@ -14,7 +14,7 @@
 
 // Project identity and version
 #define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.1a"         // Version string
+#define VERSION     "0.2"          // Version string
 
 // Select one display board type
 //#define SSD1306

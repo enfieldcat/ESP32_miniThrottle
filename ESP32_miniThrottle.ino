@@ -18,6 +18,8 @@ DisplaySSD1327_128x128_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, -1});
 WiFiClient client;
 static SemaphoreHandle_t transmitSem = xSemaphoreCreateMutex();
 static SemaphoreHandle_t displaySem  = xSemaphoreCreateMutex();
+static SemaphoreHandle_t velociSem   = xSemaphoreCreateMutex();
+static SemaphoreHandle_t functionSem = xSemaphoreCreateMutex();
 static QueueHandle_t cvQueue         = xQueueCreate (2, sizeof(int16_t)); // Queue for querying CV Values
 static QueueHandle_t keyboardQueue   = xQueueCreate (10, sizeof(char));   // Queue for keyboard type of events
 static QueueHandle_t keyReleaseQueue = xQueueCreate (10, sizeof(char));   // Queue for keyboard release type of events

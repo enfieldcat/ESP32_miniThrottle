@@ -152,8 +152,11 @@ void processJmriPacket (char *packet)
           for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
             if ((locoNumber == 0 && throtId == locoRoster[ptr].throttleNr) || (locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type)) {
               if (locoNumber != 0) found = true;
-              if (tptr[1] == '1') locoRoster[ptr].function = locoRoster[ptr].function | mask;
-              else locoRoster[ptr].function = locoRoster[ptr].function & mask;
+              if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+                if (tptr[1] == '1') locoRoster[ptr].function = locoRoster[ptr].function | mask;
+                else locoRoster[ptr].function = locoRoster[ptr].function & mask;
+                xSemaphoreGive(functionSem);
+              }
             }
           }
           funcChange = true;
@@ -166,9 +169,12 @@ void processJmriPacket (char *packet)
           for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
             if ((locoNumber == 0 && throtId == locoRoster[ptr].throttleNr) || (locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type)) {
               if (locoNumber != 0) found = true;
-              locoRoster[ptr].speed = velocity;
+              if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+                locoRoster[ptr].speed = velocity;
+                xSemaphoreGive(velociSem);
+              }
             }
-           }
+          }
         }
         //
         // Direction (Reverse?true) / Rigting
@@ -177,8 +183,11 @@ void processJmriPacket (char *packet)
           for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
             if ((locoNumber == 0 && throtId == locoRoster[ptr].throttleNr) || (locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type)) {
               if (locoNumber != 0) found = true;
-              if (tptr[1] == '0') locoRoster[ptr].direction = REVERSE;
-              else locoRoster[ptr].direction = FORWARD;
+              if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+                if (tptr[1] == '0') locoRoster[ptr].direction = REVERSE;
+                else locoRoster[ptr].direction = FORWARD;
+                xSemaphoreGive(velociSem);
+              }
             }
           }
         }

@@ -97,21 +97,29 @@ void locomotiveDriver()
       if (enablePot) strcpy (potVal, "Pot");
       else potVal[0] = '\0';
       #endif
-      if (locoRoster[initialLoco].speed == -1) {
-        sprintf (displayLine, "%s BRAKE %3s %3s", dirString[locoRoster[initialLoco].direction], 0, potVal, trainModeString[m]);
-      }
-      else {
-        if (locoRoster[initialLoco].steps > 0)
-          sprintf (displayLine, "%s %3d%% %3s %4s", dirString[locoRoster[initialLoco].direction], ((locoRoster[initialLoco].speed * 100) / locoRoster[initialLoco].steps), potVal, trainModeString[m]);
-        else
-          sprintf (displayLine, "%s %3d %3s %5s", dirString[locoRoster[initialLoco].direction], locoRoster[initialLoco].speed, potVal, trainModeString[m]);
+      if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        if (locoRoster[initialLoco].speed == -1) {
+          sprintf (displayLine, "%s BRAKE %3s %3s", dirString[locoRoster[initialLoco].direction], potVal, trainModeString[m]);
+        }
+        else {
+          if (locoRoster[initialLoco].steps > 0)
+            sprintf (displayLine, "%s %3d%% %3s %4s", dirString[locoRoster[initialLoco].direction], ((locoRoster[initialLoco].speed * 100) / (locoRoster[initialLoco].steps - 2)), potVal, trainModeString[m]);
+          else {
+            sprintf (displayLine, "%s %3d %3s %5s", dirString[locoRoster[initialLoco].direction], locoRoster[initialLoco].speed, potVal, trainModeString[m]);
+          }
+        }
+        xSemaphoreGive(velociSem);
       }
       displayScreenLine (displayLine, speedLine, false);
       // Display graph line if available
       if (graphLine>0 && locoRoster[initialLoco].steps>0) {
         uint8_t temp = graphLine*selFontHeight;
-        int16_t xpos = ((locoRoster[initialLoco].speed * (screenWidth-4)) / (locoRoster[initialLoco].steps-2)) + 2;
+        int16_t xpos = 0;
         uint16_t oldColor = display.getColor();
+        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          xpos = ((locoRoster[initialLoco].speed * (screenWidth-4)) / (locoRoster[initialLoco].steps-2)) + 2;
+          xSemaphoreGive(velociSem);
+        }
         if (xpos<0) xpos = 1;
         display.drawRect(0, temp,   screenWidth-1, temp + (selFontHeight-1));
         // display.setColor (RGB_COLOR8 (128,128,128));
@@ -122,8 +130,11 @@ void locomotiveDriver()
       }
       // update speedo DAC, 3v voltmeter
       #ifdef SPEEDOPIN
-      uint16_t speedo = (locoRoster[initialLoco].speed * 255) / locoRoster[initialLoco].steps;
-      dacWrite (SPEEDOPIN, speedo);
+      if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        uint16_t speedo = (locoRoster[initialLoco].speed * 255) / locoRoster[initialLoco].steps;
+        dacWrite (SPEEDOPIN, speedo);
+        xSemaphoreGive(velociSem);
+      }
       #endif
     }
     if (funcChange && funcLine>0) {
@@ -139,55 +150,28 @@ void locomotiveDriver()
     //
     if (xQueueReceive(keyboardQueue, &commandChar, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
       switch (commandChar) {
-        case 'U':  // Increase forwardness. 
-          if (trainSetMode && locoRoster[initialLoco].direction != FORWARD) {
-            if (locoRoster[initialLoco].speed > 0) {
-              locoRoster[initialLoco].speed = locoRoster[initialLoco].speed - speedStep;
-              if (locoRoster[initialLoco].speed < 0) locoRoster[initialLoco].speed = 0;
-              setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
-              #ifdef BRAKEPRESPIN
-              brakedown(1);
-              #endif
-            }
-            else if (locoRoster[initialLoco].direction == REVERSE) {
-              locoRoster[initialLoco].direction = STOP;     // move from REVERSE to STOP
-            }
-            else {
-              locoRoster[initialLoco].direction = FORWARD;  // move from STOP to FORWARD
-              setLocoSpeed (initialLoco, 0, FORWARD);
-              setLocoDirection (initialLoco, FORWARD);
-              dirChange = true;
-            }
-            speedChange = true;
-          }
-          else if (locoRoster[initialLoco].speed < (locoRoster[initialLoco].steps - 2)) {
-            speedChange = true;
-            locoRoster[initialLoco].speed = locoRoster[initialLoco].speed + speedStep;
-            if (locoRoster[initialLoco].speed > (locoRoster[initialLoco].steps - 2)) {
-              locoRoster[initialLoco].speed = locoRoster[initialLoco].steps - 2;
-            }
-            setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
-          }
-          // now set increased speed for other controlled locos, based on initial loco speed
-          targetSpeed = locoRoster[initialLoco].speed;
-          for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && n != initialLoco) {
-            setLocoSpeed (n, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
-            if (dirChange) {
-              setLocoDirection (n, locoRoster[initialLoco].direction);
-            }
-          }
-          dirChange = false;
-          break;
-        case 'D':  // Increase reversedness
-          // In trainset mode down is an increase of sepped if in reverse
-          if (trainSetMode && locoRoster[initialLoco].direction != FORWARD) {
-            // if in trainsetmode and direction is not FORWARD, then special handling is required
-            if (locoRoster[initialLoco].direction == STOP) {
-              locoRoster[initialLoco].direction = REVERSE;
+        case 'U':  // Increase forwardness.
+          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            dirChange = false;
+            if (trainSetMode && locoRoster[initialLoco].direction != FORWARD) {
+              if (locoRoster[initialLoco].speed > 0) {
+                locoRoster[initialLoco].speed = locoRoster[initialLoco].speed - speedStep;
+                if (locoRoster[initialLoco].speed < 0) locoRoster[initialLoco].speed = 0;
+                setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+                #ifdef BRAKEPRESPIN
+                brakedown(1);
+                #endif
+              }
+              else if (locoRoster[initialLoco].direction == REVERSE) {
+                locoRoster[initialLoco].direction = STOP;     // move from REVERSE to STOP
+              }
+              else {
+                locoRoster[initialLoco].direction = FORWARD;  // move from STOP to FORWARD
+                setLocoSpeed (initialLoco, 0, FORWARD);
+                setLocoDirection (initialLoco, FORWARD);
+                dirChange = true;
+              }
               speedChange = true;
-              setLocoSpeed (initialLoco, 0, REVERSE);
-              setLocoDirection (initialLoco, REVERSE);
-              dirChange = true;
             }
             else if (locoRoster[initialLoco].speed < (locoRoster[initialLoco].steps - 2)) {
               speedChange = true;
@@ -197,55 +181,94 @@ void locomotiveDriver()
               }
               setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
             }
-          }
-          else if (locoRoster[initialLoco].speed > 0) { // FORWARD and speed > 0
-            speedChange = true;
-            locoRoster[initialLoco].speed = locoRoster[initialLoco].speed - speedStep;
-            if (locoRoster[initialLoco].speed < 0) locoRoster[initialLoco].speed = 0;
-            setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
-            #ifdef BRAKEPRESPIN
-            brakedown(1);
-            #endif
-          }
-          else if (trainSetMode) {            // FORWARD and speed <= 0
-            locoRoster[initialLoco].direction = STOP;
-            setLocoSpeed (initialLoco, 0, locoRoster[initialLoco].direction);
-            speedChange = true;
-          }
-          // now set reduced speed for other controlled locos, based on initial loco speed
-          targetSpeed = locoRoster[initialLoco].speed;
-          for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && n != initialLoco) {
-            setLocoSpeed (n, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
-            if (dirChange) {
-              setLocoDirection (n, locoRoster[initialLoco].direction);
+            // now set increased speed for other controlled locos, based on initial loco speed
+            targetSpeed = locoRoster[initialLoco].speed;
+            for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && n != initialLoco) {
+              setLocoSpeed (n, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+              if (dirChange) {
+                setLocoDirection (n, locoRoster[initialLoco].direction);
+              }
             }
+            xSemaphoreGive(velociSem);
           }
-          dirChange = false;
+          break;
+        case 'D':  // Increase reversedness
+          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            dirChange = false;
+            // In trainset mode down is an increase of speed if in reverse
+            if (trainSetMode && locoRoster[initialLoco].direction != FORWARD) {
+              // if in trainsetmode and direction is not FORWARD, then special handling is required
+              if (locoRoster[initialLoco].direction == STOP) {
+                locoRoster[initialLoco].direction = REVERSE;
+                speedChange = true;
+                setLocoSpeed (initialLoco, 0, REVERSE);
+                setLocoDirection (initialLoco, REVERSE);
+                dirChange = true;
+              }
+              else if (locoRoster[initialLoco].speed < (locoRoster[initialLoco].steps - 2)) {
+                speedChange = true;
+                locoRoster[initialLoco].speed = locoRoster[initialLoco].speed + speedStep;
+                if (locoRoster[initialLoco].speed > (locoRoster[initialLoco].steps - 2)) {
+                  locoRoster[initialLoco].speed = locoRoster[initialLoco].steps - 2;
+                }
+                setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+              }
+            }
+            else if (locoRoster[initialLoco].speed > 0) { // FORWARD and speed > 0
+              speedChange = true;
+              locoRoster[initialLoco].speed = locoRoster[initialLoco].speed - speedStep;
+              if (locoRoster[initialLoco].speed < 0) locoRoster[initialLoco].speed = 0;
+              setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+              #ifdef BRAKEPRESPIN
+              brakedown(1);
+              #endif
+            }
+            else if (trainSetMode) {            // FORWARD and speed <= 0
+              locoRoster[initialLoco].direction = STOP;
+              setLocoSpeed (initialLoco, 0, locoRoster[initialLoco].direction);
+              speedChange = true;
+            }
+            // now set reduced speed for other controlled locos, based on initial loco speed
+            targetSpeed = locoRoster[initialLoco].speed;
+            for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && n != initialLoco) {
+              setLocoSpeed (n, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+              if (dirChange) {
+                setLocoDirection (n, locoRoster[initialLoco].direction);
+              }
+            }
+            xSemaphoreGive(velociSem);
+          }
           break;
         case 'B':
-          for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
-            if (locoRoster[n].speed > 0) {
-              locoRoster[n].speed = 0;
-              speedChange = true;
+          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
+              if (locoRoster[n].speed > 0) {
+                locoRoster[n].speed = 0;
+                speedChange = true;
+              }
               setLocoSpeed (n, -1, locoRoster[n].direction);
             }
+            xSemaphoreGive(velociSem);
           }
           break;
         case 'L':  // Left / Right = Reverse / Forward
         case 'R':
-          uint8_t intended_dir;
-          if (commandChar == 'L') intended_dir = REVERSE;
-          else intended_dir = FORWARD;
-          for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
-            if (locoRoster[n].direction != intended_dir) {
-              if (locoRoster[n].speed > 0) {
-                locoRoster[n].speed = 0;
+          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            uint8_t intended_dir;
+            if (commandChar == 'L') intended_dir = REVERSE;
+            else intended_dir = FORWARD;
+            for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
+              if (locoRoster[n].direction != intended_dir) {
+                if (locoRoster[n].speed > 0) {
+                  locoRoster[n].speed = 0;
+                }
+                speedChange = true;
+                locoRoster[n].direction = intended_dir;
+                setLocoDirection (n, intended_dir);
+                setLocoSpeed (n, 0, locoRoster[n].direction);
               }
-              speedChange = true;
-              locoRoster[n].direction = intended_dir;
-              setLocoDirection (n, intended_dir);
-              setLocoSpeed (n, 0, locoRoster[n].direction);
             }
+            xSemaphoreGive(velociSem);
           }
           break;
         case 'X':
@@ -281,20 +304,23 @@ void locomotiveDriver()
           break;
         }
       if (commandChar >= '0' && commandChar <= '9') {
-        funcChange = true;
-        functPrefix += (commandChar - '0');
-        uint16_t mask = 1 << functPrefix;
-        inFunct = true;
-        for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
-          if (cmdProtocol==JMRI) setLocoFunction (n, functPrefix, true);
-          else if ((mask & locoRoster[n].function) == 0) { // set if not yet set
-            locoRoster[n].function = locoRoster[n].function | mask;
-            setLocoFunction (n, functPrefix, true);
+        if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          funcChange = true;
+          functPrefix += (commandChar - '0');
+          uint16_t mask = 1 << functPrefix;
+          inFunct = true;
+          for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
+            if (cmdProtocol==JMRI) setLocoFunction (n, functPrefix, true);
+            else if ((mask & locoRoster[n].function) == 0) { // set if not yet set
+              locoRoster[n].function = locoRoster[n].function | mask;
+              setLocoFunction (n, functPrefix, true);
+            }
+            else {  // unset function
+              locoRoster[n].function = locoRoster[n].function & (~mask);
+              setLocoFunction (n, functPrefix, false);
+            }
           }
-          else {  // unset function
-            locoRoster[n].function = locoRoster[n].function & (~mask);
-            setLocoFunction (n, functPrefix, false);
-          }
+          xSemaphoreGive(functionSem);
         }
         if (cmdProtocol!=JMRI) {
           functPrefix = 0;
@@ -309,10 +335,13 @@ void locomotiveDriver()
       }
     }
     if (inFunct && xQueueReceive(keyReleaseQueue, &releaseChar, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
-      funcChange = true;
-      inFunct = false;
-      for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) setLocoFunction (n, functPrefix, false);
-      functPrefix = 0;
+      if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        funcChange = true;
+        inFunct = false;
+        for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) setLocoFunction (n, functPrefix, false);
+        functPrefix = 0;
+        xSemaphoreGive(functionSem);
+      }
     }
     // Don't escape if speed is non zero
     if (commandChar == 'E') {

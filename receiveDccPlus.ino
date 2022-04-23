@@ -18,10 +18,10 @@ void processDccPacket (char *packet)
  */
 void dccLocoStatus (char* locoStatus)
 {
-   int locoID;
-   int locoVoid;
-   int locoSpeed;
-   int locoFunc;
+   int16_t locoID;
+   int16_t locoVoid;
+   int16_t  locoSpeed;
+   uint16_t locoFunc;
    uint8_t next, maxIdx, curIdx;
    char *ptr;
 
@@ -51,16 +51,22 @@ void dccLocoStatus (char* locoStatus)
    locoFunc = util_str2int(ptr);
    for (next=0; next<locomotiveCount+MAXCONSISTSIZE && locoRoster[next].id!=locoID; next++);
    if (next==locomotiveCount+MAXCONSISTSIZE) return;
-   locoRoster[next].function = locoFunc;
-   if (locoRoster[next].steps > 126) locoRoster[next].speed = (locoSpeed >> 1) -1;
+   if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+     locoRoster[next].function = locoFunc;
+     xSemaphoreGive(functionSem);
+   }
+   if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+     if (locoRoster[next].steps > 126) locoRoster[next].speed = (int16_t) ((locoSpeed >> 1) -1);
+     xSemaphoreGive(velociSem);
+   }
 }
 
 void dccSpeedChange (char* speedSet)
 {
-  int dccRegister = 1;
-  int dccSpeed = 0;
-  int dccDirection = 0;
-  int maxLocoArray = locomotiveCount + MAXCONSISTSIZE;
+  int16_t dccRegister = 1;
+  int16_t dccSpeed = 0;
+  int16_t dccDirection = 0;
+  int16_t maxLocoArray = locomotiveCount + MAXCONSISTSIZE;
   char *token;
   char *remain = speedSet;
 
@@ -76,9 +82,12 @@ void dccSpeedChange (char* speedSet)
   if (dccSpeed>127) dccSpeed = -1;
   for (uint8_t ptr=0; ptr<maxLocoArray; ptr++) {
     if (locoRoster[ptr].owned) {
-      locoRoster[ptr].speed = dccSpeed;
-      if (dccDirection == 1) locoRoster[ptr].direction = FORWARD;
-      else locoRoster[ptr].direction = REVERSE;
+      if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        locoRoster[ptr].speed = (int16_t) dccSpeed;
+        if (dccDirection == 1) locoRoster[ptr].direction = FORWARD;
+        else locoRoster[ptr].direction = REVERSE;
+        xSemaphoreGive(velociSem);
+      }
       speedChange = true;
     }
   }

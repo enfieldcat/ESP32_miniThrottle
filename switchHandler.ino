@@ -104,16 +104,13 @@ void switchMonitor(void *pvParameters)
           if (trainSetMode) {
             if (potReading <= 127) {
               sendPotThrot (REVERSE, 127-potReading);
-              Serial.printf ("reverse %d\n", 127-potReading);
             }
             else {
               sendPotThrot (FORWARD, potReading-128);
-              Serial.printf ("forward %d\n", potReading-128);
             }
           }
           else {
             sendPotThrot (UNCHANGED, potReading>>1);
-            Serial.printf ("unchanged %d\n", potReading>>1);
           }
           // speedChange = true;
         }
@@ -166,19 +163,38 @@ void sendPotThrot (int8_t dir, int8_t speed)
     else tSpeed = speed -1;
     if (tSpeed >= locoRoster[n].steps - 1) tSpeed = locoRoster[n].steps - 2;
     if (locoRoster[n].speed != tSpeed) {
-      Serial.printf ("Set speed %d\n", tSpeed);
       #ifdef BRAKEPRESPIN
       lastSpeed = locoRoster[n].speed;
       #endif
-      if (tSpeed <= 0) setLocoSpeed (n, tSpeed, STOP);
-      else if (dir!=UNCHANGED) setLocoSpeed (n, tSpeed, dir);
-      else setLocoSpeed (n, tSpeed, locoRoster[n].direction);
+      if (tSpeed <= 0) {
+        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          setLocoSpeed (n, tSpeed, STOP);
+          xSemaphoreGive(velociSem);
+        }
+      }
+      else if (dir!=UNCHANGED) {
+        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          setLocoSpeed (n, tSpeed, dir);
+          xSemaphoreGive(velociSem);
+        }
+      }
+      else {
+        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          setLocoSpeed (n, tSpeed, locoRoster[n].direction);
+          xSemaphoreGive(velociSem);
+        }
+      }
       #ifdef BRAKEPRESPIN
-      if (lastSpeed > tSpeed && (dir==UNCHANGED || dir==locoRoster[n].direction)) brakedown(lastSpeed - tSpeed);
+      if (lastSpeed > tSpeed && (dir==UNCHANGED || dir==locoRoster[n].direction)) {
+        brakedown(lastSpeed - tSpeed);
+      }
       #endif
     }
     if (dir!=UNCHANGED && dir!=locoRoster[n].direction) {
-      setLocoDirection (n, dir);
+      if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        setLocoDirection (n, dir);
+        xSemaphoreGive(velociSem);
+      }
       #ifdef BRAKEPRESPIN
       brakedown(lastSpeed + tSpeed);
       #endif

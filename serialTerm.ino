@@ -1025,6 +1025,26 @@ void showPinConfig()  // Display pin out selection
     sprintf (outBuffer, "I2C - SCK      = %d", SCK_PIN);
     Serial.println (outBuffer);
     #endif
+    #ifdef SPI_RESET
+    sprintf (outBuffer, "SPI - reset    = %d", SPI_RESET);
+    Serial.println (outBuffer);
+    #endif
+    #ifdef SPI_CS
+    sprintf (outBuffer, "SPI - CS       = %d", SPI_CS);
+    Serial.println (outBuffer);
+    #endif
+    #ifdef SPI_DC
+    sprintf (outBuffer, "SPI - DC       = %d", SPI_DC);
+    Serial.println (outBuffer);
+    #endif
+    #ifdef SPI_SCL
+    sprintf (outBuffer, "SPI - clock/SCL= %d", SPI_SCL);
+    Serial.println (outBuffer);
+    #endif
+    #ifdef SPI_SDA
+    sprintf (outBuffer, "SPI - data/SDA = %d", SPI_SDA);
+    Serial.println (outBuffer);
+    #endif
     sprintf (outBuffer, "Encoder up     = %d", ENCODE_UP);
     Serial.println (outBuffer);
     sprintf (outBuffer, "Encoder down   = %d", ENCODE_DN);

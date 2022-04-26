@@ -121,12 +121,20 @@ void locomotiveDriver()
           xSemaphoreGive(velociSem);
         }
         if (xpos<0) xpos = 1;
+        #ifdef SPEEDBORDER
+        display.setColor (SPEEDBORDER);
+        #endif
         display.drawRect(0, temp,   screenWidth-1, temp + (selFontHeight-1));
-        // display.setColor (RGB_COLOR8 (128,128,128));
+        #ifdef SPEEDBAR
+        display.setColor (SPEEDBAR);
+        #endif
         display.fillRect(1, temp+2, xpos         , temp + (selFontHeight-3));
         display.setColor (0);
         display.fillRect( xpos+1 ,temp+1, screenWidth-2, temp + (selFontHeight-2));
         display.setColor (oldColor);
+        #ifdef BACKCOLOR
+        display.setBackground (BACKCOLOR);
+        #endif
       }
       // update speedo DAC, 3v voltmeter
       #ifdef SPEEDOPIN
@@ -414,6 +422,10 @@ void displayFunctions (uint8_t lineNr, uint32_t functions)
   dis[1] = '\0';
   if (limit > 28) limit = 29;
   y = lineNr*selFontHeight;
+  
+  #ifdef FUNCCOLOR
+  display.setColor (FUNCCOLOR);
+  #endif
   for (uint8_t n=0; n<limit; n++) {
     if (functions & mask) {
       set = true;
@@ -423,8 +435,14 @@ void displayFunctions (uint8_t lineNr, uint32_t functions)
       set = false;
     }
     dis[0] = fTemplate[n];
-    display.printFixed((n*selFontWidth), y, dis, STYLE_NORMAL);
+    display.printFixedN((n*selFontWidth), y, dis, STYLE_NORMAL, fontScale);
     if (set) display.invertColors();
     mask<<=1;
   }
+  #ifdef STDCOLOR
+  display.setColor (STDCOLOR);
+  #endif
+  #ifdef BACKCOLOR
+  display.setBackground (BACKCOLOR);
+  #endif
 }

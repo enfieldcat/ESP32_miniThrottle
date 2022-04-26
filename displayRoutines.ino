@@ -1,10 +1,47 @@
+/*
+ * internal fonts
+ * Micro: digital_font5x7
+ * Small: ssd1306xled_font6x8
+ * Std:   ssd1306xled_font8x16
+ * Large: free_calibri11x12
+ * 
+ * If defining additional fonts, list sources in .gitignore
+ * In one or more font source #define CUSTOM_FONT
+ * The source font should be listed in Ardiuno IDE before displayRoutines.ino
+ */
+#ifdef CUSTOM_FONT
+const char *fontLabel[] = {"Small", "Std", "Large", "Wide", "Huge"};
+const uint8_t fontWidth[]  = { 6,8,10,18,12 };
+const uint8_t fontHeight[] = { 8,16,20,18,24 };
+#else
+const char *fontLabel[] = {"Small", "Std", "Large", "Wide"};
+const uint8_t fontWidth[]  = { 6,8,10,18 };
+const uint8_t fontHeight[] = { 8,16,20,18 };
+#endif
+
+
 void setupFonts()
 {
   static uint8_t fontIndex = 1;
 
+  #ifdef SCREENROTATE
+  #if SCREENROTATE == 2
+  display.getInterface().flipHorizontal (screenRotate);
+  display.getInterface().flipVertical (screenRotate);
+  #else
+  display.getInterface().rotateOutput (screenRotate);
+  display.getInterface().setRotation (screenRotate);
+  #endif
+  #endif
+  screenWidth    = display.width();
+  screenHeight   = display.height();
   fontIndex      = nvs_get_int ("fontIndex", 1);
   selFontWidth   = fontWidth[fontIndex];
   selFontHeight  = fontHeight[fontIndex];
+  if (fontScale == 1) {
+    selFontWidth  = selFontWidth  << 1;
+    selFontHeight = selFontHeight << 1;
+  }
   charsPerLine   = screenWidth  / selFontWidth;
   linesPerScreen = screenHeight / selFontHeight;
   switch (fontIndex) {
@@ -20,7 +57,18 @@ void setupFonts()
     case 3:
       display.setFixedFont(font_18x18);
       break;
+    #ifdef CUSTOM_FONT
+    case 4:
+      display.setFixedFont(font_12x24);
+      break;
+    #endif
   }
+  #ifdef STDCOLOR
+  display.setColor (STDCOLOR);
+  #endif
+  #ifdef BACKCOLOR
+  display.setBackground (BACKCOLOR);
+  #endif
 }
 
 
@@ -140,7 +188,7 @@ void mkPowerMenu()
 
 void mkConfigMenu()
 {
-  const char *configMenu[] = {"CPU Speed", "Font", "Info", "Protocol", "Restart", "Server IP", "Server Port", "Speed Step", "Prev. Menu"};
+  const char *configMenu[] = {"CPU Speed", "Font", "Info", "Protocol", "Restart", "Rotate Screen", "Server IP", "Server Port", "Speed Step", "Trainset Mode", "Prev. Menu"};
   char *address;
   uint8_t result = 1;
   char commandKey;
@@ -148,7 +196,7 @@ void mkConfigMenu()
   int portNum;
 
   while (result != 0) {
-    result = displayMenu ((char**) configMenu, 9, (result-1));
+    result = displayMenu ((char**) configMenu, 11, (result-1));
     switch (result) {
       case 1:
         mkCpuSpeedMenu();
@@ -169,6 +217,9 @@ void mkConfigMenu()
         ESP.restart();
         break;
       case 6:
+        mkRotateMenu();
+        break;
+      case 7:
         address = enterAddress ("Server IP Address:");
         if (strlen(address)>0) {
           portNum = 0;
@@ -186,15 +237,19 @@ void mkConfigMenu()
           }
         }
         break;
-      case 7:
+      case 8:
         portNum = enterNumber("Server Port:");
         if (portNum>0) {
           sprintf (paramName, "port_%d", (WIFINETS-1));
           nvs_put_int (paramName, portNum);
         }
         break;
-      case 8:
+      case 9:
         mkSpeedStepMenu();
+        break;
+      case 10:
+        if (displayYesNo ("Trainset mode?")) trainSetMode = true;
+        else trainSetMode = false;
         break;
       default:
         result = 0;
@@ -314,18 +369,32 @@ void mkCVMenu()
 
 void mkFontMenu()
 {
-  char fontMenu[sizeof(fontWidth) + 1][32];
-  char *mp[sizeof(fontWidth) + 1];
+  char fontMenu[sizeof(fontWidth) + 3][32];
+  char *mp[sizeof(fontWidth) + 3];
   uint8_t result;
 
-  for (uint8_t n=0; n<sizeof(fontWidth); n++) sprintf (fontMenu[n], "%s (%dx%d chars)", fontLabel[n], (screenWidth/fontWidth[n]), (screenHeight/fontHeight[n]));
-  sprintf (fontMenu[sizeof(fontWidth)], prevMenuOption);
-  for (uint8_t n=0;n<sizeof(fontWidth) + 1; n++) mp[n] = (char*) &fontMenu[n];
-  result = displayMenu (mp, (sizeof(fontWidth) + 1), 2);
+  for (uint8_t n=0; n<sizeof(fontWidth); n++) sprintf (fontMenu[n], "%s (%dx%d chars)", fontLabel[n], (screenWidth/(fontWidth[n]<<fontScale)), (screenHeight/(fontHeight[n]<<fontScale)));
+  sprintf (fontMenu[sizeof(fontWidth)], "Font Scale x1");
+  sprintf (fontMenu[sizeof(fontWidth)+1], "Font Scale x2");
+  sprintf (fontMenu[sizeof(fontWidth)+2], prevMenuOption);
+  for (uint8_t n=0;n<sizeof(fontWidth) + 3; n++) mp[n] = (char*) &fontMenu[n];
+  result = displayMenu (mp, (sizeof(fontWidth) + 3), 1);
   if (result > 0 && result <= sizeof(fontWidth)) {
     result--;
     nvs_put_int ("fontIndex", result);
     setupFonts();
+  }
+  else {
+    if (result == sizeof(fontWidth)+1) {
+      fontScale = 0;
+      nvs_put_int ("fontScale", 0);
+      setupFonts();
+    }
+    else if (result == sizeof(fontWidth)+2) {
+      fontScale = 1;
+      nvs_put_int ("fontScale", 1);
+      setupFonts();
+    }
   }
 }
 
@@ -496,6 +565,28 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
   return (retval);
 }
 
+void mkRotateMenu()
+{
+  #ifndef SCREENROTATE
+  displayTempMessage ("Warning:", "Screen rotation not supported on this screen type");
+  #else
+  #if SCREENROTATE == 2
+  uint8_t opts = 3;
+  char *rotateMenu[] = {"Normal", "Invert", "Prev. Menu"};
+  #else
+  uint8_t opts = 5;
+  char *rotateMenu[] = {"0 deg (Normal)", "90 deg Right", "180 deg (Invert)", "90 deg Left", "Prev. Menu"};
+  #endif
+  uint8_t result = displayMenu (rotateMenu, opts, 0);
+  if (result > 0 && result < opts) {
+    result--;
+    screenRotate = result;
+    nvs_put_int ("screenRotate", result);
+    setupFonts();
+  }
+  #endif
+}
+
 void displayInfo()
 {
   char outData[80];
@@ -600,9 +691,25 @@ void displayScreenLine (char *menuItem, uint8_t lineNr, bool inverted)
     for (uint8_t n=strlen(linedata); n<charsPerLine; n++) linedata[n]=' ';
   }
   linedata[charsPerLine] = '\0';
-  if (inverted) display.invertColors();
-  display.printFixed(0, (lineNr*selFontHeight), linedata, STYLE_NORMAL);
-  if (inverted) display.invertColors();
+  if (inverted) {
+    #ifdef INVERTCOLOR
+    display.setColor (INVERTCOLOR);
+    #endif
+    #ifdef BACKCOLOR
+    display.setBackground (BACKCOLOR);
+    #endif
+    display.invertColors();
+  }
+  display.printFixedN(0, (lineNr*selFontHeight), linedata, STYLE_NORMAL, fontScale);
+  if (inverted) {
+    display.invertColors();
+    #ifdef  STDCOLOR
+    display.setColor (STDCOLOR);
+    #endif
+    #ifdef BACKCOLOR
+    display.setBackground (BACKCOLOR);
+    #endif
+  }
 }
 
 // wait for up to 30 seconds to read CV data
@@ -656,7 +763,7 @@ uint8_t displayTempMessage (char *header, char *message, bool wait4response)
 
 bool displayYesNo (char *question)
 {
-  uint8_t baseLine = displayTempMessage (NULL, question, false);
+  uint8_t baseLine = displayTempMessage (NULL, question, false) + 1;
   uint8_t command = 255;
   bool option = true;
 
@@ -687,12 +794,15 @@ int enterNumber(char *prompt)
   // y = 1.5 * selFontHeight;
   display.clear();
   y = (displayTempMessage (NULL, prompt, false)) + (1.5 * selFontHeight);
+  #ifdef INPUTCOLOR
+  display.setColor (INPUTCOLOR);
+  #endif
   while (inKey != 'S' && inKey != 'E' && inKey != '#' && inKey != '*') {
     inBuffer[charPosition] = '\0';
     if (inBuffer[0] == '\0') retVal = 0;
     else retVal = strtol (inBuffer, &tptr, 10);
     sprintf (dispNum, "%d ", retVal);
-    display.printFixed (x, y, dispNum, STYLE_NORMAL);
+    display.printFixedN (x, y, dispNum, STYLE_NORMAL, fontScale);
     if (xQueueReceive(keyboardQueue, &inKey, pdMS_TO_TICKS(30000)) == pdPASS) {
       if (charPosition < (sizeof (inBuffer) - 1) && inKey >= '0' && inKey <= '9') {
         inBuffer[charPosition++] = inKey;
@@ -701,6 +811,9 @@ int enterNumber(char *prompt)
     }
     else inKey = 'E';
   }
+  #ifdef STDCOLOR
+  display.setColor (STDCOLOR);
+  #endif
   if (inKey == 'E') retVal = -1;
   return (retVal);
 }
@@ -718,10 +831,13 @@ char* enterAddress(char *prompt)
   x = 0;
   display.clear();
   y = displayTempMessage (NULL, prompt, false) + (2 * selFontHeight);
+  #ifdef INPUTCOLOR
+  display.setColor (INPUTCOLOR);
+  #endif
   while (inKey != 'S' && inKey != 'E' && inKey != '#' && tPtr<sizeof(retVal)) {
     retVal[tPtr] = '\0';
     sprintf (displayVal, "%s ", retVal);
-    display.printFixed (x, y, displayVal, STYLE_NORMAL);
+    display.printFixedN (x, y, displayVal, STYLE_NORMAL, fontScale);
     if (xQueueReceive(keyboardQueue, &inKey, pdMS_TO_TICKS(30000)) == pdPASS) {
       if (tPtr < (sizeof (retVal) - 1) && inKey >= '0' && inKey <= '9' && (tVal+(inKey-'0'))<256) {
         retVal[tPtr++] = inKey;
@@ -748,6 +864,9 @@ char* enterAddress(char *prompt)
     }
     else inKey = 'E';
   }
+  #ifdef STDCOLOR
+  display.setColor (STDCOLOR);
+  #endif
   if (inKey == 'E') retVal[0] = '\0';
   else retVal[tPtr] = '\0';
   return (retVal);

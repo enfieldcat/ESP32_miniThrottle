@@ -11,6 +11,20 @@ DisplaySSD1306_128x64_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, -1});
 #else
 #ifdef SSD1327
 DisplaySSD1327_128x128_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, -1});
+#else
+#ifdef ST7735
+// params {reset, {busid, cs, dc, freq, scl, sca}}
+// reset may be -1 if not used, otherwise -1 => defaults
+DisplayST7735_128x160x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_SDA});
+#else
+#ifdef ST7789
+DisplayST7789_135x240x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_SDA});
+#else
+#ifdef ILI9341
+DisplayILI9341_240x320x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_SDA});
+#endif
+#endif
+#endif
 #endif
 #endif
 
@@ -51,6 +65,8 @@ static uint8_t linesPerScreen;
 static uint8_t debounceTime = DEBOUNCEMS;
 static uint8_t cmdProtocol  = UNDEFINED;
 static uint8_t nextThrottle = 'A';
+static uint8_t fontScale    = 0;
+static uint8_t screenRotate = 0;
 static char ssid[SSIDLENGTH];
 static char tname[SSIDLENGTH];
 static char remServerType[10] = { "" };  // eg: JMRI
@@ -76,17 +92,7 @@ static bool enablePot        = true;
 const char prevMenuOption[] = { "Prev. Menu"};
 const char *protoList[]     = { "Undefined", "JMRI", "DCC++" };
 
-/*
- * Supported fonts
- * Micro: digital_font5x7
- * Small: ssd1306xled_font6x8
- * Std:   ssd1306xled_font8x16
- * Large: free_calibri11x12
- */
-const char *fontLabel[] = {"Small", "Std", "Large", "Wide"};
-const uint8_t fontWidth[]  = { 6,8,10,18 };
-const uint8_t fontHeight[] = { 8,16,20,18 };
-// selected values being:
+// selected font sizes being:
 static uint8_t selFontWidth  = 8;
 static uint8_t selFontHeight = 16;
 
@@ -119,7 +125,9 @@ void setup()  {
   Serial.print   ("Throttle Name: ");
   Serial.println (tname);
   debounceTime = nvs_get_int ("debounceTime", DEBOUNCEMS);
-  if (nvs_get_int ("trainSetMode", 0) == 1) trainSetMode = true;;
+  fontScale    = nvs_get_int ("fontScale",    0);
+  screenRotate = nvs_get_int ("screenRotate", 0);
+  if (nvs_get_int ("trainSetMode", 0) == 1) trainSetMode = true;
   #ifdef SHOWPACKETSONSTART
   showPackets = true;
   #endif
@@ -192,14 +200,6 @@ void loop()
   const char txtNoPower[] = { "Track power off. Turn power on to enable function." };
   
   display.begin();
-  #ifdef SCREENINVERT
-  #ifdef SSD1306
-  display.flipHorizontal();
-  display.flipVertical();
-  #endif
-  #endif
-  screenWidth    = display.width();
-  screenHeight   = display.height();
   setupFonts();
 
   while (xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {} // clear keyboard buffer
@@ -212,18 +212,22 @@ void loop()
       if (WiFi.status() == WL_CONNECTED) tState = 2;
       else tState = 1;
       if (tState != connectState) {
+        uint8_t lineNr = 0;
+        char outData[SSIDLENGTH + 10];
         connectState = tState;
         display.clear();
-        display.printFixed(0, 0, "Name:", STYLE_NORMAL);
-        display.printFixed((6 * selFontWidth), 0, tname, STYLE_BOLD);
-        display.printFixed(0, (selFontWidth+selFontHeight), "WiFi: ", STYLE_NORMAL);
+        displayScreenLine ("No Connection", lineNr++, true);
+        sprintf (outData, "Name: %s", tname);
+        displayScreenLine (outData, lineNr++, false);
         if (WiFi.status() == WL_CONNECTED) {
-          delay (1200);
-          display.printFixed((6 * selFontWidth),(selFontWidth+selFontHeight), ssid, STYLE_BOLD);
-          display.printFixed(0, 2*(selFontWidth+selFontHeight), "Svr:  ", STYLE_NORMAL);
-          display.printFixed((6 * selFontWidth),2*(selFontWidth+selFontHeight), "Connecting", STYLE_BOLD);
+          delay (250);
+          sprintf (outData, "WiFi: %s", ssid);
+          displayScreenLine (outData, lineNr++, false);
+          displayScreenLine ("Svr:  Connecting", lineNr++, false);
         }
-        else display.printFixed((6 * selFontWidth),(selFontWidth+selFontHeight), "Connecting", STYLE_BOLD);
+        else {
+          displayScreenLine ("Wifi: Connecting", lineNr++, false);
+        }
       }
     }
     else {

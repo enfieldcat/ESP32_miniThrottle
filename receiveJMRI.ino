@@ -1,4 +1,3 @@
-
 // Keep a large statically allocated token table for major tokens
 static char *majToken[JMRIMAXFIELDS];
 static uint8_t tokenTally;

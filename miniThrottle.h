@@ -17,8 +17,11 @@
 #define VERSION     "0.2"          // Version string
 
 // Select one display board type
-//#define SSD1306
-#define SSD1327
+// #define SSD1306             // SSD1306 128x64     I2C
+// #define SSD1327             // SSD1327 128x128    I2C
+// #define ST7735              // ST7735  128x160x16 SPI
+// #define ST7789              // ST7789  135x240x16 SPI
+#define ILI9341             // ILI9341 240x320x16 SPI
 
 // Default settings
 #define MYSSID  "DCC_ESP"
@@ -63,10 +66,54 @@
 #ifdef SSD1306
 // #define SCREENINVERT
 #define DISPLAYADDR  0x3c   // i2c display addr
+#define SDA_PIN        05    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
+#define SCK_PIN        04    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
+#define SCREENROTATE    2    // Screen can be rotated to 1 od 2 positions
 #endif
 #ifdef SSD1327
 #define DISPLAYADDR  0x3c   // i2c display addr
+#define SDA_PIN        22    // i2c SDA pin, normally 21
+#define SCK_PIN        23    // i2c SCK pin, normally 22
+// No SCREENROTATE
 #endif
+#ifdef ST7735                // HSPI_HD   = 4, HSPI_WP = 2, HSPI_MISO = 12
+#define SPI_RESET      22
+#define SPI_CS         -1    // HSPI_CS   = 15
+#define SPI_DC         27
+#define SPI_SCL        -1    // HSPI_CLK  = 14
+#define SPI_SDA        -1    // HSPI_MOSI = 13
+#define COLORDISPLAY
+#define SCREENROTATE    4    // 4 different totation positions
+#endif
+#ifdef ST7789
+#define SPI_RESET      27
+#define SPI_CS         -1    // HSPI_CS   = 15
+#define SPI_DC         12
+#define SPI_SCL        14    // HSPI_CLK  = 14
+#define SPI_SDA        13    // HSPI_MOSI = 13
+#define COLORDISPLAY
+#define SCREENROTATE    4    // 4 different totation positions
+#endif
+#ifdef ILI9341               // HSPI_HD   = 4, HSPI_WP = 2, HSPI_MISO = 12
+#define SPI_RESET      27
+#define SPI_CS         -1    // HSPI_CS   = 15
+#define SPI_DC         12
+#define SPI_SCL        14    // HSPI_CLK  = 14
+#define SPI_SDA        13    // HSPI_MOSI = 13
+#define COLORDISPLAY
+#define SCREENROTATE    4    // 4 different totation positions
+#endif
+
+#ifdef COLORDISPLAY
+#define BACKCOLOR   RGB_COLOR16(0,0,0)         // Background RGB color
+#define STDCOLOR    RGB_COLOR16(255,255,255)   // Std foreground
+#define SPEEDBAR    RGB_COLOR16(100,255,100)   // Speedometer bar
+#define SPEEDBORDER RGB_COLOR16(100,100,255)   // Speedometer border
+#define INVERTCOLOR RGB_COLOR16(255,255,0)     // Invert color - used for menus and loco lists when driving
+#define FUNCCOLOR   RGB_COLOR16(100,255,255)   // function key colors
+#define INPUTCOLOR  RGB_COLOR16(50,255,50)     // input color
+#endif
+
 // Define keypad things, Define one type of keypad
 //#define keynone
 //#define key1x5
@@ -97,17 +144,20 @@
 
 // Define Pin Assignments
 // Manually check before compiling that pins are not duplicated
-#define SDA_PIN        22    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
-#define SCK_PIN        23    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
+#ifdef SSD1306
+#else
+#ifdef SSD1327
+#endif
+#endif
 // define either of TRACKPWR or TRACKPWRINV or neither. do not set both
 #define TRACKPWR       02   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
-//#define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
+// #define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
 #define ENCODE_UP      36   // encoder up bounce
 #define ENCODE_DN      39   // encoder down bounce
 #define ENCODE_SW      34   // encoder switch
 #define DIRFWDPIN      32   // Direction sw spdt center off LOW active
 #define DIRREVPIN      33   // Direction sw spdt center off LOW active
-#define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float
+// #define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
 #ifdef key4x5
 #define MEMBR_COLS     21,19,18,05
 #define MEMBR_ROWS     17,16,04,26,15
@@ -124,15 +174,15 @@
 #define MEMBR_COLS     15,26,23,17,05
 #define MEMBR_ROWS     17
 #endif
-// To configure a speedometer, use one of the 2 DAC pins to drive a 3v voltmeter
+// To configure a speedometer, use one of the 2 DAC pins (25, 26) to drive a 3v voltmeter
 #define SPEEDOPIN      25
 // To define a brake pressure gauge using a 3V voltmeter, use BRAKEPRESPIN on one of 2 DAC pins
 #define BRAKEPRESPIN   26
 // To enable trainset mode indicator
-#define TRAINSETLED    27
+// #define TRAINSETLED    27
 // To enable function key indicators
-#define F1LED          14
-#define F2LED          12
+// #define F1LED          14
+// #define F2LED          12
 
 
 /*

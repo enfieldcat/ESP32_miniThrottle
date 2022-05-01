@@ -37,10 +37,10 @@ void keypadMonitor(void *pvParameters)
       }
       switch (inChar) { // set function indicator - Universally applied ones, may have others in CAB mode
         case '*':
-          if (trainSetMode) trainSetMode = false;
-          else trainSetMode = true;
+          if (bidirectionalMode) bidirectionalMode = false;
+          else bidirectionalMode = true;
           #ifdef TRAINSETLED
-          if (trainSetMode) digitalWrite(TRAINSETLED, HIGH);
+          if (bidirectionalMode) digitalWrite(TRAINSETLED, HIGH);
           else  digitalWrite(TRAINSETLED, LOW);
           #endif
           break;

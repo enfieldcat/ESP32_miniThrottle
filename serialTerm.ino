@@ -103,8 +103,8 @@ void process (uint8_t *inBuffer)
   else if (nparam==1 && strcmp (param[0], "noshowkeepalive") == 0) showKeepAlive = false;
   else if (nparam==1 && strcmp (param[0], "showkeypad")      == 0) showKeypad    = true;
   else if (nparam==1 && strcmp (param[0], "noshowkeypad")    == 0) showKeypad    = false;
-  else if (nparam==1 && strcmp (param[0], "trainsetmode")    == 0) mt_settrainset (true);
-  else if (nparam==1 && strcmp (param[0], "notrainsetmode")  == 0) mt_settrainset (false);
+  else if (nparam==1 && strcmp (param[0], "bidirectional")   == 0) mt_setbidirectional (true);
+  else if (nparam==1 && strcmp (param[0], "nobidirectional") == 0) mt_setbidirectional (false);
   else if (nparam==1 && strcmp (param[0], "sortdata")        == 0) nvs_put_int    ("sortData", 1);
   else if (nparam==1 && strcmp (param[0], "nosortdata")      == 0) nvs_put_int    ("sortData", 0);
   else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
@@ -160,6 +160,8 @@ void mt_export()
     if (strcmp (msgBuffer, "none") != 0) {
       Serial.printf ("name %s\n", msgBuffer);
     }
+    Serial.print   ("Display Type: ");
+    Serial.println (DISPLAY);
     count = nvs_get_int ("detentCount", -1);
     if (count >= 0) {
       Serial.printf ("detentcount %d\n", count);
@@ -194,9 +196,9 @@ void mt_export()
     count = nvs_get_int ("sortData", -1);
     if (count == 0) Serial.println ("nosortdata");
     else if (count == 1) Serial.println ("sortdata");
-    count = nvs_get_int ("trainSetMode", -1);
-    if (count == 0) Serial.println ("notrainsetmode");
-    else if (count == 1) Serial.println ("trainsetmode");
+    count = nvs_get_int ("bidirectionalMode", -1);
+    if (count == 0) Serial.println ("nobidirectional");
+    else if (count == 1) Serial.println ("bidirectional");
     for (uint8_t n=0; n<WIFINETS; n++) {
       sprintf (varName, "wifissid_%d", n);
       nvs_get_string (varName, msgBuffer, "none", sizeof(msgBuffer));
@@ -419,7 +421,7 @@ void mt_sys_config()   // display all known configuration data
     }
     Serial.println("--- Local mode data -------------------------");
     Serial.print  ("Train Set Mode: O");
-    if (trainSetMode) Serial.println ("n");
+    if (bidirectionalMode) Serial.println ("n");
     else Serial.println ("ff");
     Serial.print  ("Sort Menu Data: ");
     if (nvs_get_int ("sortData", SORTDATA) == 1) Serial.println ("Yes");
@@ -783,11 +785,11 @@ void mt_set_routedelay (int nparam, char **param)
   }
 }
 
-void mt_settrainset (bool setting)
+void mt_setbidirectional (bool setting)
 {
-  trainSetMode = setting;
-  if (setting) nvs_put_int ("trainSetMode", 1);
-  else nvs_put_int ("trainSetMode", 0);
+  bidirectionalMode = setting;
+  if (setting) nvs_put_int ("bidirectionalMode", 1);
+  else nvs_put_int ("bidirectionalMode", 0);
 }
 
 void mt_set_server (int nparam, char **param)  // set details about remote servers
@@ -1082,7 +1084,7 @@ void showPinConfig()  // Display pin out selection
     Serial.println (outBuffer);
     #endif
     #ifdef TRAINSETLEN
-    sprintf (outBuffer, "Train set indc = %d", TRAINSETPIN);
+    sprintf (outBuffer, "Bidirectional  = %d", TRAINSETPIN);
     Serial.println (outBuffer);
     #endif
     #ifdef F1LED
@@ -1348,11 +1350,11 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    permanent setting, default sortdata");
       }
     }
-    if (all || strcmp(param[1], "trainsetmode")==0) {
-      Serial.println ((const char*) "[no]trainsetmode");
+    if (all || strcmp(param[1], "bidirectional")==0) {
+      Serial.println ((const char*) "[no]bidirectional");
       if (!summary) {
-        Serial.println ((const char*) "    turn train set mode on/off as default setting");
-        Serial.println ((const char*) "    permanent setting, default notrainsetmode");
+        Serial.println ((const char*) "    turn bidirectional (AKA \"train set\") mode on/off as default setting");
+        Serial.println ((const char*) "    permanent setting, default nobidirectional");
       }
     }
     if (all || strcmp(param[1], "wifi")==0) {

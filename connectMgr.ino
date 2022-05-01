@@ -24,8 +24,11 @@ void connectionManager(void *pvParameters)
     for (index = 0; index < WIFINETS; index++) {
       sprintf (paramName, "wifissid_%d", index);
       // use a different default for ssid for wifi 0 to other wifi
-      if (index == 0) nvs_get_string (paramName, ssid, MYSSID, sizeof(ssid));
-      else nvs_get_string (paramName, ssid, "none", sizeof(ssid));
+      if (xSemaphoreTake(transmitSem, pdMS_TO_TICKS(20000)) == pdTRUE) {
+        if (index == 0) nvs_get_string (paramName, ssid, MYSSID, sizeof(ssid));
+        else nvs_get_string (paramName, ssid, "none", sizeof(ssid));
+        xSemaphoreGive(transmitSem);
+      }
       if (strcmp (ssid, "none") != 0) {
         sprintf (paramName, "wifipass_%d", index);
         nvs_get_string (paramName, password, "none", sizeof(password));
@@ -34,6 +37,10 @@ void connectionManager(void *pvParameters)
       }
     }
     WiFi.setHostname(tname);
+  }
+  if (xSemaphoreTake(transmitSem, pdMS_TO_TICKS(20000)) == pdTRUE) {
+    ssid[0] = '\0';
+    xSemaphoreGive(transmitSem);
   }
   // Check that we are connected
   while (true) {
@@ -67,7 +74,10 @@ void connectionManager(void *pvParameters)
       }
       else {
         // Place name of actually selected SSID in ssid variable
-        WiFi.SSID().toCharArray(ssid, sizeof(ssid));
+        if (xSemaphoreTake(transmitSem, pdMS_TO_TICKS(20000)) == pdTRUE) {
+          WiFi.SSID().toCharArray(ssid, sizeof(ssid));
+          xSemaphoreGive(transmitSem);
+        }
         MDNS.begin(tname);
         Serial.print   ("WiFi Connected: ");
         Serial.println (ssid);        
@@ -160,8 +170,11 @@ bool net_single_connect()
         for (uint8_t z=0; z<14 && WiFi.status() != WL_CONNECTED; z++) delay (1000);
         if (WiFi.status() == WL_CONNECTED) {
           net_connected = true;
+          if (xSemaphoreTake(transmitSem, pdMS_TO_TICKS(20000)) == pdTRUE) {
+            strcpy (ssid, wifi_ssid[n]);
+            xSemaphoreGive(transmitSem);
+          }
           MDNS.begin(tname);
-          strcpy (ssid, wifi_ssid[n]);
         }
         else {
           if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {

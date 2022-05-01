@@ -8,24 +8,20 @@
 // DisplaySSD1306_128x64_I2C display(-1); // or (-1,{busId, addr, scl, sda, frequency})
 #ifdef SSD1306
 DisplaySSD1306_128x64_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, -1});
-#else
+#endif
 #ifdef SSD1327
 DisplaySSD1327_128x128_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, -1});
-#else
+#endif
 #ifdef ST7735
 // params {reset, {busid, cs, dc, freq, scl, sca}}
 // reset may be -1 if not used, otherwise -1 => defaults
 DisplayST7735_128x160x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_SDA});
-#else
+#endif
 #ifdef ST7789
 DisplayST7789_135x240x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_SDA});
-#else
+#endif
 #ifdef ILI9341
 DisplayILI9341_240x320x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_SDA});
-#endif
-#endif
-#endif
-#endif
 #endif
 
 // WiFi Server Definitions
@@ -34,6 +30,7 @@ static SemaphoreHandle_t transmitSem = xSemaphoreCreateMutex();
 static SemaphoreHandle_t displaySem  = xSemaphoreCreateMutex();
 static SemaphoreHandle_t velociSem   = xSemaphoreCreateMutex();
 static SemaphoreHandle_t functionSem = xSemaphoreCreateMutex();
+static SemaphoreHandle_t turnoutSem  = xSemaphoreCreateMutex();
 static QueueHandle_t cvQueue         = xQueueCreate (2, sizeof(int16_t)); // Queue for querying CV Values
 static QueueHandle_t keyboardQueue   = xQueueCreate (10, sizeof(char));   // Queue for keyboard type of events
 static QueueHandle_t keyReleaseQueue = xQueueCreate (10, sizeof(char));   // Queue for keyboard release type of events
@@ -65,7 +62,6 @@ static uint8_t linesPerScreen;
 static uint8_t debounceTime = DEBOUNCEMS;
 static uint8_t cmdProtocol  = UNDEFINED;
 static uint8_t nextThrottle = 'A';
-static uint8_t fontScale    = 0;
 static uint8_t screenRotate = 0;
 static char ssid[SSIDLENGTH];
 static char tname[SSIDLENGTH];
@@ -81,7 +77,7 @@ static bool trackPower       = false;
 static bool refreshDisplay   = true;
 static bool drivingLoco      = false;
 static bool initialDataSent  = false;
-static bool trainSetMode     = false;
+static bool bidirectionalMode     = false;
 static bool menuMode         = false;
 static bool funcChange       = true;
 static bool speedChange      = false;
@@ -115,19 +111,21 @@ void setup()  {
   nvs_init();
   nvs_get_string ("tname", tname, NAME, sizeof(tname));
   // Print a diagnostic to the console, Prior to starting tasks no semaphore required
+  Serial.print   ("Software Vers: ");
   Serial.print   (PRODUCTNAME);
   Serial.print   (" ");
   Serial.println (VERSION);
-  Serial.print   ("Compile time: ");
+  Serial.print   ("Compile time:  ");
   Serial.print   (__DATE__);
   Serial.print   (" ");
   Serial.println (__TIME__);
+  Serial.print   ("Display Type:  ");
+  Serial.println (DISPLAY);
   Serial.print   ("Throttle Name: ");
   Serial.println (tname);
   debounceTime = nvs_get_int ("debounceTime", DEBOUNCEMS);
-  fontScale    = nvs_get_int ("fontScale",    0);
   screenRotate = nvs_get_int ("screenRotate", 0);
-  if (nvs_get_int ("trainSetMode", 0) == 1) trainSetMode = true;
+  if (nvs_get_int ("bidirectionalMode", 0) == 1) bidirectionalMode = true;
   #ifdef SHOWPACKETSONSTART
   showPackets = true;
   #endif
@@ -155,7 +153,7 @@ void setup()  {
   #endif
   #ifdef TRAINSETLED
   pinMode(TRAINSETLED, OUTPUT);
-  if (trainSetMode) digitalWrite(TRAINSETLED, HIGH);
+  if (bidirectionalMode) digitalWrite(TRAINSETLED, HIGH);
   else digitalWrite(TRAINSETLED, LOW);
   #endif
   #ifdef SPEEDOPIN
@@ -208,7 +206,10 @@ void loop()
       uint8_t tState;
       uint8_t answer;
 
-      if (tState < 3 && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) mkConfigMenu();
+      if (tState < 3 && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
+        mkConfigMenu();
+        connectState = 99;
+      }
       if (WiFi.status() == WL_CONNECTED) tState = 2;
       else tState = 1;
       if (tState != connectState) {
@@ -220,7 +221,15 @@ void loop()
         sprintf (outData, "Name: %s", tname);
         displayScreenLine (outData, lineNr++, false);
         if (WiFi.status() == WL_CONNECTED) {
-          delay (250);
+          if (xSemaphoreTake(transmitSem, pdMS_TO_TICKS(20000)) == pdTRUE) {
+            uint8_t waitLoop = 0;
+            while (strlen (ssid) == 0 && waitLoop++ < 100) {
+              xSemaphoreGive(transmitSem);
+              delay (100);
+              xSemaphoreTake(transmitSem, pdMS_TO_TICKS(20000));
+            }
+          }
+          xSemaphoreGive(transmitSem);
           sprintf (outData, "WiFi: %s", ssid);
           displayScreenLine (outData, lineNr++, false);
           displayScreenLine ("Svr:  Connecting", lineNr++, false);

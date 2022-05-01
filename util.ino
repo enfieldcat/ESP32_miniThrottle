@@ -2,6 +2,8 @@ int util_str2int(char *string)
 {
   char *tptr;
   long result;
+
+  if (string==NULL || strlen(string)==0) return(0);
   result = strtol (string, &tptr, 10);
 
   return ((int) result);
@@ -15,6 +17,7 @@ bool util_str_isa_int (char *inString)
 {
   bool retval = true;
   int  howlong = strlen(inString);
+  if (inString==NULL || strlen(inString)==0) return(false);
   for (int n=0; n<howlong; n++) {
     if ((inString[n]>='0' && inString[n]<='9') || (n==0 && (inString[n]=='+' || inString[n]=='-'))) {
       // it looks integer!

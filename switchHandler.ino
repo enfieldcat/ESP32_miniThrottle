@@ -101,7 +101,7 @@ void switchMonitor(void *pvParameters)
         potReading = (potReading / potLoopCount) >> 2;
         if (abs (lastPotReading - potReading) > 1) {  // ignore changes teetering on the cusp of change
           lastPotReading = potReading;
-          if (trainSetMode) {
+          if (bidirectionalMode) {
             if (potReading <= 127) {
               sendPotThrot (REVERSE, 127-potReading);
             }

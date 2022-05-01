@@ -15,12 +15,16 @@ void locomotiveDriver()
   uint8_t speedStep = 4;
   uint8_t bumpCount = 0;
   int16_t targetSpeed = 0;
-  bool dirChange = false;
+  int16_t warnSpeed = nvs_get_int ("warnSpeed", 90);
+  int16_t calcSpeed = 0;
+  uint8_t calcDirection = STOP;
   char commandChar = 'Z';
   char releaseChar = 'Z';
   char displayLine[65];
   char potVal[4] = "";
   bool inFunct = false;
+  bool dirChange = false;
+  bool brakeFlag = true;
 
   speedStep = nvs_get_int ("speedStep", 4);
   while (xQueueReceive(keyReleaseQueue, &releaseChar, pdMS_TO_TICKS(debounceTime)) == pdPASS); // clear release queue
@@ -70,67 +74,131 @@ void locomotiveDriver()
       refreshDisplay = false;
       display.clear();
       lineNr = 0;
-      for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
+      // display all controlled locos, but leave at least 1 status line
+      for (uint8_t n=0; n<maxLocoArray && lineNr<(linesPerScreen-2); n++) if (locoRoster[n].owned) {
         // sprintf (displayLine, "Loco: %s", locoRoster[n].name);
         displayScreenLine (locoRoster[n].name, lineNr++, true);
       }
       speedLine = lineNr++;
-      if (lineNr+1<linesPerScreen) {
+      if (speedLine < linesPerScreen-4) {
+        graphLine = lineNr+2;
+        lineNr += 3;
+      }
+      else if (lineNr+1<linesPerScreen) {
         graphLine = lineNr++;
-        funcLine = lineNr++;
       }
-      else {
-        graphLine = 0;
-        if (lineNr<linesPerScreen) funcLine = lineNr++;
-        else funcLine = 0;
-      }
+      else graphLine = 0;
+      funcLine = lineNr;
+      if (graphLine >= linesPerScreen) graphLine = 0;
+      if (funcLine  >= linesPerScreen) funcLine  = 0;
+      if (funcLine  <  linesPerScreen-1) funcLine++;
       speedChange = true;
       funcChange = true;
     }
-    if ((m==0 && trainSetMode) || (m==1 && !trainSetMode)) speedChange = true;
+    if ((m==0 && bidirectionalMode) || (m==1 && !bidirectionalMode)) speedChange = true;
     if (speedChange && speedLine<linesPerScreen) {
       speedChange = false;
       // Show speed
-      if (trainSetMode) m = 1;
+      if (bidirectionalMode) m = 1;
       else m = 0;
       #ifdef POTTHROTPIN
       if (enablePot) strcpy (potVal, "Pot");
       else potVal[0] = '\0';
       #endif
       if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        calcDirection = locoRoster[initialLoco].direction;
         if (locoRoster[initialLoco].speed == -1) {
-          sprintf (displayLine, "%s BRAKE %3s %3s", dirString[locoRoster[initialLoco].direction], potVal, trainModeString[m]);
+          calcSpeed = 0;
+          brakeFlag = true;
         }
         else {
-          if (locoRoster[initialLoco].steps > 0)
-            sprintf (displayLine, "%s %3d%% %3s %4s", dirString[locoRoster[initialLoco].direction], ((locoRoster[initialLoco].speed * 100) / (locoRoster[initialLoco].steps - 2)), potVal, trainModeString[m]);
+          brakeFlag = false;
+          if (locoRoster[initialLoco].steps > 0) {
+            calcSpeed = (locoRoster[initialLoco].speed * 100) / (locoRoster[initialLoco].steps - 2);
+          }
           else {
-            sprintf (displayLine, "%s %3d %3s %5s", dirString[locoRoster[initialLoco].direction], locoRoster[initialLoco].speed, potVal, trainModeString[m]);
+            calcSpeed = locoRoster[initialLoco].speed;
           }
         }
         xSemaphoreGive(velociSem);
       }
-      displayScreenLine (displayLine, speedLine, false);
+      if (speedLine > linesPerScreen-4) {
+        if (brakeFlag) {
+          sprintf (displayLine, "%s BRAKE %3s %3s",   dirString[calcDirection], potVal, trainModeString[m]);
+        }
+        else {
+          if (locoRoster[initialLoco].steps > 0) {
+            sprintf (displayLine, "%s %3d%% %3s %4s", dirString[calcDirection], calcSpeed, potVal, trainModeString[m]);
+          }
+          else {
+            sprintf (displayLine, "%s %3d %3s %5s",   dirString[calcDirection], calcSpeed, potVal, trainModeString[m]);
+          }
+        }
+        #ifdef WARNCOLOR
+        if (calcSpeed >= warnSpeed) display.setColor (WARNCOLOR);
+        #endif
+        displayScreenLine (displayLine, speedLine, false);
+        #ifdef WARNCOLOR
+        if (calcSpeed >= warnSpeed) display.setColor (STDCOLOR);
+        #endif
+      }
+      else {
+        char dispTemplate[10];
+        if (charsPerLine > 5) {
+          sprintf (dispTemplate, "%%3s %%%ds", charsPerLine-4);
+          sprintf (displayLine, dispTemplate, potVal, trainModeString[m]);
+          displayScreenLine (displayLine, speedLine, false);
+        }
+        else {
+          displayScreenLine ((char*) trainModeString[m], speedLine, false);
+        }
+        if (brakeFlag) {
+          strcpy (displayLine, "BRAKE");
+        }
+        else {
+          if (locoRoster[initialLoco].steps > 0) {
+            sprintf (displayLine, "%s %3d%%", dirString[calcDirection], calcSpeed);
+          }
+          else {
+            sprintf (displayLine, "%s %3d",   dirString[calcDirection], calcSpeed);
+          }
+        }
+        #ifdef WARNCOLOR
+        if (calcSpeed >= warnSpeed) display.setColor (WARNCOLOR);
+        #endif
+        #ifdef SCALEFONT
+        uint8_t speedPosition = ((charsPerLine>>1) - strlen(displayLine)) * selFontWidth;
+        display.printFixedN(speedPosition, ((speedLine+1)*selFontHeight), displayLine, STYLE_NORMAL, 1);
+        #else
+        uint8_t speedPosition = (((charsPerLine - strlen(displayLine)) * selFontWidth) >> 1);
+        display.printFixed(speedPosition, ((speedLine+1)*selFontHeight), displayLine, STYLE_NORMAL);
+        #endif
+        #ifdef WARNCOLOR
+        if (calcSpeed >= warnSpeed) display.setColor (STDCOLOR);
+        #endif
+      }
       // Display graph line if available
       if (graphLine>0 && locoRoster[initialLoco].steps>0) {
-        uint8_t temp = graphLine*selFontHeight;
+        int16_t ypos = graphLine*selFontHeight;
         int16_t xpos = 0;
+        int16_t barHeight = selFontHeight - 1;
         uint16_t oldColor = display.getColor();
         if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
           xpos = ((locoRoster[initialLoco].speed * (screenWidth-4)) / (locoRoster[initialLoco].steps-2)) + 2;
           xSemaphoreGive(velociSem);
         }
+        if (funcLine > 0 && (funcLine - graphLine) > 1) barHeight = (selFontHeight << 1) - 1;
         if (xpos<0) xpos = 1;
         #ifdef SPEEDBORDER
         display.setColor (SPEEDBORDER);
         #endif
-        display.drawRect(0, temp,   screenWidth-1, temp + (selFontHeight-1));
+        display.drawRect(0, ypos,   screenWidth-1, ypos + barHeight);
         #ifdef SPEEDBAR
         display.setColor (SPEEDBAR);
         #endif
-        display.fillRect(1, temp+2, xpos         , temp + (selFontHeight-3));
+        display.fillRect(1, ypos+2, xpos         , ypos + (barHeight-2));
         display.setColor (0);
-        display.fillRect( xpos+1 ,temp+1, screenWidth-2, temp + (selFontHeight-2));
+        display.fillRect( xpos+1 ,ypos+1, screenWidth-2, ypos + (barHeight-2));
         display.setColor (oldColor);
         #ifdef BACKCOLOR
         display.setBackground (BACKCOLOR);
@@ -161,7 +229,7 @@ void locomotiveDriver()
         case 'U':  // Increase forwardness.
           if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
             dirChange = false;
-            if (trainSetMode && locoRoster[initialLoco].direction != FORWARD) {
+            if (bidirectionalMode && locoRoster[initialLoco].direction != FORWARD) {
               if (locoRoster[initialLoco].speed > 0) {
                 locoRoster[initialLoco].speed = locoRoster[initialLoco].speed - speedStep;
                 if (locoRoster[initialLoco].speed < 0) locoRoster[initialLoco].speed = 0;
@@ -203,9 +271,9 @@ void locomotiveDriver()
         case 'D':  // Increase reversedness
           if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
             dirChange = false;
-            // In trainset mode down is an increase of speed if in reverse
-            if (trainSetMode && locoRoster[initialLoco].direction != FORWARD) {
-              // if in trainsetmode and direction is not FORWARD, then special handling is required
+            // In bidirectional mode down is an increase of speed if in reverse
+            if (bidirectionalMode && locoRoster[initialLoco].direction != FORWARD) {
+              // if in bidirectional and direction is not FORWARD, then special handling is required
               if (locoRoster[initialLoco].direction == STOP) {
                 locoRoster[initialLoco].direction = REVERSE;
                 speedChange = true;
@@ -231,7 +299,7 @@ void locomotiveDriver()
               brakedown(1);
               #endif
             }
-            else if (trainSetMode) {            // FORWARD and speed <= 0
+            else if (bidirectionalMode) {            // FORWARD and speed <= 0
               locoRoster[initialLoco].direction = STOP;
               setLocoSpeed (initialLoco, 0, locoRoster[initialLoco].direction);
               speedChange = true;
@@ -422,6 +490,7 @@ void displayFunctions (uint8_t lineNr, uint32_t functions)
   dis[1] = '\0';
   if (limit > 28) limit = 29;
   y = lineNr*selFontHeight;
+  if (lineNr < (linesPerScreen - 1)) y += 2;  // add extra spacing
   
   #ifdef FUNCCOLOR
   display.setColor (FUNCCOLOR);
@@ -435,7 +504,7 @@ void displayFunctions (uint8_t lineNr, uint32_t functions)
       set = false;
     }
     dis[0] = fTemplate[n];
-    display.printFixedN((n*selFontWidth), y, dis, STYLE_NORMAL, fontScale);
+    display.printFixed((n*selFontWidth), y, dis, STYLE_NORMAL);
     if (set) display.invertColors();
     mask<<=1;
   }

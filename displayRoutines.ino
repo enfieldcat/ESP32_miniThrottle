@@ -29,7 +29,7 @@ void setupFonts()
   display.getInterface().flipHorizontal (screenRotate);
   display.getInterface().flipVertical (screenRotate);
   #else
-  display.getInterface().rotateOutput (screenRotate);
+  //display.getInterface().rotateOutput (screenRotate);
   display.getInterface().setRotation (screenRotate);
   #endif
   #endif
@@ -38,10 +38,6 @@ void setupFonts()
   fontIndex      = nvs_get_int ("fontIndex", 1);
   selFontWidth   = fontWidth[fontIndex];
   selFontHeight  = fontHeight[fontIndex];
-  if (fontScale == 1) {
-    selFontWidth  = selFontWidth  << 1;
-    selFontHeight = selFontHeight << 1;
-  }
   charsPerLine   = screenWidth  / selFontWidth;
   linesPerScreen = screenHeight / selFontHeight;
   switch (fontIndex) {
@@ -63,6 +59,7 @@ void setupFonts()
       break;
     #endif
   }
+  display.fill(0x00);
   #ifdef STDCOLOR
   display.setColor (STDCOLOR);
   #endif
@@ -103,6 +100,7 @@ void mkLocoMenu()
           locoRoster[locomotiveCount].steps     = 128;
           locoRoster[locomotiveCount].id        = tLoco;
           locoRoster[locomotiveCount].function  = 0;
+          sprintf (locoRoster[locomotiveCount].name, "Loco-ID-%d", tLoco);
         }
       }
     }
@@ -248,8 +246,8 @@ void mkConfigMenu()
         mkSpeedStepMenu();
         break;
       case 10:
-        if (displayYesNo ("Trainset mode?")) trainSetMode = true;
-        else trainSetMode = false;
+        if (displayYesNo ("Trainset mode?")) bidirectionalMode = true;
+        else bidirectionalMode = false;
         break;
       default:
         result = 0;
@@ -369,32 +367,18 @@ void mkCVMenu()
 
 void mkFontMenu()
 {
-  char fontMenu[sizeof(fontWidth) + 3][32];
-  char *mp[sizeof(fontWidth) + 3];
+  char fontMenu[sizeof(fontWidth) + 1][32];
+  char *mp[sizeof(fontWidth) + 1];
   uint8_t result;
 
-  for (uint8_t n=0; n<sizeof(fontWidth); n++) sprintf (fontMenu[n], "%s (%dx%d chars)", fontLabel[n], (screenWidth/(fontWidth[n]<<fontScale)), (screenHeight/(fontHeight[n]<<fontScale)));
-  sprintf (fontMenu[sizeof(fontWidth)], "Font Scale x1");
-  sprintf (fontMenu[sizeof(fontWidth)+1], "Font Scale x2");
-  sprintf (fontMenu[sizeof(fontWidth)+2], prevMenuOption);
-  for (uint8_t n=0;n<sizeof(fontWidth) + 3; n++) mp[n] = (char*) &fontMenu[n];
-  result = displayMenu (mp, (sizeof(fontWidth) + 3), 1);
+  for (uint8_t n=0; n<sizeof(fontWidth); n++) sprintf (fontMenu[n], "%s (%dx%d chars)", fontLabel[n], (screenWidth/fontWidth[n]), (screenHeight/fontHeight[n]));
+  sprintf (fontMenu[sizeof(fontWidth)], prevMenuOption);
+  for (uint8_t n=0;n<sizeof(fontWidth) + 1; n++) mp[n] = (char*) &fontMenu[n];
+  result = displayMenu (mp, (sizeof(fontWidth) + 1), 1);
   if (result > 0 && result <= sizeof(fontWidth)) {
     result--;
     nvs_put_int ("fontIndex", result);
     setupFonts();
-  }
-  else {
-    if (result == sizeof(fontWidth)+1) {
-      fontScale = 0;
-      nvs_put_int ("fontScale", 0);
-      setupFonts();
-    }
-    else if (result == sizeof(fontWidth)+2) {
-      fontScale = 1;
-      nvs_put_int ("fontScale", 1);
-      setupFonts();
-    }
   }
 }
 
@@ -507,6 +491,7 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
               locoRoster[option].steps     = 128;
               locoRoster[option].id        = tLoco;
               locoRoster[option].function  = 0;
+              sprintf (locoRoster[option].name, "Loco-ID-%d", tLoco);
             }
           }
         }
@@ -568,7 +553,7 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
 void mkRotateMenu()
 {
   #ifndef SCREENROTATE
-  displayTempMessage ("Warning:", "Screen rotation not supported on this screen type");
+  displayTempMessage ("Warning:", "Screen rotation not supported on this screen type", true);
   #else
   #if SCREENROTATE == 2
   uint8_t opts = 3;
@@ -636,7 +621,9 @@ uint8_t displayMenu (char **menuItems, uint8_t itemCount, uint8_t selectedItem)
   uint8_t exitCode = 255;
   char commandKey;
   bool hasChanged = true;
+  bool lineChanged[itemCount];
 
+  for (uint8_t n=0; n<itemCount; n++) lineChanged[n] = true;
   if (selectedItem > itemCount) selectedItem = 0;
   display.clear();
   menuMode = true;
@@ -645,8 +632,9 @@ uint8_t displayMenu (char **menuItems, uint8_t itemCount, uint8_t selectedItem)
       hasChanged = false;
       if (currentItem > (linesPerScreen-1)) displayLine = currentItem - (linesPerScreen-1);
       else displayLine = 0;
-      for (uint8_t n=0; n<linesPerScreen && displayLine < itemCount; n++, displayLine++) {
+      for (uint8_t n=0; n<linesPerScreen && displayLine < itemCount; n++, displayLine++) if (lineChanged[displayLine]) {
         displayScreenLine (menuItems[displayLine], n, displayLine==currentItem);
+        lineChanged[displayLine] = false;
       }
     }
     if (xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(10)) == pdPASS) {
@@ -658,13 +646,17 @@ uint8_t displayMenu (char **menuItems, uint8_t itemCount, uint8_t selectedItem)
       }
       else if (commandKey == 'D') {
         if (currentItem > 0) {
+          lineChanged[currentItem] = true;
           currentItem--;
+          lineChanged[currentItem] = true;
           hasChanged = true;
         }
       }
       else if (commandKey == 'U') {
         if (currentItem < (itemCount-1)) {
+          lineChanged[currentItem] = true;
           currentItem++;
+          lineChanged[currentItem] = true;
           hasChanged = true;
         }
       }
@@ -700,7 +692,7 @@ void displayScreenLine (char *menuItem, uint8_t lineNr, bool inverted)
     #endif
     display.invertColors();
   }
-  display.printFixedN(0, (lineNr*selFontHeight), linedata, STYLE_NORMAL, fontScale);
+  display.printFixed(0, (lineNr*selFontHeight), linedata, STYLE_NORMAL);
   if (inverted) {
     display.invertColors();
     #ifdef  STDCOLOR
@@ -791,7 +783,6 @@ int enterNumber(char *prompt)
   uint16_t x, y;
 
   x = 4 * selFontWidth;
-  // y = 1.5 * selFontHeight;
   display.clear();
   y = (displayTempMessage (NULL, prompt, false)) + (1.5 * selFontHeight);
   #ifdef INPUTCOLOR
@@ -802,7 +793,7 @@ int enterNumber(char *prompt)
     if (inBuffer[0] == '\0') retVal = 0;
     else retVal = strtol (inBuffer, &tptr, 10);
     sprintf (dispNum, "%d ", retVal);
-    display.printFixedN (x, y, dispNum, STYLE_NORMAL, fontScale);
+    display.printFixed (x, y, dispNum, STYLE_NORMAL);
     if (xQueueReceive(keyboardQueue, &inKey, pdMS_TO_TICKS(30000)) == pdPASS) {
       if (charPosition < (sizeof (inBuffer) - 1) && inKey >= '0' && inKey <= '9') {
         inBuffer[charPosition++] = inKey;
@@ -837,7 +828,7 @@ char* enterAddress(char *prompt)
   while (inKey != 'S' && inKey != 'E' && inKey != '#' && tPtr<sizeof(retVal)) {
     retVal[tPtr] = '\0';
     sprintf (displayVal, "%s ", retVal);
-    display.printFixedN (x, y, displayVal, STYLE_NORMAL, fontScale);
+    display.printFixed (x, y, displayVal, STYLE_NORMAL);
     if (xQueueReceive(keyboardQueue, &inKey, pdMS_TO_TICKS(30000)) == pdPASS) {
       if (tPtr < (sizeof (retVal) - 1) && inKey >= '0' && inKey <= '9' && (tVal+(inKey-'0'))<256) {
         retVal[tPtr++] = inKey;

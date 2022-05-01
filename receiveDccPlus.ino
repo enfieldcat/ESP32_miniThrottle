@@ -18,10 +18,10 @@ void processDccPacket (char *packet)
  */
 void dccLocoStatus (char* locoStatus)
 {
-   int16_t locoID;
-   int16_t locoVoid;
-   int16_t  locoSpeed;
-   uint16_t locoFunc;
+   int16_t locoID = -9999;
+   int16_t locoVoid = -9999;
+   int16_t  locoSpeed = -9999;
+   uint16_t locoFunc = 9999;
    uint8_t next, maxIdx, curIdx;
    char *ptr;
 
@@ -30,34 +30,44 @@ void dccLocoStatus (char* locoStatus)
    for (next=0; locoStatus[next]!=' ' && next<strlen(locoStatus); next++);  // extract loco id
    locoStatus[next++] = '\0';
    curIdx = next;
-   locoID = util_str2int(locoStatus);
+   if (ptr!=NULL && strlen(ptr)>0) {
+     locoID = util_str2int(locoStatus);
+   }
    ptr = locoStatus + next;
    for (next=0; ptr[next]!=' ' && next<strlen(ptr); next++);  // extract loco void
    curIdx = curIdx + next + 1;
    if (curIdx > maxIdx) return;
    ptr[next++] = '\0';
-   locoVoid = util_str2int(ptr);
+   if (ptr!=NULL && strlen(ptr)>0) {
+     locoVoid = util_str2int(ptr);
+   }
    ptr = ptr + next;
    for (next=0; ptr[next]!=' ' && next<strlen(ptr); next++);  // extract loco speed
    curIdx = curIdx + next + 1;
    if (curIdx > maxIdx) return;
    ptr[next++] = '\0';
-   locoSpeed = util_str2int(ptr);
+   if (ptr!=NULL && strlen(ptr)>0) {
+     locoSpeed = util_str2int(ptr);
+   }
    ptr = ptr + next;
    for (next=0; ptr[next]!=' ' && next<strlen(ptr); next++);  // extract loco functions
    curIdx = curIdx + next + 1;
    if (curIdx > maxIdx) return;
    ptr[next++] = '\0';
-   locoFunc = util_str2int(ptr);
-   for (next=0; next<locomotiveCount+MAXCONSISTSIZE && locoRoster[next].id!=locoID; next++);
-   if (next==locomotiveCount+MAXCONSISTSIZE) return;
-   if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-     locoRoster[next].function = locoFunc;
-     xSemaphoreGive(functionSem);
+   if (ptr!=NULL && strlen(ptr)>0) {
+     locoFunc = util_str2int(ptr);
    }
-   if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-     if (locoRoster[next].steps > 126) locoRoster[next].speed = (int16_t) ((locoSpeed >> 1) -1);
-     xSemaphoreGive(velociSem);
+   if (locoID != -9999) {
+     for (next=0; next<locomotiveCount+MAXCONSISTSIZE && locoRoster[next].id!=locoID; next++);
+     if (next==locomotiveCount+MAXCONSISTSIZE) return;
+     if (locoFunc>=0 && locoFunc != 9999 && xSemaphoreTake(functionSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+       locoRoster[next].function = locoFunc;
+       xSemaphoreGive(functionSem);
+     }
+     if (locoSpeed>=-1 && locoSpeed <256 && xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+       if (locoRoster[next].steps > 126) locoRoster[next].speed = (int16_t) ((locoSpeed >> 1) -1);
+       xSemaphoreGive(velociSem);
+     }
    }
 }
 

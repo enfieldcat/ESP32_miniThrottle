@@ -29,7 +29,6 @@ void setupFonts()
   display.getInterface().flipHorizontal (screenRotate);
   display.getInterface().flipVertical (screenRotate);
   #else
-  //display.getInterface().rotateOutput (screenRotate);
   display.getInterface().setRotation (screenRotate);
   #endif
   #endif
@@ -58,6 +57,9 @@ void setupFonts()
       display.setFixedFont(font_12x24);
       break;
     #endif
+    default:
+      display.setFixedFont(ssd1306xled_font8x16);
+      break;
   }
   display.fill(0x00);
   #ifdef STDCOLOR
@@ -186,7 +188,7 @@ void mkPowerMenu()
 
 void mkConfigMenu()
 {
-  const char *configMenu[] = {"CPU Speed", "Font", "Info", "Protocol", "Restart", "Rotate Screen", "Server IP", "Server Port", "Speed Step", "Trainset Mode", "Prev. Menu"};
+  const char *configMenu[] = {"CPU Speed", "Font", "Info", "Protocol", "Restart", "Rotate Screen", "Server IP", "Server Port", "Speed Step", "Bidirectional Mode", "Prev. Menu"};
   char *address;
   uint8_t result = 1;
   char commandKey;

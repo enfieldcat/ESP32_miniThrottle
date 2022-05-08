@@ -77,7 +77,7 @@ static bool trackPower       = false;
 static bool refreshDisplay   = true;
 static bool drivingLoco      = false;
 static bool initialDataSent  = false;
-static bool bidirectionalMode     = false;
+static bool bidirectionalMode= false;
 static bool menuMode         = false;
 static bool funcChange       = true;
 static bool speedChange      = false;
@@ -164,6 +164,7 @@ void setup()  {
   #endif
 
   // Use tasks to process various input and output streams
+  // micro controller has enough memory, that stack sizes can be generously allocated to avoid stack overflows
   xTaskCreate(serialConsole, "serialConsole", 8192, NULL, 4, NULL);
   #ifdef DELAYONSTART
   Serial.println ("Delay before starting network services");
@@ -179,10 +180,11 @@ void setup()  {
   xTaskCreate(keypadMonitor, "keypadMonitor", 2048, NULL, 4, NULL);
   #endif
   xTaskCreate(switchMonitor, "switchMonitor", 2048, NULL, 4, NULL);
+  // xTaskCreate(displayMain,   "displayMain",   8192, NULL, 4, NULL);
 }
 
 /*
- * Use the main loop to update the display
+ * Main loop is used to run display
  * To avoid a corrupted display only update the display from a single thread
  * Try to avoid writing over the edge of the screen.
  */
@@ -196,7 +198,28 @@ void loop()
   char commandStr[2];
   const char *baseMenu[]  = { "Locomotives", "Turnouts", "Routes", "Track Power", "CV Programming", "Configuration" };
   const char txtNoPower[] = { "Track power off. Turn power on to enable function." };
-  
+
+  delay (250);
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.print ("Start device display (");
+    #ifdef DISPLAY
+    Serial.print (DISPLAY);
+    Serial.print (", ");
+    #endif
+    #ifdef SCREENROTATE
+    Serial.print (SCREENROTATE);
+    Serial.print (" way rotatable, ");
+    #endif
+    #ifdef SCALEFONT
+    Serial.print (" scalable speed indic, ");
+    #endif
+    #ifdef COLORDISPLAY
+    Serial.println ("color)");
+    #else
+    Serial.println ("monochrome)");
+    #endif
+    xSemaphoreGive(displaySem);
+  }
   display.begin();
   setupFonts();
 

@@ -16,12 +16,23 @@
 #define PRODUCTNAME "MiniThrottle" // Branding name
 #define VERSION     "0.2"          // Version string
 
+// Uncomment these to enable debug options on startup
+// #define DELAYONSTART 20000
+// #define SHOWPACKETSONSTART 1
+
 // Select one display board type
 //#define SSD1306      // SSD1306 128x64     I2C
 //#define SSD1327      // SSD1327 128x128    I2C
 //#define ST7735       // ST7735  128x160x16 SPI
-//#define ST7789       // ST7789  135x240x16 SPI
-#define ILI9341      // ILI9341 240x320x16 SPI
+#define ST7789       // ST7789  135x240x16 SPI
+//#define ILI9341      // ILI9341 240x320x16 SPI
+
+// Define keypad things, Define one type of keypad
+//#define keynone
+//#define key1x5
+#define key3x4
+//#define key4x4
+//#define key4x5
 
 // Default settings
 #define MYSSID  "DCC_ESP"
@@ -29,9 +40,63 @@
 #define PORT    12090
 #define NAME    "mThrottle"
 
-// Uncomment these to enable debug options on startup
-// #define DELAYONSTART 20000
-// #define SHOWPACKETSONSTART 1
+// Define Pin Assignments
+// Manually check before compiling that pins are not duplicated
+/*
+ * **********  PIN ASSIGNMENTS  ******************************************************************
+ *
+ * NB: pins 34 and above are read only, do not use them for outputs, assign to switches and rotary encoders
+ * 
+ * ADC is used for Potentiometer throttle (Pot-Throt / POTTHROTPIN)
+ *     ADC1_CH0 - GPIO36
+ *     ADC1_CH1 - GPIO37
+ *     ADC1_CH2 - GPIO38
+ *     ADC1_CH3 - GPIO39
+ *     ADC1_CH4 - GPIO32
+ *     ADC1_CH5 - GPIO33
+ *     ADC1_CH6 - GPIO34
+ *     ADC1_CH7 - GPIO35
+ * ADC2 not usable with WIFI enabled.
+ * 
+ * DAC is used to drive 3v voltmeter speedo
+ * DAC pins are limited to 25 and 26
+ * 
+ */
+// define either of TRACKPWR or TRACKPWRINV or neither. do not set both
+#define TRACKPWR       02   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
+// #define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
+#define ENCODE_UP      36   // encoder up bounce
+#define ENCODE_DN      39   // encoder down bounce
+#define ENCODE_SW      34   // encoder switch
+#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
+#define DIRREVPIN      33   // Direction sw spdt center off LOW active
+#define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
+#ifdef key4x5
+#define MEMBR_COLS     21,19,18,05
+#define MEMBR_ROWS     17,16,04,26,15
+#endif
+#ifdef key4x4
+#define MEMBR_COLS     21,19,18,05
+#define MEMBR_ROWS     17,16,04,15
+#endif
+#ifdef key3x4
+#define MEMBR_COLS     17,16,04
+#define MEMBR_ROWS     05,18,19,21
+#endif
+#ifdef key1x5
+#define MEMBR_COLS     15,26,23,17,05
+#define MEMBR_ROWS     17
+#endif
+// To configure a speedometer, use one of the 2 DAC pins (25, 26) to drive a 3v voltmeter
+#define SPEEDOPIN      25
+// To define a brake pressure gauge using a 3V voltmeter, use BRAKEPRESPIN on one of 2 DAC pins
+//#define BRAKEPRESPIN   26
+// To enable bidirectional mode indicator
+//#define TRAINSETLED    27
+// To enable function key indicators
+//#define F1LED          14
+//#define F2LED          12
+
 
 // Define application things
 #define MAXFUNCTIONS   30   // only expect 0-29 supported
@@ -65,14 +130,14 @@
 // Define display things
 #ifdef SSD1306
 // #define SCREENINVERT
-#define DISPLAYADDR  0x3c   // i2c display addr
+#define DISPLAYADDR  0x3c    // i2c display addr
 #define SDA_PIN        05    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
 #define SCK_PIN        04    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
 #define SCREENROTATE    2    // Screen can be rotated to 1 of 2 positions
 #define DISPLAY "sdd1306"
 #endif
 #ifdef SSD1327
-#define DISPLAYADDR  0x3c   // i2c display addr
+#define DISPLAYADDR  0x3c    // i2c display addr
 #define SDA_PIN        22    // i2c SDA pin, normally 21
 #define SCK_PIN        23    // i2c SCK pin, normally 22
 #define DISPLAY "sdd1327"
@@ -91,7 +156,7 @@
 #endif
 #ifdef ST7789
 #define SPI_RESET      27
-#define SPI_CS         -1    // HSPI_CS   = 15
+#define SPI_CS         26    // HSPI_CS   = 15
 #define SPI_DC         12
 #define SPI_SCL        14    // HSPI_CLK  = 14
 #define SPI_SDA        13    // HSPI_MOSI = 13
@@ -122,76 +187,6 @@
 #define INPUTCOLOR  RGB_COLOR16(50,255,50)     // input color
 #define WARNCOLOR   RGB_COLOR16(255,150,150)   // Warning color
 #endif
-
-// Define keypad things, Define one type of keypad
-//#define keynone
-//#define key1x5
-#define key3x4
-//#define key4x4
-//#define key4x5
-
-/*
- * **********  PIN ASSIGNMENTS  ******************************************************************
- *
- * NB: pins 34 and above are read only, do not use them for outputs, assign to switches and rotary encoders
- * 
- * ADC is used for Potentiometer throttle (Pot-Throt / POTTHROTPIN)
- *     ADC1_CH0 - GPIO36
- *     ADC1_CH1 - GPIO37
- *     ADC1_CH2 - GPIO38
- *     ADC1_CH3 - GPIO39
- *     ADC1_CH4 - GPIO32
- *     ADC1_CH5 - GPIO33
- *     ADC1_CH6 - GPIO34
- *     ADC1_CH7 - GPIO35
- * ADC2 not usable with WIFI enabled.
- * 
- * DAC is used to drive 3v voltmeter speedo
- * DAC pins are limited to 25 and 26
- * 
- */
-
-// Define Pin Assignments
-// Manually check before compiling that pins are not duplicated
-#ifdef SSD1306
-#else
-#ifdef SSD1327
-#endif
-#endif
-// define either of TRACKPWR or TRACKPWRINV or neither. do not set both
-#define TRACKPWR       02   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
-// #define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
-#define ENCODE_UP      36   // encoder up bounce
-#define ENCODE_DN      39   // encoder down bounce
-#define ENCODE_SW      34   // encoder switch
-#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
-#define DIRREVPIN      33   // Direction sw spdt center off LOW active
-//#define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
-#ifdef key4x5
-#define MEMBR_COLS     21,19,18,05
-#define MEMBR_ROWS     17,16,04,26,15
-#endif
-#ifdef key4x4
-#define MEMBR_COLS     21,19,18,05
-#define MEMBR_ROWS     17,16,04,15
-#endif
-#ifdef key3x4
-#define MEMBR_COLS     17,16,04
-#define MEMBR_ROWS     05,18,19,21
-#endif
-#ifdef key1x5
-#define MEMBR_COLS     15,26,23,17,05
-#define MEMBR_ROWS     17
-#endif
-// To configure a speedometer, use one of the 2 DAC pins (25, 26) to drive a 3v voltmeter
-//#define SPEEDOPIN      25
-// To define a brake pressure gauge using a 3V voltmeter, use BRAKEPRESPIN on one of 2 DAC pins
-//#define BRAKEPRESPIN   26
-// To enable bidirectional mode indicator
-// #define TRAINSETLED    27
-// To enable function key indicators
-// #define F1LED          14
-// #define F2LED          12
 
 
 /*

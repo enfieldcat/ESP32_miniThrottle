@@ -21,11 +21,14 @@ void locomotiveDriver()
   char commandChar = 'Z';
   char releaseChar = 'Z';
   char displayLine[65];
-  char potVal[4] = "";
+  char potVal[4];
+  char funVal[4];
   bool inFunct = false;
   bool dirChange = false;
   bool brakeFlag = true;
 
+  potVal[0] = '\0';
+  funVal[0] = '\0';
   speedStep = nvs_get_int ("speedStep", 4);
   while (xQueueReceive(keyReleaseQueue, &releaseChar, pdMS_TO_TICKS(debounceTime)) == pdPASS); // clear release queue
   drivingLoco = true;
@@ -59,7 +62,7 @@ void locomotiveDriver()
   int maxLocoArray = locomotiveCount + MAXCONSISTSIZE;
   refreshDisplay = true;
   speedChange = true;
-  while (commandChar != 'E' && locoCount > 0) {  // Until escaped out of driving mode
+  while (commandChar != 'E' && locoCount > 0 && trackPower) {  // Until escaped out of driving mode
     if (bumpCount > BUMPCOUNT) {
       uint8_t count = 0;
       for (uint8_t n = 0; n<maxLocoArray; n++) if (locoRoster[n].owned) count++;
@@ -122,7 +125,7 @@ void locomotiveDriver()
         }
         xSemaphoreGive(velociSem);
       }
-      if (speedLine > linesPerScreen-4) {
+      if (speedLine > linesPerScreen-4 || speedLine == (graphLine-1)) {
         if (brakeFlag) {
           sprintf (displayLine, "%s BRAKE %3s %3s",   dirString[calcDirection], potVal, trainModeString[m]);
         }
@@ -143,17 +146,29 @@ void locomotiveDriver()
         #endif
       }
       else {
-        char dispTemplate[10];
+        char dispTemplate[16];
+        if (functPrefix > 9) {
+          if (functPrefix > 19) strcpy (funVal, "F2");
+          else strcpy (funVal, "F1");
+        }
+        else funVal[0] = '\0';
         if (charsPerLine > 5) {
-          sprintf (dispTemplate, "%%3s %%%ds", charsPerLine-4);
-          sprintf (displayLine, dispTemplate, potVal, trainModeString[m]);
+          if (charsPerLine < 10) {
+            sprintf (dispTemplate, "%%3s %%%ds", charsPerLine-4);
+            sprintf (displayLine, dispTemplate, potVal, trainModeString[m]);
+          }
+          else {
+            uint8_t spacer = ((charsPerLine / 3) << 1) - 3;
+            sprintf (dispTemplate, "%%2s %%%ds%%%ds", spacer, (charsPerLine - (spacer+3)));
+            sprintf (displayLine, dispTemplate, funVal, potVal, trainModeString[m]);
+          }
           displayScreenLine (displayLine, speedLine, false);
         }
         else {
           displayScreenLine ((char*) trainModeString[m], speedLine, false);
         }
         if (brakeFlag) {
-          strcpy (displayLine, "BRAKE");
+          strcpy (displayLine, " BRAKE ");
         }
         else {
           if (locoRoster[initialLoco].steps > 0) {
@@ -178,7 +193,7 @@ void locomotiveDriver()
         #endif
       }
       // Display graph line if available
-      if (graphLine>0 && locoRoster[initialLoco].steps>0) {
+      if (graphLine>0 && locoRoster[initialLoco].steps>0 && graphLine>speedLine) {
         int16_t ypos = graphLine*selFontHeight;
         int16_t xpos = 0;
         int16_t barHeight = selFontHeight - 1;
@@ -194,6 +209,10 @@ void locomotiveDriver()
         #endif
         display.drawRect(0, ypos,   screenWidth-1, ypos + barHeight);
         #ifdef SPEEDBAR
+        #ifdef WARNCOLOR
+        if (calcSpeed >= warnSpeed) display.setColor (WARNCOLOR);
+        else
+        #endif
         display.setColor (SPEEDBAR);
         #endif
         display.fillRect(1, ypos+2, xpos         , ypos + (barHeight-2));
@@ -350,6 +369,7 @@ void locomotiveDriver()
         case 'X':
           if (functPrefix == 10) functPrefix = 0;
           else functPrefix = 10;
+          if (speedLine <= linesPerScreen-4) speedChange = true; // update function flag in display
           #ifdef F1LED
           if (functPrefix == 10) digitalWrite(F1LED, HIGH);
           else digitalWrite(F1LED, LOW);
@@ -361,6 +381,7 @@ void locomotiveDriver()
         case 'Y':
           if (functPrefix == 20) functPrefix = 0;
           else functPrefix = 20;
+          if (speedLine <= linesPerScreen-4) speedChange = true; // update function flag in display
           #ifdef F1LED
           digitalWrite(F1LED, LOW);
           #endif
@@ -397,6 +418,7 @@ void locomotiveDriver()
             }
           }
           xSemaphoreGive(functionSem);
+          if (speedLine <= linesPerScreen-4) speedChange = true; // update function flag in display
         }
         if (cmdProtocol!=JMRI) {
           functPrefix = 0;

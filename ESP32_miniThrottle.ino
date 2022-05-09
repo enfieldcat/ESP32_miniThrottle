@@ -84,6 +84,10 @@ static bool speedChange      = false;
 #ifdef POTTHROTPIN
 static bool enablePot        = true;
 #endif
+#ifdef FILESUPPORT
+static fs::File writeFile;
+static bool writingFile      = false;
+#endif
 
 const char prevMenuOption[] = { "Prev. Menu"};
 const char *protoList[]     = { "Undefined", "JMRI", "DCC++" };
@@ -163,6 +167,18 @@ void setup()  {
   dacWrite (BRAKEPRESPIN, 0);
   #endif
 
+  // Check filesystem for cert and icon storage
+  #ifdef FILESUPPORT
+    if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)){
+    Serial.println("SPIFFS Mount Failed: will attempt to format and mount.");
+    // spiffsAvailable = false;
+    delay (1000);
+  }
+  // else spiffsAvailable = true;
+  #ifdef CERTFILE
+  OTAcertExists(SPIFFS);
+  #endif
+  #endif
   // Use tasks to process various input and output streams
   // micro controller has enough memory, that stack sizes can be generously allocated to avoid stack overflows
   xTaskCreate(serialConsole, "serialConsole", 8192, NULL, 4, NULL);

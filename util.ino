@@ -137,3 +137,215 @@ void sortRoute()
     }
   }
 }
+
+
+#ifdef FILESUPPORT
+// directory listing of SPiffs filesystem
+// cf: https://github.com/espressif/arduino-esp32/blob/master/libraries/SPIFFS/examples/SPIFFS_Test/SPIFFS_Test.ino
+void util_listDir(fs::FS &fs, const char * dirname, uint8_t levels){
+  char msgBuffer[80];
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.printf("Listing directory: %s\r\n", dirname);
+    xSemaphoreGive(displaySem);
+  }
+
+  File root = fs.open(dirname);
+  if(!root){
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println ("- failed to open directory");
+      xSemaphoreGive(displaySem);
+    }
+    return;
+  }
+  if(!root.isDirectory()){
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println(" - not a directory");
+      xSemaphoreGive(displaySem);
+    }
+    return;
+  }
+
+  File file = root.openNextFile();
+  while(file){
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      for (uint8_t space=0; space<levels; space++) Serial.print ("  ");
+      xSemaphoreGive(displaySem);
+    }
+    if(file.isDirectory()){
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.print  ("  DIR : ");
+        Serial.println((char*)file.name());
+        xSemaphoreGive(displaySem);
+      }
+      util_listDir(fs, file.name(), levels +1);
+    } 
+    else {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.print  ("  FILE: ");
+        Serial.print  ((char*)file.name());
+        sprintf (msgBuffer, "%d", (uint)file.size());
+        Serial.print  ("\tSIZE: ");
+        Serial.println(msgBuffer);
+        xSemaphoreGive(displaySem);
+      }
+    }
+    file = root.openNextFile();
+  }
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    sprintf (msgBuffer, "%d bytes used of %d available (%d%% used)", SPIFFS.usedBytes(), SPIFFS.totalBytes(), (SPIFFS.usedBytes()*100)/SPIFFS.totalBytes());
+    xSemaphoreGive(displaySem);
+  }
+  Serial.println (msgBuffer);
+}
+
+void util_deleteFile(fs::FS &fs, const char * path){
+  if (!fs.exists(path)) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println ("  - File does not exist");
+      xSemaphoreGive(displaySem);
+    }
+    return;
+  }
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.print   ("Deleting file: ");
+    Serial.println ((char*) path);
+    if(fs.remove(path)){
+      Serial.println("  - file deleted");
+    } else {
+      Serial.println("  - delete failed");
+    }
+    xSemaphoreGive(displaySem);
+  }
+}
+
+char* util_loadFile(fs::FS &fs, const char* path)
+{
+  util_loadFile (fs, path, NULL);
+}
+
+
+char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
+{
+  char *retval = NULL;
+  int fileSize = 0;
+  int ptr = 0;
+
+  if (sizeOfFile!=NULL) *sizeOfFile = 0;
+  if (!fs.exists(path)) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println ("  - File does not exist");
+      xSemaphoreGive(displaySem);
+    }
+    return (retval);
+  }
+  File file = fs.open(path);
+  if(!file){
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println("  - failed to open file for reading");
+      xSemaphoreGive(displaySem);
+    }
+    return (retval);
+  }
+  if(file.isDirectory()){
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println("  - Cannot open directory for reading");
+      xSemaphoreGive(displaySem);
+    }
+    return (retval);
+  }
+  fileSize = file.size() + 1;
+  retval = (char*) malloc (fileSize);
+  if (retval != NULL) {
+    while(file.available() && ptr<fileSize){
+      retval[ptr++] = file.read();
+    }
+    file.close();
+    retval[fileSize-1] = '\0';  // Ensure data ends with a null terminator character
+  }
+  if (retval!=NULL && sizeOfFile!=NULL) *sizeOfFile = fileSize;
+
+  return (retval);
+}
+
+
+void util_readFile(fs::FS &fs, const char * path) {
+  uint8_t inChar;
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.print   ("Reading file: ");
+    Serial.println ((char*) path);
+    xSemaphoreGive(displaySem);
+  }
+
+  if (!fs.exists(path)) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println ("  - File does not exist");
+      xSemaphoreGive(displaySem);
+    }
+    return;
+  }
+  File file = fs.open(path);
+  if(!file){
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println("  - failed to open file for reading");
+      xSemaphoreGive(displaySem);
+    }
+    return;
+  }
+  if(file.isDirectory()){
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println("  - Cannot open directory for reading");
+      xSemaphoreGive(displaySem);
+    }
+    return;
+  }
+
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {  
+    Serial.println ("--- read from file -----------------------");
+    Serial.println ("");
+    while(file.available()){
+      inChar = (uint8_t) file.read();
+      if (inChar == '\n') Serial.print('\r');
+      Serial.print(inChar);
+    }
+    file.close();
+    Serial.println ("");
+    Serial.println ("--- end of file --------------------------");
+    xSemaphoreGive(displaySem);
+  }
+}
+
+void util_writeFile (fs::FS &fs, const char * path)
+{
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.print   ("Writing file: ");
+    Serial.print   ((char*) path);
+    Serial.println ("  -  Use \".\" on a line of its own to stop writing.");
+    xSemaphoreGive(displaySem);
+  }
+
+  if (fs.exists(path)) fs.remove(path);
+  writeFile = fs.open(path, FILE_WRITE);
+  if(!writeFile){
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println("  - failed to open file for writing");
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else writingFile = true;
+}
+
+void util_closeWriteFile()
+{
+  writeFile.close();
+}
+
+void util_appendWriteFile (char* content)
+{
+  writeFile.print(content);
+}
+
+void util_format_spiffs()
+{
+  SPIFFS.format();
+}
+#endif

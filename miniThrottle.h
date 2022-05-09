@@ -9,12 +9,37 @@
 #include "lcdgfx.h"
 #include <Keypad.h>
 #include <ESP32Encoder.h>
+// Used for NVS access and query
 #include <Preferences.h>
 #include <esp_partition.h>
+
 
 // Project identity and version
 #define PRODUCTNAME "MiniThrottle" // Branding name
 #define VERSION     "0.2"          // Version string
+#define OTAUPDATE   "https://conferre.cf/projects/miniThrottle/"   // default location for over the air update, comment out if not required
+
+#ifdef OTAUPDATE
+// Name of default certificate file used for Over The Air Update using http/https, say for a club standard build from the club web server
+#define CERTFILE     "/rootCACertificate"
+#define OTA_BUFFER_SIZE 4098
+#include <HTTPClient.h>
+#include <esp_ota_ops.h>
+#include <mbedtls/sha256.h>
+#ifndef FILESUPPORT
+#define FILESUPPORT
+#endif
+#endif
+
+// Local filesystem can potentially be used to store https certificates or icons/images
+#ifdef FILESUPPORT
+#include <FS.h>
+#include <SPIFFS.h>
+/* You only need to format SPIFFS the first time you run a
+   test or else use the SPIFFS plugin to create a partition
+   https://github.com/me-no-dev/arduino-esp32fs-plugin */
+#define FORMAT_SPIFFS_IF_FAILED true
+#endif
 
 // Uncomment these to enable debug options on startup
 // #define DELAYONSTART 20000

@@ -80,11 +80,16 @@ void process (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "detentcount") == 0)   mt_set_detentCount  (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "dump") == 0)          mt_dump_data        (nparam, param);
   else if (nparam==1 && strcmp (param[0], "export") == 0)        mt_export           ();
+  else if (nparam==3 && strcmp (param[1], "del")   == 0 && strcmp (param[0], "file") == 0) util_deleteFile (SPIFFS, param[2]);
+  else if (nparam==2 && strcmp (param[1], "dir")   == 0 && strcmp (param[0], "file") == 0) util_listDir    (SPIFFS, "/", 0);
+  else if (nparam==3 && strcmp (param[1], "read")  == 0 && strcmp (param[0], "file") == 0) util_readFile   (SPIFFS, param[2]);
+  else if (nparam==3 && strcmp (param[1], "write") == 0 && strcmp (param[0], "file") == 0) util_writeFile  (SPIFFS, param[2]);
   else if (nparam<=2 && strcmp (param[0], "help") == 0)          help                (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "mdns") == 0)          set_mdns            (nparam, param);
   else if (nparam==1 && strcmp (param[0], "memory") == 0)        showMemory          ();
   else if (nparam<=2 && strcmp (param[0], "name") == 0)          mt_set_name         (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "nvs") == 0)           mt_dump_nvs         (nparam, param);
+  else if (nparam<=2 && strcmp (param[0], "ota") == 0)           mt_ota              (nparam, param);
   else if (nparam==1 && strcmp (param[0], "pins")  == 0)         showPinConfig       ();
   else if (nparam<=2 && strcmp (param[0], "protocol") == 0)      mt_set_protocol     (nparam, param);
   else if (nparam==1 && strcmp (param[0], "restart") == 0)       mt_sys_restart      ("command line request");
@@ -669,6 +674,29 @@ void set_mdns(int nparam, char **param)
       }
     }
     else mdnsLookup (param[1]);
+  }
+}
+
+/*
+ * Over the air update controls
+ */
+void mt_ota (int nparam, char **param)
+{
+
+  if ((nparam==1 || strcmp(param[1], "status") == 0) && xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.println ((char *) OTAstatus());
+    xSemaphoreGive(displaySem);
+  }
+  else if (nparam==2) {
+    if (strcmp(param[1], "update") == 0) OTAcheck4update();
+    else if (strcmp(param[1], "revert") == 0) OTAcheck4rollback();
+    else if (strncmp(param[1], "http://", 7) == 0 || strncmp(param[1], "https://", 8) == 0) {
+      nvs_put_string ("ota_url", param[1]);
+    }
+    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.print ("ota parameter not understood: ");
+      Serial.println (param[1]);
+    }
   }
 }
 

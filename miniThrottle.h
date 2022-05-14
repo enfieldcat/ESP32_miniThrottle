@@ -137,7 +137,7 @@
 #define BUFFSIZE      250   // Keyboard buffer size
 #define NETWBUFFSIZE 1024   // Network packet size
 #define JMRIMAXFIELDS  64   // Max fields per JMRI received packet
-#define MAXSUBTOKEN     4   // Max sub tokens per JRMI field
+#define MAXSUBTOKEN     4   // Max sub tokens per JMRI field
 #define DEBOUNCEMS     33   // millis to wait for switch / keypad debounce
 #define INITWAIT        5   // seconds to wait for first packet from server to ID protocol
 #define BUMPCOUNT     100   // re-evalute loco count every N times through loco control routine

@@ -1,7 +1,7 @@
 ESP32 based JMRI miniThrottle
 =============================
 Development for model train throttle controller.
-It uses either JRMI or DCC++ protocols to conect to a control station.
+It uses either JMRI or DCC++ protocols to conect to a control station.
 The default is configurable.
 
 Status:
@@ -55,4 +55,4 @@ Tested interfaces:
 * JMRI: ESP_DCC https://www.instructables.com/DCC-Controller-2-Boards-1-PSU-No-Soldering/
 * DCC++ : https://github.com/DccPlusPlus/BaseStation/wiki
 
-It is expected to work but NOT TESTED using JRMI https://www.jmri.org/ and Digitrax LNWI (LocoNet WiFi Interface)/
+It is expected to work but NOT TESTED using JMRI https://www.jmri.org/ and Digitrax LNWI (LocoNet WiFi Interface)/

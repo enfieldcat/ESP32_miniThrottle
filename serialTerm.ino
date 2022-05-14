@@ -1345,10 +1345,10 @@ void help(int nparam, char **param)  // show help data
       }
     }
     if (all || strcmp(param[1], "protocol")==0) {
-      Serial.println ((const char*) "protocol {jrmi|dcc++}");
+      Serial.println ((const char*) "protocol {jmri|dcc++}");
       if (!summary) {
         Serial.println ((const char*) "    Select default protocol to use");
-        Serial.println ((const char*) "    permanent setting, default jrmi");
+        Serial.println ((const char*) "    permanent setting, default jmri");
       }
     }
     if (all || strcmp(param[1], "restart")==0) {

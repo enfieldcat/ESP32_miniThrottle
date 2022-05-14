@@ -188,7 +188,7 @@ void mkPowerMenu()
 
 void mkConfigMenu()
 {
-  const char *configMenu[] = {"CPU Speed", "Font", "Info", "Protocol", "Restart", "Rotate Screen", "Server IP", "Server Port", "Speed Step", "Bidirectional Mode", "Prev. Menu"};
+  const char *configMenu[] = {"Bidirectional Mode", "CPU Speed", "Font", "Info", "Protocol", "Restart", "Rotate Screen", "Server IP", "Server Port", "Speed Step", "Prev. Menu"};
   char *address;
   uint8_t result = 1;
   char commandKey;
@@ -199,27 +199,31 @@ void mkConfigMenu()
     result = displayMenu ((char**) configMenu, 11, (result-1));
     switch (result) {
       case 1:
-        mkCpuSpeedMenu();
+        if (displayYesNo ("Bidirectional mode?")) bidirectionalMode = true;
+        else bidirectionalMode = false;
         break;
       case 2:
-        mkFontMenu();
+        mkCpuSpeedMenu();
         break;
       case 3:
+        mkFontMenu();
+        break;
+      case 4:
         displayInfo();
         xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(30000)); // 30 second timeout
         break;
-      case 4:
+      case 5:
         mkProtoPref();
         break;
-      case 5:
+      case 6:
         setDisconnected();
         displayTempMessage ("Restarting", "Press any key to reboot or wait 30 seconds", true);
         ESP.restart();
         break;
-      case 6:
+      case 7:
         mkRotateMenu();
         break;
-      case 7:
+      case 8:
         address = enterAddress ("Server IP Address:");
         if (strlen(address)>0) {
           portNum = 0;
@@ -237,19 +241,15 @@ void mkConfigMenu()
           }
         }
         break;
-      case 8:
+      case 9:
         portNum = enterNumber("Server Port:");
         if (portNum>0) {
           sprintf (paramName, "port_%d", (WIFINETS-1));
           nvs_put_int (paramName, portNum);
         }
         break;
-      case 9:
-        mkSpeedStepMenu();
-        break;
       case 10:
-        if (displayYesNo ("Trainset mode?")) bidirectionalMode = true;
-        else bidirectionalMode = false;
+        mkSpeedStepMenu();
         break;
       default:
         result = 0;
@@ -632,7 +632,10 @@ uint8_t displayMenu (char **menuItems, uint8_t itemCount, uint8_t selectedItem)
   while (exitCode == 255) {
     if (hasChanged) {
       hasChanged = false;
-      if (currentItem > (linesPerScreen-1)) displayLine = currentItem - (linesPerScreen-1);
+      if (currentItem >= (linesPerScreen-1)) {
+        displayLine = currentItem - (linesPerScreen-1);
+        for (uint8_t n=0; n<itemCount; n++) lineChanged[n] = true;
+      }
       else displayLine = 0;
       for (uint8_t n=0; n<linesPerScreen && displayLine < itemCount; n++, displayLine++) if (lineChanged[displayLine]) {
         displayScreenLine (menuItems[displayLine], n, displayLine==currentItem);

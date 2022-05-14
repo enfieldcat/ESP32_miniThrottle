@@ -22,8 +22,6 @@
 #ifdef OTAUPDATE
 // Name of default certificate file used for Over The Air Update using http/https, say for a club standard build from the club web server
 #define CERTFILE     "/rootCACertificate"
-#define OTA_BUFFER_SIZE 4098
-#include <HTTPClient.h>
 #include <esp_ota_ops.h>
 #include <mbedtls/sha256.h>
 #ifndef FILESUPPORT
@@ -31,14 +29,13 @@
 #endif
 #endif
 
-// Local filesystem can potentially be used to store https certificates or icons/images
+// Local filesystem can potentially be used to store https certificates, command sequences or icons/images
 #ifdef FILESUPPORT
+#include <HTTPClient.h>
 #include <FS.h>
 #include <SPIFFS.h>
-/* You only need to format SPIFFS the first time you run a
-   test or else use the SPIFFS plugin to create a partition
-   https://github.com/me-no-dev/arduino-esp32fs-plugin */
-#define FORMAT_SPIFFS_IF_FAILED true
+#define WEB_BUFFER_SIZE 4098
+#define FORMAT_SPIFFS_IF_FAILED true   // format unformatted partition
 #endif
 
 // Uncomment these to enable debug options on startup

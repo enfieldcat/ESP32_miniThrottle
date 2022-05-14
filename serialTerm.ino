@@ -56,6 +56,11 @@ void process (uint8_t *inBuffer)
   uint8_t n;
   bool inSpace = false;
 
+  if (writingFile) {
+    if (strcmp ((char *)inBuffer, ".") == 0) util_closeWriteFile();
+    else util_appendWriteFile((char *)inBuffer);
+    return;
+  }
   param[0] = (char*) &inBuffer[0];
   for (n=0, nparam=1; n<BUFFSIZE && inBuffer[n]!= '\0' && nparam<MAXPARAMS; n++) {
     if (inBuffer[n]<=' ') {
@@ -82,8 +87,10 @@ void process (uint8_t *inBuffer)
   else if (nparam==1 && strcmp (param[0], "export") == 0)        mt_export           ();
   else if (nparam==3 && strcmp (param[1], "del")   == 0 && strcmp (param[0], "file") == 0) util_deleteFile (SPIFFS, param[2]);
   else if (nparam==2 && strcmp (param[1], "dir")   == 0 && strcmp (param[0], "file") == 0) util_listDir    (SPIFFS, "/", 0);
-  else if (nparam==3 && strcmp (param[1], "read")  == 0 && strcmp (param[0], "file") == 0) util_readFile   (SPIFFS, param[2]);
+  else if (nparam==3 && strcmp (param[1], "list")  == 0 && strcmp (param[0], "file") == 0) util_readFile   (SPIFFS, param[2], false);
+  else if (nparam==3 && strcmp (param[1], "replay")== 0 && strcmp (param[0], "file") == 0) util_readFile   (SPIFFS, param[2], true);
   else if (nparam==3 && strcmp (param[1], "write") == 0 && strcmp (param[0], "file") == 0) util_writeFile  (SPIFFS, param[2]);
+  else if (nparam==4 && strcmp (param[1], "download") == 0 && strcmp (param[0], "file") == 0) getHttp2File (SPIFFS, param[2], param[3]);
   else if (nparam<=2 && strcmp (param[0], "help") == 0)          help                (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "mdns") == 0)          set_mdns            (nparam, param);
   else if (nparam==1 && strcmp (param[0], "memory") == 0)        showMemory          ();
@@ -1259,6 +1266,25 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    info only");
       }
     }
+    #ifdef FILESUPPORT
+    if (all || strcmp(param[1], "file")==0) {
+      Serial.println ((const char*) "file dir");
+      Serial.println ((const char*) "file del <filename>");
+      Serial.println ((const char*) "file download <URL> <filename>");
+      Serial.println ((const char*) "file list <filename>");
+      Serial.println ((const char*) "file replay <filename>");
+      Serial.println ((const char*) "file write <filename>");
+      if (!summary) {
+        Serial.println ((const char*) "    Various file system management commands to:");
+        Serial.println ((const char*) "    dir: get directory listing");
+        Serial.println ((const char*) "    del: delete the named file. NB: filenames are case sensitive");
+        Serial.println ((const char*) "    download: download the named file from the URL, no spaces in URL");
+        Serial.println ((const char*) "    list: list the contents of the named file.");
+        Serial.println ((const char*) "    replay: replay the contents of the named file as a set of configuration commands");
+        Serial.println ((const char*) "    write: write the named file from the command prompt, NB no editing facility.");
+      }
+    }
+    #endif
     if (all || strcmp(param[1], "help")==0) {
       Serial.println ((const char*) "help [summary|all|<command>]");
       if (!summary) {
@@ -1301,6 +1327,16 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    info only");
       }
     }
+    #ifdef OTAUPDATE
+    if (all || strcmp(param[1], "ota")==0) {
+      Serial.println ((const char*) "nvs [status|update|revert]");
+      if (!summary) {
+        Serial.println ((const char*) "    Manage Over The Air (OTA) updates to firmware");
+        Serial.println ((const char*) "    NB: does not check hardware compatibility, use with care!");
+        Serial.println ((const char*) "    permanent setting");
+      }
+    }
+    #endif
     if (all || strcmp(param[1], "pins")==0) {
       Serial.println ((const char*) "pins");
       if (!summary) {

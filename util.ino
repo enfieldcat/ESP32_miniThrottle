@@ -268,8 +268,11 @@ char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
 }
 
 
-void util_readFile(fs::FS &fs, const char * path) {
+void util_readFile(fs::FS &fs, const char * path, bool replay) {
   uint8_t inChar;
+  uint8_t bufPtr = 0;
+  uint8_t cmdBuffer[BUFFSIZE];
+  
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
     Serial.print   ("Reading file: ");
     Serial.println ((char*) path);
@@ -304,8 +307,19 @@ void util_readFile(fs::FS &fs, const char * path) {
     Serial.println ("");
     while(file.available()){
       inChar = (uint8_t) file.read();
-      if (inChar == '\n') Serial.print('\r');
-      Serial.print(inChar);
+      if (inChar == '\n') {
+        Serial.print('\r');
+        if (replay || bufPtr == BUFFSIZE){
+          cmdBuffer[bufPtr] = '\0';
+          if (cmdBuffer[0] != '#') process(cmdBuffer); // if 1st char in line is a '#' it is a comment
+          bufPtr = 0;
+        }
+      }
+      else if (replay) {
+        cmdBuffer[bufPtr++] = inChar;
+        if (bufPtr == BUFFSIZE) bufPtr = 0; // overflow, line too long so truncate
+      }
+      Serial.print((char) inChar);
     }
     file.close();
     Serial.println ("");
@@ -337,15 +351,142 @@ void util_writeFile (fs::FS &fs, const char * path)
 void util_closeWriteFile()
 {
   writeFile.close();
+  writingFile = false;
 }
 
 void util_appendWriteFile (char* content)
 {
-  writeFile.print(content);
+  writeFile.println(content);
 }
 
 void util_format_spiffs()
 {
   SPIFFS.format();
+}
+
+
+void getHttp2File (fs::FS &fs, char *url, char *fileName)
+{
+  HTTPClient *httpClient = NULL;
+  char http_certFile[42];
+  uint8_t *inBuffer = NULL;
+  int16_t inLength = 100;
+
+  if (url == NULL || fileName == NULL) return;
+  if (strncmp (url, "http://", 7) != 0 && strncmp (url, "https://", 8) != 0) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println ("URL should start with \"http://\" or \"https://\"");
+      xSemaphoreGive(displaySem);
+    }
+  }
+  if (fileName[0] != '/') {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println ("Filename should start with \"/\"");
+      xSemaphoreGive(displaySem);
+    }
+  }
+  nvs_get_string ("web_certFile", http_certFile, CERTFILE, sizeof(http_certFile));
+  if (http_certFile[0]!='\0') rootCACertificate = util_loadFile(SPIFFS, http_certFile);
+  else rootCACertificate = NULL;
+  WiFiClient *inStream = getHttpStream(url, rootCACertificate, httpClient);
+  if (inStream != NULL) {
+    if (fs.exists(fileName)) fs.remove(fileName);
+    writeFile = fs.open(fileName, FILE_WRITE);
+    if(!writeFile){
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.print  (fileName);
+        Serial.println(" - failed to open file for writing");
+        xSemaphoreGive(displaySem);
+      }
+    }
+    else {
+      inBuffer = (uint8_t*) malloc (WEB_BUFFER_SIZE);
+      if (inBuffer!=NULL) {
+        while (inLength>0) {
+          inLength = inStream->read(inBuffer, WEB_BUFFER_SIZE);
+          if (inLength>0) writeFile.write (inBuffer, inLength);
+        }
+        free (inBuffer);
+      }
+      writeFile.close();
+    }
+  }
+  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.print   ("Failed to open URL: ");
+    Serial.println (url);
+    xSemaphoreGive(displaySem);
+  }
+  if (httpClient != NULL) closeHttpStream (httpClient);
+}
+
+
+/*
+ * Open a stream to read http/s data
+ */
+WiFiClient* getHttpStream (char *url, const char *cert, HTTPClient *http)
+{
+  WiFiClient *retVal = NULL;
+  int httpCode;
+
+  http = new HTTPClient;
+  if (strncmp (url, "https://", 8) == 0 && cert != NULL) {
+    http->begin (url, cert);
+  }
+  else {
+    http->begin (url);
+  }
+  httpCode = http->GET();
+  if (httpCode == HTTP_CODE_OK) {
+    retVal = http->getStreamPtr();
+  }
+  else if (httpCode<0) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.printf ("Error connecting to web server: %d on %s", httpCode, url);
+      xSemaphoreGive(displaySem);
+    }
+  }
+return (retVal);
+}
+
+/*
+ * Close http stream once done
+ */
+void closeHttpStream(HTTPClient *http)
+{
+  if (http!= NULL) {
+    http->end();
+    http->~HTTPClient();
+    http = NULL;
+  }
+}
+
+void defaultCertExists(fs::FS &fs)
+{
+  if(!fs.exists(CERTFILE)){
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.print ("Missing default certificate file, creating ");
+      Serial.println (CERTFILE);
+      xSemaphoreGive(displaySem);
+    }
+    // file.close();
+    File defCertFile = fs.open( CERTFILE, FILE_WRITE);
+    if(!defCertFile){
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.println("  - failed to open file for writing");
+        xSemaphoreGive(displaySem);
+      }
+    }
+    else {
+      defCertFile.print (defaultCertificate);
+      defCertFile.close();
+    }
+  }
+  else {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.print (CERTFILE);
+      Serial.println (" default certificate file exists, leaving untouched.");
+      xSemaphoreGive(displaySem);
+    }
+  }
 }
 #endif

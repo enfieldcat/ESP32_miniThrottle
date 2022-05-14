@@ -354,16 +354,15 @@ void txPacket (char *header, char *pktData)
 void txPacket (char *pktData)
 {
   if (!client.connected()) return;
+  if (pktData== NULL) return;
   if (xSemaphoreTake(transmitSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-    if (pktData!= NULL) {
-      client.println (pktData);
-      client.flush();
-    }
+    client.println (pktData);
+    client.flush();
     xSemaphoreGive(transmitSem);
     if (showPackets) {
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
         Serial.print ("--> ");
-        if (pktData!= NULL) Serial.print (pktData);
+        Serial.print (pktData);
         Serial.println ("");
         xSemaphoreGive(displaySem);
       }

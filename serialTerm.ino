@@ -91,6 +91,7 @@ void process (uint8_t *inBuffer)
   else if (nparam==3 && strcmp (param[1], "replay")== 0 && strcmp (param[0], "file") == 0) util_readFile   (SPIFFS, param[2], true);
   else if (nparam==3 && strcmp (param[1], "write") == 0 && strcmp (param[0], "file") == 0) util_writeFile  (SPIFFS, param[2]);
   else if (nparam==4 && strcmp (param[1], "download") == 0 && strcmp (param[0], "file") == 0) getHttp2File (SPIFFS, param[2], param[3]);
+  else if (nparam<=2 && strcmp (param[0], "font") == 0)          mt_set_font         (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "help") == 0)          help                (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "mdns") == 0)          set_mdns            (nparam, param);
   else if (nparam==1 && strcmp (param[0], "memory") == 0)        showMemory          ();
@@ -101,6 +102,9 @@ void process (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "protocol") == 0)      mt_set_protocol     (nparam, param);
   else if (nparam==1 && strcmp (param[0], "restart") == 0)       mt_sys_restart      ("command line request");
   else if (nparam<=2 && strcmp (param[0], "routedelay") == 0)    mt_set_routedelay   (nparam, param);
+  #ifdef SCREENROTATE
+  else if (nparam<=2 && strcmp (param[0], "rotatedisplay") == 0) mt_set_rotateDisp   (nparam, param);
+  #endif
   else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
   else if (nparam>=2 && strcmp (param[0], "sendcmd") == 0)       mt_sendcmd          (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "speedstep") == 0)     mt_set_speedStep    (nparam, param);
@@ -515,6 +519,81 @@ void mt_set_debounceTime (int nparam, char **param) //set count of clicks requir
     }
   }
 }
+
+void mt_set_font (int nparam, char **param)  // set font
+{
+  uint8_t fontIndex;
+  
+  if (nparam == 1) {
+    fontIndex = nvs_get_int ("fontIndex", 1);
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.printf ("Current font %d: %s\n", fontIndex, fontLabel[fontIndex]);
+      Serial.println ("Font options are:");
+      for (uint8_t n=0; n<sizeof(fontWidth); n++) {
+        Serial.printf ("%d: %s (%dx%d chars)\n", n, fontLabel[n], (screenWidth/fontWidth[n]), (screenHeight/fontHeight[n]));
+      }
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else {
+    if (util_str_isa_int (param[1])) {
+      fontIndex = util_str2int(param[1]);
+      if (fontIndex >= 0 && fontIndex < sizeof(fontWidth)) {
+        nvs_put_int ("fontIndex", fontIndex);
+      }
+      else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.printf ("Font index should be between 0 and %d\n", sizeof(fontWidth) - 1);
+        xSemaphoreGive(displaySem);
+      }
+    }
+    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.printf ("Font index should be between 0 and %d\n", sizeof(fontWidth) - 1);
+      xSemaphoreGive(displaySem);
+    }
+  }
+}
+
+#ifdef SCREENROTATE
+void mt_set_rotateDisp (int nparam, char **param)  // Rotation of screen
+{
+  uint8_t rotateIndex;
+  #if SCREENROTATE == 2
+  uint8_t opts = 2;
+  char *rotateOpts[] = {"0 deg (Normal)", "180 deg (Invert)"};
+  #else
+  uint8_t opts = 4;
+  char *rotateOpts[] = {"0 deg (Normal)", "90 deg Right", "180 deg (Invert)", "90 deg Left"};
+  #endif
+  if (nparam == 1) {
+    rotateIndex = nvs_get_int ("screenRotate", 0);
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.printf ("Screen orientation is: %d, %s\n", rotateIndex, rotateOpts[rotateIndex]);
+      Serial.printf ("Rotation Options are:\n");
+      for (uint8_t n=0; n<opts; n++) {
+        Serial.printf ("%d: %s\n", n, rotateOpts[n]);
+      }
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else {
+    if (util_str_isa_int (param[1])) {
+      rotateIndex = util_str2int(param[1]);
+      if (rotateIndex >= 0 && rotateIndex < opts) {
+        nvs_put_int ("screenRotate", rotateIndex);
+      }
+      else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.printf ("Rotate index should be between 0 and %d\n", opts - 1);
+        xSemaphoreGive(displaySem);
+      }
+    }
+    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.printf ("Rotate index should be between 0 and %d\n", opts - 1);
+      xSemaphoreGive(displaySem);
+    }
+  }
+
+}
+#endif
 
 void mt_set_wifi (int nparam, char **param)  // set WiFi parameters
 {
@@ -1285,6 +1364,13 @@ void help(int nparam, char **param)  // show help data
       }
     }
     #endif
+    if (all || strcmp(param[1], "font")==0) {
+      Serial.println ((const char*) "font [index]");
+      if (!summary) {
+        Serial.println ((const char*) "    Display or set font");
+        Serial.println ((const char*) "    Permanent setting");
+      }
+    }
     if (all || strcmp(param[1], "help")==0) {
       Serial.println ((const char*) "help [summary|all|<command>]");
       if (!summary) {
@@ -1358,6 +1444,15 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    temporary setting");
       }
     }
+    #ifdef SCREENROTATE
+    if (all || strcmp(param[1], "rotatedisplay")==0) {
+      Serial.println ((const char*) "rotatedisplay [direction]");
+      if (!summary) {
+        Serial.println ((const char*) "    Rotate screen orientation");
+        Serial.println ((const char*) "    permanent setting");
+      }
+    }
+    #endif
     if (all || strcmp(param[1], "routedelay")==0) {
       Serial.println ((const char*) "routedelay [mS_delay]");
       if (!summary) {

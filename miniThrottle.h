@@ -43,16 +43,16 @@
 // #define SHOWPACKETSONSTART 1
 
 // Select one display board type
-//#define SSD1306      // SSD1306 128x64     I2C
+#define SSD1306      // SSD1306 128x64     I2C
 //#define SSD1327      // SSD1327 128x128    I2C
 //#define ST7735       // ST7735  128x160x16 SPI
-#define ST7789       // ST7789  135x240x16 SPI
+//#define ST7789       // ST7789  135x240x16 SPI
 //#define ILI9341      // ILI9341 240x320x16 SPI
 
 // Define keypad things, Define one type of keypad
-//#define keynone
+#define keynone
 //#define key1x5
-#define key3x4
+//#define key3x4
 //#define key4x4
 //#define key4x5
 

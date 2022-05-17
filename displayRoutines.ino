@@ -559,7 +559,7 @@ void mkRotateMenu()
   #else
   #if SCREENROTATE == 2
   uint8_t opts = 3;
-  char *rotateMenu[] = {"Normal", "Invert", "Prev. Menu"};
+  char *rotateMenu[] = {"0 deg (Normal)", "180 deg (Invert)", "Prev. Menu"};
   #else
   uint8_t opts = 5;
   char *rotateMenu[] = {"0 deg (Normal)", "90 deg Right", "180 deg (Invert)", "90 deg Left", "Prev. Menu"};

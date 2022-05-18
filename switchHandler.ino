@@ -1,9 +1,24 @@
 /*
  * Handle switches, eg direction or rotary encoder
  */
-uint8_t toggleSwitch[] = {(uint8_t)ENCODE_SW, (uint8_t)DIRFWDPIN, (uint8_t)DIRREVPIN};
+uint8_t toggleSwitch[] = {
+  #ifdef ENCODE_SW
+  (uint8_t)ENCODE_SW,
+  #endif
+  #ifdef DIRFWDPIN
+  (uint8_t)DIRFWDPIN,
+  #endif
+  #ifdef DIRREVPIN
+  (uint8_t)DIRREVPIN,
+  #endif
+  99   // end of array "filler" in the event DIRREVPIN is undefined
+  };
 uint8_t directionSetting = STOP;
+#ifdef ENCODE_UP
+#ifdef ENCODE_DN
 ESP32Encoder encoder;
+#endif
+#endif
 
 void switchMonitor(void *pvParameters)
 // This is the control switch monitor task.
@@ -16,8 +31,8 @@ void switchMonitor(void *pvParameters)
   static char submitKey = 'S';
   static char downKey = 'D';
   static char upKey = 'U';
-  uint8_t lastRead[sizeof(toggleSwitch)];
-  uint8_t currentSetting[sizeof(toggleSwitch)];
+  uint8_t lastRead[sizeof(toggleSwitch)-1];
+  uint8_t currentSetting[sizeof(toggleSwitch)-1];
   bool changed = false;
   uint8_t readChar;
   #ifdef POTTHROTPIN
@@ -28,10 +43,14 @@ void switchMonitor(void *pvParameters)
   #endif
 
   // deal with the encoder first
+  #ifdef ENCODE_UP
+  #ifdef ENCODE_DN
   ESP32Encoder::useInternalWeakPullResistors=UP;
   encoder.attachFullQuad(ENCODE_UP, ENCODE_DN);
   encoder.setFilter(1023);
   encoder.setCount (100);
+  #endif
+  #endif
   #ifdef POTTHROTPIN
   // We only need 8 bit resolution, higher resolution is wasted compute power
   analogReadResolution(10);
@@ -39,14 +58,14 @@ void switchMonitor(void *pvParameters)
   analogSetPinAttenuation(POTTHROTPIN, ADC_11db);  // param 2 = attenuation, range 0-3 sets FSD: 0:ADC_0db=800mV, 1:ADC_2_5db=1.1V, 2:ADC_6db=1.35V, 3:ADC_11db=2.6V
   #endif
   // now initialise other switches
-  for (uint8_t n=0; n<sizeof(toggleSwitch); n++) {
+  for (uint8_t n=0; n<sizeof(toggleSwitch)-1; n++) {
     pinMode(toggleSwitch[n], INPUT_PULLUP);
     lastRead[n] = 1;
     currentSetting[n] = 1;
   }
   while (true) {
     changed = false;
-    for (uint8_t n=0; n<sizeof(toggleSwitch); n++) {
+    for (uint8_t n=0; n<sizeof(toggleSwitch)-1; n++) {
       readChar = digitalRead(toggleSwitch[n]);
       if (lastRead[n] != readChar) {
         changed = true;
@@ -56,17 +75,22 @@ void switchMonitor(void *pvParameters)
     if (changed) {
       changed = false;
       delay (debounceTime);
-      for (uint8_t n=0; n<sizeof(toggleSwitch); n++) {
+      for (uint8_t n=0; n<sizeof(toggleSwitch)-1; n++) {
         readChar = digitalRead(toggleSwitch[n]);
         if (lastRead[n] == readChar && currentSetting[n] != readChar) {
           currentSetting[n] = readChar;
           switch (toggleSwitch[n]) {
+            #ifdef DIRFWDPIN
             case DIRFWDPIN:
               sendDirChange (currentSetting[n], currentSetting[n+1]);
               break;
+            #endif
+            #ifdef DIRREVPIN
             case DIRREVPIN:
               sendDirChange (currentSetting[n-1], currentSetting[n]);
               break;
+            #endif
+            #ifdef ENCODE_SW
             case ENCODE_SW:
               if (readChar==0) {
                 if (showKeypad) Serial.println (submitKey);
@@ -74,10 +98,15 @@ void switchMonitor(void *pvParameters)
                 xQueueSend (keyboardQueue, &submitKey, 0);
               }
               break;
+            #endif
+            default:
+              break;
           }
         }
       }
     }
+    #ifdef ENCODE_UP
+    #ifdef ENCODE_DN
     encodeValue = encoder.getCount();
     if (encodeValue != 100) {
       if (++detentCount >= nvs_get_int ("detentCount", 2)) {
@@ -93,6 +122,8 @@ void switchMonitor(void *pvParameters)
         detentCount = 0;
       }
     }
+    #endif
+    #endif
     #ifdef POTTHROTPIN
     if (drivingLoco && enablePot) { // Ignore potentiometer if not actually driving loco
       // Oversample to get a more stable average

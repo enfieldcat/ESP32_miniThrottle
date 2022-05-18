@@ -1161,16 +1161,26 @@ void showPinConfig()  // Display pin out selection
     sprintf (outBuffer, "SPI - data/SDA = %d", SPI_SDA);
     Serial.println (outBuffer);
     #endif
+    #ifdef ENCODE_UP
     sprintf (outBuffer, "Encoder up     = %d", ENCODE_UP);
     Serial.println (outBuffer);
+    #endif
+    #ifdef ENCODE_DN
     sprintf (outBuffer, "Encoder down   = %d", ENCODE_DN);
     Serial.println (outBuffer);
+    #endif
+    #ifdef ENCODE_SW
     sprintf (outBuffer, "Encoder switch = %d", ENCODE_SW);
     Serial.println (outBuffer);
+    #endif
+    #ifdef DIRFWDPIN
     sprintf (outBuffer, "Direction Fwd  = %d", DIRFWDPIN);
     Serial.println (outBuffer);
+    #endif
+    #ifdef DIRREVPIN
     sprintf (outBuffer, "Direction Rev  = %d", DIRREVPIN);
     Serial.println (outBuffer);
+    #endif
     #ifndef keynone
     sprintf (outBuffer, "Keyboard rows (%d) ", sizeof(rows));
     Serial.print (outBuffer);

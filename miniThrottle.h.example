@@ -50,11 +50,11 @@
 //#define ILI9341      // ILI9341 240x320x16 SPI
 
 // Define keypad things, Define one type of keypad
-#define keynone
+//#define keynone
 //#define key1x5
 //#define key3x4
 //#define key4x4
-//#define key4x5
+#define key4x5
 
 // Default settings
 #define MYSSID  "DCC_ESP"
@@ -68,34 +68,46 @@
  * **********  PIN ASSIGNMENTS  ******************************************************************
  *
  * NB: pins 34 and above are read only, do not use them for outputs, assign to switches and rotary encoders
+ *     pins 34 and above do not have internal pull up resistors, if using for switches add your own 20K pull up
+ *     
+ * NB: pins 06 to 11 are connected to the internal flash memory, do not use these even if available on your board
  * 
  * ADC is used for Potentiometer throttle (Pot-Throt / POTTHROTPIN)
- *     ADC1_CH0 - GPIO36
- *     ADC1_CH1 - GPIO37
- *     ADC1_CH2 - GPIO38
- *     ADC1_CH3 - GPIO39
- *     ADC1_CH4 - GPIO32
- *     ADC1_CH5 - GPIO33
- *     ADC1_CH6 - GPIO34
- *     ADC1_CH7 - GPIO35
+ *     ADC1_CH0 - GPIO 36
+ *     ADC1_CH1 - GPIO 37
+ *     ADC1_CH2 - GPIO 38
+ *     ADC1_CH3 - GPIO 39
+ *     ADC1_CH4 - GPIO 32
+ *     ADC1_CH5 - GPIO 33
+ *     ADC1_CH6 - GPIO 34
+ *     ADC1_CH7 - GPIO 35
  * ADC2 not usable with WIFI enabled.
  * 
  * DAC is used to drive 3v voltmeter speedo
  * DAC pins are limited to 25 and 26
  * 
+ * SPI bus can be mapped to other pins, but the "native" pins are
+ * SPI  |    MOSI |    MISO |     CLK |      CS
+ * VSPI | GPIO 23 | GPIO 19 | GPIO 18 | GPIO 05
+ * HSPI | GPIO 13 | GPIO 12 | GPIO 14 | GPIO 15
+ * 
+ * I2C bus can be mapped to other pins, but the "native" pins are
+ *    SDA - GPIO 21
+ *    SCL - GPIO 22
+ * 
  */
 // define either of TRACKPWR or TRACKPWRINV or neither. do not set both
-#define TRACKPWR       02   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
+// #define TRACKPWR       02   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
 // #define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
-#define ENCODE_UP      36   // encoder up bounce
-#define ENCODE_DN      39   // encoder down bounce
-#define ENCODE_SW      34   // encoder switch
-#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
-#define DIRREVPIN      33   // Direction sw spdt center off LOW active
-#define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
+// #define ENCODE_UP      36   // encoder up bounce
+// #define ENCODE_DN      25   // encoder down bounce
+// #define ENCODE_SW      26   // encoder switch
+//#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
+//#define DIRREVPIN      33   // Direction sw spdt center off LOW active
+//#define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
 #ifdef key4x5
-#define MEMBR_COLS     21,19,18,05
-#define MEMBR_ROWS     17,16,04,26,15
+#define MEMBR_COLS     16,25,26,00
+#define MEMBR_ROWS     02,14,12,13,15
 #endif
 #ifdef key4x4
 #define MEMBR_COLS     21,19,18,05
@@ -110,7 +122,7 @@
 #define MEMBR_ROWS     17
 #endif
 // To configure a speedometer, use one of the 2 DAC pins (25, 26) to drive a 3v voltmeter
-#define SPEEDOPIN      25
+//#define SPEEDOPIN      25
 // To define a brake pressure gauge using a 3V voltmeter, use BRAKEPRESPIN on one of 2 DAC pins
 //#define BRAKEPRESPIN   26
 // To enable bidirectional mode indicator
@@ -165,12 +177,12 @@
 #define DISPLAY "sdd1327"
 // No SCREENROTATE
 #endif
-#ifdef ST7735                // HSPI_HD   = 4, HSPI_WP = 2, HSPI_MISO = 12
+#ifdef ST7735
 #define SPI_RESET      22
-#define SPI_CS         -1    // HSPI_CS   = 15
+#define SPI_CS         -1
 #define SPI_DC         27
-#define SPI_SCL        -1    // HSPI_CLK  = 14
-#define SPI_SDA        -1    // HSPI_MOSI = 13
+#define SPI_SCL        -1
+#define SPI_SDA        -1
 #define DISPLAY "st7735"
 #define COLORDISPLAY
 #define SCALEFONT
@@ -178,10 +190,10 @@
 #endif
 #ifdef ST7789
 #define SPI_RESET      27
-#define SPI_CS         26    // HSPI_CS   = 15
+#define SPI_CS         26
 #define SPI_DC         12
-#define SPI_SCL        14    // HSPI_CLK  = 14
-#define SPI_SDA        13    // HSPI_MOSI = 13
+#define SPI_SCL        14
+#define SPI_SDA        13
 #define DISPLAY "st7789"
 #define COLORDISPLAY
 #define SCALEFONT
@@ -189,10 +201,10 @@
 #endif
 #ifdef ILI9341               // HSPI_HD   = 4, HSPI_WP = 2, HSPI_MISO = 12
 #define SPI_RESET      27
-#define SPI_CS         -1    // HSPI_CS   = 15
+#define SPI_CS         -1
 #define SPI_DC         12
-#define SPI_SCL        14    // HSPI_CLK  = 14
-#define SPI_SDA        13    // HSPI_MOSI = 13
+#define SPI_SCL        14
+#define SPI_SDA        13
 #define DISPLAY "ili9341"
 #define COLORDISPLAY
 #define SCALEFONT
@@ -234,7 +246,8 @@ char keymap[ROWCOUNT][COLCOUNT] = {
   { 'X', 'Y', '#', 'P' }
 #else
   { 'X', 'Y', '#', '*' }
-#endif};
+#endif
+};
 #endif
 #ifdef key4x4
 #define COLCOUNT        4

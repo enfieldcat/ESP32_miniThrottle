@@ -226,7 +226,9 @@ void setup()  {
   #ifdef DELAYONSTART
   Serial.println ("Network services started, starting user interface");
   #endif
-  #ifndef keynone
+  #ifdef keynone
+  Serial.println ("No keypad defined");
+  #else
   xTaskCreate(keypadMonitor, "keypadMonitor", 2048, NULL, 4, NULL);
   #endif
   xTaskCreate(switchMonitor, "switchMonitor", 2048, NULL, 4, NULL);

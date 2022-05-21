@@ -21,12 +21,20 @@ void serialConsole(void *pvParameters)
       if (inChar == 8 || inChar == 127) {
         if (bufferPtr > 0) {
           bufferPtr--;
-          Serial.print (0x08);
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            Serial.print ((char)0x08);
+            Serial.print ((char) ' ');
+            Serial.print ((char)0x08);
+            xSemaphoreGive(displaySem);
+          }
         }
       }
       else {
         if (inChar == '\n' || inChar == '\r') {
-          Serial.println ("");
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            Serial.println ("");
+            xSemaphoreGive(displaySem);
+          }
           if (bufferPtr>0) {
             inBuffer[bufferPtr] = '\0';
             process(inBuffer);
@@ -36,11 +44,14 @@ void serialConsole(void *pvParameters)
         }
         else if (bufferPtr < BUFFSIZE-1) {
           inBuffer[bufferPtr++] = inChar;
-          Serial.print ((char)inChar);
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            Serial.print ((char)inChar);
+            xSemaphoreGive(displaySem);
+          }
         }
       }
     }
-    delay(debounceTime);
+    delay(10);
   }
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
     Serial.println ("All console services stopping");
@@ -174,17 +185,17 @@ void mt_export()
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
     nvs_get_string ("tname", msgBuffer, "none", sizeof(msgBuffer));
     if (strcmp (msgBuffer, "none") != 0) {
-      Serial.printf ("name %s\n", msgBuffer);
+      Serial.printf ("name %s\r\n", msgBuffer);
     }
     Serial.print   ("Display Type: ");
     Serial.println (DISPLAY);
     count = nvs_get_int ("detentCount", -1);
     if (count >= 0) {
-      Serial.printf ("detentcount %d\n", count);
+      Serial.printf ("detentcount %d\r\n", count);
     }
     count = nvs_get_int ("debounceTime", -1);
     if (count >= 0) {
-      Serial.printf ("debouncetime %d\n", count);
+      Serial.printf ("debouncetime %d\r\n", count);
     }
     count = nvs_get_int ("defaultProto", -1);
     if (count >= 0) {
@@ -193,21 +204,21 @@ void mt_export()
       else Serial.println ("dcc++");
     }
     count = nvs_get_int ("routeDelay", -1);
-    if (count >= 0) Serial.printf ("routedelay %d\n", count);
+    if (count >= 0) Serial.printf ("routedelay %d\r\n", count);
     for (uint8_t n=0; n<WIFINETS; n++) {
       sprintf (varName, "server_%d", n);
       nvs_get_string (varName, msgBuffer, "none", sizeof(msgBuffer));
       if (strcmp (msgBuffer, "none") != 0) {
         sprintf (varName, "port_%d", n);
         count = nvs_get_int (varName, 1080);
-        Serial.printf ("server %d %s %d\n", n, msgBuffer, count);
+        Serial.printf ("server %d %s %d\r\n", n, msgBuffer, count);
       }
     }
     count = nvs_get_int ("speedStep", -1);
-    if (count >= 0) Serial.printf ("speedstep %d\n", count);
+    if (count >= 0) Serial.printf ("speedstep %d\r\n", count);
     count = nvs_get_int ("brakeup", -1);
     if (count >= 0 || nvs_get_int ("brakedown", -1) >= 0){
-      Serial.printf ("brake %d %d\n", nvs_get_int ("brakeup", 1), nvs_get_int ("brakedown", 20));
+      Serial.printf ("brake %d %d\r\n", nvs_get_int ("brakeup", 1), nvs_get_int ("brakedown", 20));
     }
     count = nvs_get_int ("sortData", -1);
     if (count == 0) Serial.println ("nosortdata");
@@ -222,8 +233,8 @@ void mt_export()
         Serial.printf ("wifi %d %s", n, msgBuffer);
         sprintf (varName, "wifipass_%d", n);
         nvs_get_string (varName, msgBuffer, "none", sizeof(msgBuffer));
-        if (strcmp (msgBuffer, "none") != 0) Serial.printf (" %s\n", msgBuffer);
-        else Serial.printf ("\n");
+        if (strcmp (msgBuffer, "none") != 0) Serial.printf (" %s\r\n", msgBuffer);
+        else Serial.printf ("\r\n");
       }
     }
     xSemaphoreGive(displaySem);
@@ -530,7 +541,7 @@ void mt_set_font (int nparam, char **param)  // set font
       Serial.printf ("Current font %d: %s\n", fontIndex, fontLabel[fontIndex]);
       Serial.println ("Font options are:");
       for (uint8_t n=0; n<sizeof(fontWidth); n++) {
-        Serial.printf ("%d: %s (%dx%d chars)\n", n, fontLabel[n], (screenWidth/fontWidth[n]), (screenHeight/fontHeight[n]));
+        Serial.printf ("%d: %s (%dx%d chars)\r\n", n, fontLabel[n], (screenWidth/fontWidth[n]), (screenHeight/fontHeight[n]));
       }
       xSemaphoreGive(displaySem);
     }
@@ -542,12 +553,12 @@ void mt_set_font (int nparam, char **param)  // set font
         nvs_put_int ("fontIndex", fontIndex);
       }
       else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        Serial.printf ("Font index should be between 0 and %d\n", sizeof(fontWidth) - 1);
+        Serial.printf ("Font index should be between 0 and %d\r\n", sizeof(fontWidth) - 1);
         xSemaphoreGive(displaySem);
       }
     }
     else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-      Serial.printf ("Font index should be between 0 and %d\n", sizeof(fontWidth) - 1);
+      Serial.printf ("Font index should be between 0 and %d\r\n", sizeof(fontWidth) - 1);
       xSemaphoreGive(displaySem);
     }
   }
@@ -567,10 +578,10 @@ void mt_set_rotateDisp (int nparam, char **param)  // Rotation of screen
   if (nparam == 1) {
     rotateIndex = nvs_get_int ("screenRotate", 0);
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-      Serial.printf ("Screen orientation is: %d, %s\n", rotateIndex, rotateOpts[rotateIndex]);
-      Serial.printf ("Rotation Options are:\n");
+      Serial.printf ("Screen orientation is: %d, %s\r\n", rotateIndex, rotateOpts[rotateIndex]);
+      Serial.printf ("Rotation Options are:\r\n");
       for (uint8_t n=0; n<opts; n++) {
-        Serial.printf ("%d: %s\n", n, rotateOpts[n]);
+        Serial.printf ("%d: %s\r\n", n, rotateOpts[n]);
       }
       xSemaphoreGive(displaySem);
     }
@@ -582,12 +593,12 @@ void mt_set_rotateDisp (int nparam, char **param)  // Rotation of screen
         nvs_put_int ("screenRotate", rotateIndex);
       }
       else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        Serial.printf ("Rotate index should be between 0 and %d\n", opts - 1);
+        Serial.printf ("Rotate index should be between 0 and %d\r\n", opts - 1);
         xSemaphoreGive(displaySem);
       }
     }
     else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-      Serial.printf ("Rotate index should be between 0 and %d\n", opts - 1);
+      Serial.printf ("Rotate index should be between 0 and %d\r\n", opts - 1);
       xSemaphoreGive(displaySem);
     }
   }
@@ -759,7 +770,7 @@ void set_mdns(int nparam, char **param)
         xSemaphoreGive(displaySem);
       }
     }
-    else mdnsLookup (param[1]);
+    mdnsLookup (param[1]);
   }
 }
 

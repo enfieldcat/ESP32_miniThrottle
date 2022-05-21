@@ -779,6 +779,10 @@ bool displayYesNo (char *question)
 
 int enterNumber(char *prompt)
 {
+  #ifdef keynone
+  displayTempMessage ("Warning:", "Cannot enter number without a keypad", true);
+  return (-1);
+  #else
   int retVal = 0;
   char *tptr;
   char inKey = 'Z';
@@ -812,6 +816,7 @@ int enterNumber(char *prompt)
   #endif
   if (inKey == 'E') retVal = -1;
   return (retVal);
+  #endif
 }
 
 char* enterAddress(char *prompt)

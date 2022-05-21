@@ -25,6 +25,22 @@ void switchMonitor(void *pvParameters)
 // Read a control switch, and place it in a keyboard queue
 {
   (void)  pvParameters;
+  #ifndef POTTHROTPIN
+  #ifndef ENCODE_UP
+  #ifndef ENCODE_DN
+  #ifndef ENCODE_SW
+  #ifndef DIRFWDPIN
+  #ifndef DIRREVPIN
+  // No work for this thread if none of the above are defined
+  Serial.println ("No switches or encoder defined");
+  vTaskDelete( NULL );
+  return;
+  #endif
+  #endif
+  #endif
+  #endif
+  #endif
+  #endif  
   int encodeValue;
   int detentCount = 0;
   static char escapeKey = 'E';

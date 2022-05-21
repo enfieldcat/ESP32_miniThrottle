@@ -481,12 +481,5 @@ void defaultCertExists(fs::FS &fs)
       defCertFile.close();
     }
   }
-  else {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-      Serial.print (CERTFILE);
-      Serial.println (" default certificate file exists, leaving untouched.");
-      xSemaphoreGive(displaySem);
-    }
-  }
 }
 #endif

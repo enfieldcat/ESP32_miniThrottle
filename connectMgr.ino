@@ -108,7 +108,7 @@ void connectionManager(void *pvParameters)
         port = mdnsLookup ("_withrottle", server);
         if (port != 0 && strlen(server) > 0) {
           if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-            Serial.printf ("MDNS look up service: %s:%d\n", server, port);
+            Serial.printf ("MDNS look up service: %s:%d\r\n", server, port);
             xSemaphoreGive (displaySem);
           }
           connect2server (server, port);
@@ -256,26 +256,26 @@ void mdnsLookup (char *service)
   if ((!err) && results != NULL && xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
     r = results;
     while (r){
-      Serial.printf("%d: Interface: %s, Type: %s\n", i++, if_str[r->tcpip_if], ip_protocol_str[r->ip_protocol]);
+      Serial.printf("%d: Interface: %s, Type: %s\r\n", i++, if_str[r->tcpip_if], ip_protocol_str[r->ip_protocol]);
       if (r->instance_name){
-        Serial.printf("  PTR : %s\n", r->instance_name);
+        Serial.printf("  PTR : %s\r\n", r->instance_name);
       }
       if (r->hostname){
-         Serial.printf("  SRV : %s.local:%u\n", r->hostname, r->port);
+         Serial.printf("  SRV : %s.local:%u\r\n", r->hostname, r->port);
       }
       if (r->txt_count){
         Serial.printf("  TXT : [%u] ", r->txt_count);
         for(t=0; t<r->txt_count; t++){
           Serial.printf("%s=%s; ", r->txt[t].key, r->txt[t].value);
         }
-        Serial.printf("\n");
+        Serial.printf("\r\n");
       }
       a = r->addr;
       while (a){
         if(a->addr.type == IPADDR_TYPE_V6){
-          Serial.printf("  AAAA: " IPV6STR "\n", IPV62STR(a->addr.u_addr.ip6));
+          Serial.printf("  AAAA: " IPV6STR "\r\n", IPV62STR(a->addr.u_addr.ip6));
         } else {
-          Serial.printf("  A   : " IPSTR "\n", IP2STR(&(a->addr.u_addr.ip4)));
+          Serial.printf("  A   : " IPSTR "\r\n", IP2STR(&(a->addr.u_addr.ip4)));
         }
         a = a->next;
       }

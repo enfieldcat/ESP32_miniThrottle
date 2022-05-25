@@ -163,7 +163,7 @@ void setup()  {
   Serial.println (tname);
   debounceTime = nvs_get_int ("debounceTime", DEBOUNCEMS);
   screenRotate = nvs_get_int ("screenRotate", 0);
-  if (nvs_get_int ("bidirectionalMode", 0) == 1) bidirectionalMode = true;
+  if (nvs_get_int ("bidirectional", 0) == 1) bidirectionalMode = true;
   #ifdef SHOWPACKETSONSTART
   showPackets = true;
   #endif

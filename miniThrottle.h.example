@@ -53,8 +53,8 @@
 //#define keynone
 //#define key1x5
 //#define key3x4
-//#define key4x4
-#define key4x5
+#define key4x4
+//#define key4x5
 
 // Default settings
 #define MYSSID  "DCC_ESP"
@@ -95,13 +95,20 @@
  *    SDA - GPIO 21
  *    SCL - GPIO 22
  * 
+ * The following are "strapping pins" which should in the state shown on reboot
+ *    GPIO 05 (must be HIGH during boot)
+ *    GPIO 12 (must be LOW during boot)
+ *    GPIO 15 (must be HIGH during boot)
+ *
+ * Bringing the EN pin to GND temporarily will hard reset the ESP32 module
+ *
  */
 // define either of TRACKPWR or TRACKPWRINV or neither. do not set both
 // #define TRACKPWR       02   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
 // #define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
-// #define ENCODE_UP      36   // encoder up bounce
-// #define ENCODE_DN      25   // encoder down bounce
-// #define ENCODE_SW      26   // encoder switch
+#define ENCODE_UP      39   // encoder up bounce
+#define ENCODE_DN      16   // encoder down bounce
+#define ENCODE_SW      36   // encoder switch
 //#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
 //#define DIRREVPIN      33   // Direction sw spdt center off LOW active
 //#define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
@@ -110,8 +117,8 @@
 #define MEMBR_ROWS     02,14,12,13,15
 #endif
 #ifdef key4x4
-#define MEMBR_COLS     21,19,18,05
-#define MEMBR_ROWS     17,16,04,15
+#define MEMBR_COLS     02,00,26,25
+#define MEMBR_ROWS     14,12,13,15
 #endif
 #ifdef key3x4
 #define MEMBR_COLS     17,16,04

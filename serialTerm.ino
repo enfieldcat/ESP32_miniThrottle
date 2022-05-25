@@ -183,12 +183,23 @@ void mt_export()
   char msgBuffer[BUFFSIZE];
 
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.println ("# MiniThrottle export");
+    Serial.println ("#####################");
+    Serial.println ("# Delete any security information like WiFi passwords before posting to web");
+    Serial.print   ("# Software Vers: ");
+    Serial.print   (PRODUCTNAME);
+    Serial.print   (" ");
+    Serial.println (VERSION);
+    Serial.print   ("# Compile time:  ");
+    Serial.print   (__DATE__);
+    Serial.print   (" ");
+    Serial.println (__TIME__);
+    Serial.print   ("# Display Type: ");
+    Serial.println (DISPLAY);
     nvs_get_string ("tname", msgBuffer, "none", sizeof(msgBuffer));
     if (strcmp (msgBuffer, "none") != 0) {
       Serial.printf ("name %s\r\n", msgBuffer);
     }
-    Serial.print   ("Display Type: ");
-    Serial.println (DISPLAY);
     count = nvs_get_int ("detentCount", -1);
     if (count >= 0) {
       Serial.printf ("detentcount %d\r\n", count);
@@ -223,7 +234,7 @@ void mt_export()
     count = nvs_get_int ("sortData", -1);
     if (count == 0) Serial.println ("nosortdata");
     else if (count == 1) Serial.println ("sortdata");
-    count = nvs_get_int ("bidirectionalMode", -1);
+    count = nvs_get_int ("bidirectional", -1);
     if (count == 0) Serial.println ("nobidirectional");
     else if (count == 1) Serial.println ("bidirectional");
     for (uint8_t n=0; n<WIFINETS; n++) {
@@ -447,7 +458,7 @@ void mt_sys_config()   // display all known configuration data
       Serial.println (lastMessage);
     }
     Serial.println("--- Local mode data -------------------------");
-    Serial.print  ("Train Set Mode: O");
+    Serial.print  (" Bidirectional: O");
     if (bidirectionalMode) Serial.println ("n");
     else Serial.println ("ff");
     Serial.print  ("Sort Menu Data: ");
@@ -913,8 +924,8 @@ void mt_set_routedelay (int nparam, char **param)
 void mt_setbidirectional (bool setting)
 {
   bidirectionalMode = setting;
-  if (setting) nvs_put_int ("bidirectionalMode", 1);
-  else nvs_put_int ("bidirectionalMode", 0);
+  if (setting) nvs_put_int ("bidirectional", 1);
+  else nvs_put_int ("bidirectional", 0);
 }
 
 void mt_set_server (int nparam, char **param)  // set details about remote servers

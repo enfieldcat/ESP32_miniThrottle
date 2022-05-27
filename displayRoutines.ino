@@ -81,7 +81,7 @@ void mkLocoMenu()
   for (uint8_t n=0; n<locomotiveCount; n++) locoMenu[n] = locoRoster[n].name;
   locoMenu[locomotiveCount] = (char*) lastOpt;
   locoMenu[locomotiveCount+1] = (char*) prevMenuOption;   // give option to go to previous menu
-  while (result!=0) {
+  while (result!=0 && client.connected()) {
     result = displayMenu (locoMenu, locomotiveCount+2, lastLocoMenuOption);
     if (result == (locomotiveCount + 2)) result = 0;
     else if (result == (locomotiveCount + 1)) {
@@ -132,7 +132,7 @@ void mkTurnoutMenu()
   for (uint8_t n=0; n<turnoutCount; n++) switchMenu[n] = turnoutList[n].userName;
   switchMenu[turnoutCount] = (char*) prevMenuOption;
   for (uint8_t n=0; n<turnoutStateCount; n++) stateMenu[n] = turnoutState[n].name;
-  while (result!=0) {
+  while (result!=0 && client.connected()) {
     result = displayMenu (switchMenu, turnoutCount+1, lastSwitchMenuOption);
     if (result == (turnoutCount+1)) result = 0;  // give option to go to previous menu
     if (result > 0) {
@@ -161,7 +161,7 @@ void mkRouteMenu()
   }
   for (uint8_t n=0; n<routeCount; n++) routeMenu[n] = routeList[n].userName;
   routeMenu[routeCount] = (char*) prevMenuOption;
-  while (result!=0) {
+  while (result!=0 && client.connected()) {
     result = displayMenu (routeMenu, routeCount+1, lastRouteMenuOption);
     if (result == (routeCount+1)) result = 0;  // give option to go to previous menu
     if (result > 0) {
@@ -269,7 +269,7 @@ void mkCVMenu()
   char message[64];
 
   if (cmdProtocol == DCCPLUS) {
-    while (result!=0) {
+    while (result!=0 && client.connected()) {
       result = displayMenu ((char**)cvMenu, 6, lastCvMenuOption);
       if (result > 0) lastCvMenuOption = result - 1;
       switch (result) {

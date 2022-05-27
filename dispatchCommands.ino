@@ -15,8 +15,17 @@ void setInitialData()
       txPacket ("N", tname);
     }
     else if (cmdProtocol == DCCPLUS) {
+      uint8_t reqState;
+
+      while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
       txPacket ("<s>");
-      delay(200);
+      if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) != pdPASS) {
+        // wait for ack
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          Serial.println ("Warning: No Ack for initial info");
+          xSemaphoreGive(displaySem);
+        }
+      }
     }
   }
 }
@@ -33,11 +42,35 @@ void setTrackPower (uint8_t desiredState)
   switch (desiredState) {
     case 1:
       if (cmdProtocol == JMRI) txPacket ("PPA1");
-      else if (cmdProtocol == DCCPLUS) txPacket ("<1>");
+      else if (cmdProtocol == DCCPLUS) {
+        uint8_t reqState;
+        
+        while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
+        txPacket ("<1>");
+        if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) != pdPASS) {
+          // wait for ack
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            Serial.println ("Warning: No Ack for track power on");
+            xSemaphoreGive(displaySem);
+          }
+        }
+      }
       break;
     case 2:
       if (cmdProtocol == JMRI) txPacket ("PPA0");
-      else if (cmdProtocol == DCCPLUS) txPacket ("<0>");
+      else if (cmdProtocol == DCCPLUS) {
+        uint8_t reqState;
+        
+        while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
+        txPacket ("<0>");
+        if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) != pdPASS) {
+          // wait for ack
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            Serial.println ("Warning: No Ack for track power off");
+            xSemaphoreGive(displaySem);
+          }
+        }
+      }
       break;
   }
 }
@@ -66,8 +99,15 @@ void setTurnout (uint8_t turnoutNr, char desiredState)
     else {
       sprintf (outPacket, "<T %s %c>", turnoutList[turnoutNr].sysName, turnoutState[desiredState].state);
     }
+    while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
     txPacket (outPacket);
-    xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) == pdPASS; // wait for ack
+    if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) != pdPASS) {
+      // wait for ack
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.println ("Warning: No Ack for setting Turnout");
+        xSemaphoreGive(displaySem);
+      }
+    }
   }
 }
 
@@ -122,6 +162,7 @@ void setRoute (uint8_t routeNr)
 void setLocoFunction (uint8_t locoIndex, uint8_t funcIndex, bool set)
 {
   char commandPacket[40];
+  
   if (cmdProtocol == JMRI) {
     char setVal = '0';
     if (set) setVal = '1';
@@ -129,11 +170,20 @@ void setLocoFunction (uint8_t locoIndex, uint8_t funcIndex, bool set)
     txPacket (commandPacket);
   }
   else if (cmdProtocol == DCCPLUS) {
+    uint8_t reqState;
     char setVal = 0;
+    
     if (set) setVal = 1;
     sprintf (commandPacket, "<F %d %d %d>", locoRoster[locoIndex].id, funcIndex, setVal);
+    while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
     txPacket (commandPacket);
-    delay(100);
+    if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) != pdPASS) {
+      // wait for ack
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.println ("Warning: No Ack for setting function");
+        xSemaphoreGive(displaySem);
+      }
+    }
   }
 }
 
@@ -162,6 +212,8 @@ void setStealLoco(uint8_t locoIndex)
 void setLocoSpeed (uint8_t locoIndex, int16_t speed, int8_t direction)
 {
   char commandPacket[40];
+  uint8_t reqState;
+  
   if (cmdProtocol == JMRI) {
     // if (speed<0) speed = 0;
     sprintf (commandPacket, "M%cA%c%d<;>V%d", locoRoster[locoIndex].throttleNr, locoRoster[locoIndex].type, locoRoster[locoIndex].id, speed);
@@ -171,8 +223,15 @@ void setLocoSpeed (uint8_t locoIndex, int16_t speed, int8_t direction)
     uint8_t tdir = 0;
     if (direction == FORWARD) tdir = 1;
     sprintf (commandPacket, "<t 1 %d %d %d>", locoRoster[locoIndex].id, speed, tdir);
+    while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
     txPacket (commandPacket);
-    delay (10);
+    if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) != pdPASS) {
+      // wait for ack
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.println ("Warning: No Ack for setting loco speed");
+        xSemaphoreGive(displaySem);
+      }
+    }
   }
 }
 

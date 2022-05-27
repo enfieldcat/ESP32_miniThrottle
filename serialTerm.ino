@@ -183,8 +183,11 @@ void mt_export()
   char msgBuffer[BUFFSIZE];
 
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.println ("#");
     Serial.println ("# MiniThrottle export");
+    Serial.println ("#");
     Serial.println ("#####################");
+    Serial.println ("#");
     Serial.println ("# Delete any security information like WiFi passwords before posting to web");
     Serial.print   ("# Software Vers: ");
     Serial.print   (PRODUCTNAME);
@@ -196,6 +199,7 @@ void mt_export()
     Serial.println (__TIME__);
     Serial.print   ("# Display Type: ");
     Serial.println (DISPLAY);
+    Serial.println ("#");
     nvs_get_string ("tname", msgBuffer, "none", sizeof(msgBuffer));
     if (strcmp (msgBuffer, "none") != 0) {
       Serial.printf ("name %s\r\n", msgBuffer);
@@ -237,6 +241,10 @@ void mt_export()
     count = nvs_get_int ("bidirectional", -1);
     if (count == 0) Serial.println ("nobidirectional");
     else if (count == 1) Serial.println ("bidirectional");
+    count = nvs_get_int ("fontIndex", -1);
+    if (count > -1) Serial.printf ("font %d\r\n", count);
+    count = nvs_get_int ("screenRotate", -1);
+    if (count > -1) Serial.printf ("rotatedisplay %d\r\n", count);
     for (uint8_t n=0; n<WIFINETS; n++) {
       sprintf (varName, "wifissid_%d", n);
       nvs_get_string (varName, msgBuffer, "none", sizeof(msgBuffer));

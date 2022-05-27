@@ -23,6 +23,7 @@ void dccLocoStatus (char* locoStatus)
    int16_t  locoSpeed = -9999;
    uint16_t locoFunc = 9999;
    uint8_t next, maxIdx, curIdx;
+   uint8_t result = 0;
    char *ptr;
 
    maxIdx = strlen(locoStatus);
@@ -69,6 +70,7 @@ void dccLocoStatus (char* locoStatus)
        xSemaphoreGive(velociSem);
      }
    }
+   xQueueSend (dccAckQueue, &result, 0);
 }
 
 void dccSpeedChange (char* speedSet)
@@ -79,6 +81,7 @@ void dccSpeedChange (char* speedSet)
   int16_t maxLocoArray = locomotiveCount + MAXCONSISTSIZE;
   char *token;
   char *remain = speedSet;
+  uint8_t result = 0;
 
   int len = strlen (speedSet);
   while (speedSet[len-1]=='>' || speedSet[len-1]=='*' || speedSet[len-1]==' ') len--;
@@ -101,6 +104,7 @@ void dccSpeedChange (char* speedSet)
       speedChange = true;
     }
   }
+  xQueueSend (dccAckQueue, &result, 0);
 }
 
 /*
@@ -134,6 +138,8 @@ void dccAckTurnout ()
  */
 void dccPowerChange(char state)
 {
+  uint8_t result = 0;
+
   if (state == '1') {
     trackPower = true;
     #ifdef TRACKPWR
@@ -152,6 +158,7 @@ void dccPowerChange(char state)
     digitalWrite(TRACKPWRINV, HIGH);  // Off or unknown
     #endif
   }
+  xQueueSend (dccAckQueue, &result, 0);
 }
 
 /*
@@ -160,6 +167,7 @@ void dccPowerChange(char state)
 void dccComment(char* comment)
 {
   int len = strlen (comment);
+  uint8_t result = 0;
 
   // drop trailing chars
   while (comment[len-1]=='>' || comment[len-1]=='*' || comment[len-1]==' ') len--;
@@ -172,6 +180,7 @@ void dccComment(char* comment)
   else len = 0;
   // copy to lastMessage buffer
   strcpy (lastMessage, &comment[len]);
+  xQueueSend (dccAckQueue, &result, 0);
 }
 
 /*
@@ -198,8 +207,11 @@ void dccCV(char* cv)
  */
 void dccInfo(char *cv)
 {
+  uint8_t result = 0;
+  
   if (strlen(cv)>=sizeof(remServerDesc)) cv[sizeof(remServerDesc)-1] = '\0';
   strcpy (remServerDesc, cv);
+  xQueueSend (dccAckQueue, &result, 0);
 }
 
 /*

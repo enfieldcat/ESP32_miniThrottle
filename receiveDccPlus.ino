@@ -290,7 +290,13 @@ void dccPopulateTurnout()
       sprintf (commandBuffer, "<T %s %s>", turnoutData[n].sysName, curData);
       curData = curData + (2*NAMELENGTH);
       txPacket (commandBuffer);
-      xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) == pdPASS; // wait for ack
+      if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) { // wait for ack
+        // wait for ack
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          Serial.println ("Warning: No response for defining turnout");
+          xSemaphoreGive(displaySem);
+        }
+      }
     }
     if (rawData != NULL) {
       free (rawData);

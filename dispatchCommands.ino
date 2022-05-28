@@ -19,10 +19,10 @@ void setInitialData()
 
       while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
       txPacket ("<s>");
-      if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) != pdPASS) {
+      if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
         // wait for ack
         if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-          Serial.println ("Warning: No Ack for initial info");
+          Serial.println ("Warning: No response for initial info");
           xSemaphoreGive(displaySem);
         }
       }
@@ -47,10 +47,10 @@ void setTrackPower (uint8_t desiredState)
         
         while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
         txPacket ("<1>");
-        if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) != pdPASS) {
+        if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
           // wait for ack
           if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-            Serial.println ("Warning: No Ack for track power on");
+            Serial.println ("Warning: No response for track power on");
             xSemaphoreGive(displaySem);
           }
         }
@@ -63,10 +63,10 @@ void setTrackPower (uint8_t desiredState)
         
         while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
         txPacket ("<0>");
-        if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) != pdPASS) {
+        if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
           // wait for ack
           if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-            Serial.println ("Warning: No Ack for track power off");
+            Serial.println ("Warning: No response for track power off");
             xSemaphoreGive(displaySem);
           }
         }
@@ -101,10 +101,10 @@ void setTurnout (uint8_t turnoutNr, char desiredState)
     }
     while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
     txPacket (outPacket);
-    if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) != pdPASS) {
+    if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
       // wait for ack
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        Serial.println ("Warning: No Ack for setting Turnout");
+        Serial.println ("Warning: No response for setting Turnout");
         xSemaphoreGive(displaySem);
       }
     }
@@ -177,10 +177,10 @@ void setLocoFunction (uint8_t locoIndex, uint8_t funcIndex, bool set)
     sprintf (commandPacket, "<F %d %d %d>", locoRoster[locoIndex].id, funcIndex, setVal);
     while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
     txPacket (commandPacket);
-    if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) != pdPASS) {
+    if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
       // wait for ack
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        Serial.println ("Warning: No Ack for setting function");
+        Serial.println ("Warning: No response for setting function");
         xSemaphoreGive(displaySem);
       }
     }
@@ -225,10 +225,10 @@ void setLocoSpeed (uint8_t locoIndex, int16_t speed, int8_t direction)
     sprintf (commandPacket, "<t 1 %d %d %d>", locoRoster[locoIndex].id, speed, tdir);
     while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
     txPacket (commandPacket);
-    if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(10000)) != pdPASS) {
+    if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
       // wait for ack
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        Serial.println ("Warning: No Ack for setting loco speed");
+        Serial.println ("Warning: No response for setting loco speed");
         xSemaphoreGive(displaySem);
       }
     }

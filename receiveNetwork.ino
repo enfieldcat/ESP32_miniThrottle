@@ -6,9 +6,15 @@ void receiveNetData(void *pvParameters)
   char inChar;
   uint8_t bufferPtr = 0;
 
+  #ifdef USEWIFI
   while (WiFi.status() == WL_CONNECTED) {
     while (client.available()) {
       inChar = client.read();
+  #else
+  while (true) {
+    while (serial_dev.available()) {
+      inChar = serial_dev.read();
+  #endif
       if (inChar == '\r' || inChar == '\n' || (cmdProtocol==DCCPLUS && inChar=='>') || bufferPtr == (NETWBUFFSIZE-1)) {
         if (bufferPtr > 0) {
           if (cmdProtocol==DCCPLUS && inChar=='>') inBuffer[bufferPtr++] = '>';

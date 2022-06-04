@@ -24,8 +24,12 @@ DisplayST7789_135x240x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, 
 DisplayILI9341_240x320x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_SDA});
 #endif
 
+#ifdef USEWIFI
 // WiFi Server Definitions
 WiFiClient client;
+#else
+static HardwareSerial serial_dev(1);
+#endif
 static SemaphoreHandle_t transmitSem = xSemaphoreCreateMutex();
 static SemaphoreHandle_t displaySem  = xSemaphoreCreateMutex();
 static SemaphoreHandle_t velociSem   = xSemaphoreCreateMutex();
@@ -141,6 +145,7 @@ const char txtWarning[] = { "Warning" };
  */
 void setup()  {
   Serial.begin(115200);
+  delay (1000);
   for (uint8_t n=0; n<MAXCONSISTSIZE; n++) {
     strcpy (locoRoster[n].name, "Void");
     locoRoster[n].owned = false;
@@ -170,7 +175,9 @@ void setup()  {
   // Also change CPU speed before starting wireless comms
   int cpuSpeed = nvs_get_int ("cpuspeed", 0);
   if (cpuSpeed > 0) {
+    #ifdef USEWIFI
     if (cpuSpeed < 80) cpuSpeed = 80; 
+    #endif
     Serial.print ("Setting CPU speed to ");
     Serial.print (cpuSpeed);
     Serial.println ("MHz");
@@ -221,8 +228,12 @@ void setup()  {
   delay (DELAYONSTART);  // Start console but not any network services before the delay
   Serial.println ("Starting network services");
   #endif
+  #ifdef USEWIFI
   xTaskCreate(connectionManager, "connectionMgr", 8192, NULL, 4, NULL);
   xTaskCreate(keepAlive, "keepAlive", 2048, NULL, 4, NULL);
+  #else
+  connectionManager();
+  #endif
   #ifdef DELAYONSTART
   Serial.println ("Network services started, starting user interface");
   #endif
@@ -277,6 +288,7 @@ void loop()
 
   while (xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {} // clear keyboard buffer
   while (true) {
+    #ifdef USEWIFI
     if (!client.connected()) {
       uint8_t tState;
       uint8_t answer;
@@ -325,6 +337,11 @@ void loop()
         while (xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {} // clear keyboard buffer
       }
       while (client.connected()) {
+        #else
+        // handling for Serial connection
+    if (true) {
+      while (true) {
+        #endif
         answer = displayMenu ((char**)baseMenu, 6, lastMainMenuOption);
         if (answer > 0) lastMainMenuOption = answer - 1;
         switch (answer) {

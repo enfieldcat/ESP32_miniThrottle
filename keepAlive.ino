@@ -1,3 +1,4 @@
+#ifdef USEWIFI
 static TimerHandle_t keepAliveTimer = NULL;
 static QueueHandle_t keepAliveQueue = NULL;
 
@@ -92,3 +93,4 @@ void sendKeepAlive(char *pktData)
     }
   }
 }
+#endif

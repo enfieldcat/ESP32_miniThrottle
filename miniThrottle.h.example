@@ -1,9 +1,6 @@
 /*
  * Use this file to centralise any defines and includes
  */
-#include <WiFi.h>
-#include <WiFiMulti.h>
-#include <ESPmDNS.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "lcdgfx.h"
@@ -13,11 +10,24 @@
 #include <Preferences.h>
 #include <esp_partition.h>
 
+// Use either WiFi or define additional pins for second serial port to connect directly to DCC++ (WiFi free)
+#define USEWIFI
+#ifdef USEWIFI
+#include <WiFi.h>
+#include <WiFiMulti.h>
+#include <ESPmDNS.h>
+#else
+#define DCCRX 33
+#define DCCTX 32
+#define DCCSPEED 115200
+#endif
 
 // Project identity and version
 #define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.2"          // Version string
+#define VERSION     "0.4"          // Version string
+#ifdef USEWIFI
 #define OTAUPDATE   "https://conferre.cf/projects/miniThrottle/"   // default location for over the air update, comment out if not required
+#endif
 
 #ifdef OTAUPDATE
 // Name of default certificate file used for Over The Air Update using http/https, say for a club standard build from the club web server
@@ -31,7 +41,9 @@
 
 // Local filesystem can potentially be used to store https certificates, command sequences or icons/images
 #ifdef FILESUPPORT
+#ifdef USEWIFI
 #include <HTTPClient.h>
+#endif
 #include <FS.h>
 #include <SPIFFS.h>
 #define WEB_BUFFER_SIZE 4098
@@ -43,17 +55,17 @@
 // #define SHOWPACKETSONSTART 1
 
 // Select one display board type
-#define SSD1306      // SSD1306 128x64     I2C
+//#define SSD1306      // SSD1306 128x64     I2C
 //#define SSD1327      // SSD1327 128x128    I2C
 //#define ST7735       // ST7735  128x160x16 SPI
-//#define ST7789       // ST7789  135x240x16 SPI
+#define ST7789       // ST7789  135x240x16 SPI
 //#define ILI9341      // ILI9341 240x320x16 SPI
 
 // Define keypad things, Define one type of keypad
 //#define keynone
 //#define key1x5
-//#define key3x4
-#define key4x4
+#define key3x4
+//#define key4x4
 //#define key4x5
 
 // Default settings
@@ -61,6 +73,7 @@
 #define HOST    "192.168.4.1"
 #define PORT    12090
 #define NAME    "mThrottle"
+#define DCCACKTIMEOUT 3000
 
 // Define Pin Assignments
 // Manually check before compiling that pins are not duplicated
@@ -107,8 +120,8 @@
 // #define TRACKPWR       02   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
 // #define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
 #define ENCODE_UP      39   // encoder up bounce
-#define ENCODE_DN      16   // encoder down bounce
-#define ENCODE_SW      36   // encoder switch
+#define ENCODE_DN      36   // encoder down bounce
+#define ENCODE_SW      34   // encoder switch
 //#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
 //#define DIRREVPIN      33   // Direction sw spdt center off LOW active
 //#define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
@@ -260,14 +273,15 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 #define COLCOUNT        4
 #define ROWCOUNT        4
 char keymap[ROWCOUNT][COLCOUNT] = {
+// Alternative suggestion: R, L, D, U could be X, Y, E, S
 #ifdef POTTHROTPIN
-  { 'P', '0', '#', 'S' },
+  { 'P', '0', '#', 'R' },
 #else
-  { '*', '0', '#', 'S' },
+  { '*', '0', '#', 'R' },
 #endif
-  { '7', '8', '9', 'E' },
-  { '4', '5', '6', 'Y' },
-  { '1', '2', '3', 'X' }
+  { '7', '8', '9', 'L' },
+  { '4', '5', '6', 'D' },
+  { '1', '2', '3', 'U' }
 };
 #endif
 #ifdef key3x4

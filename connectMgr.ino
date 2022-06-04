@@ -9,6 +9,7 @@
  * Cycle through controller list, connect to the first possible controller
  * 
  */
+#ifdef USEWIFI
 static WiFiMulti wifiMulti;
 
 void connectionManager(void *pvParameters)
@@ -350,30 +351,38 @@ void txPacket (char *header, char *pktData)
     }
   }
 }
+#else
+void connectionManager()
+{
+  if (xSemaphoreTake(transmitSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    serial_dev.begin (DCCSPEED, SERIAL_8N1, DCCRX, DCCTX);
+    cmdProtocol = DCCPLUS;
+    delay (1000);
+    // Once connected, we can listen for returning packets
+    xTaskCreate(receiveNetData, "Network_In", 4096, NULL, 4, NULL);
+  }
+}
+
+// Transmit a packet
+void txPacket (char *header, char *pktData)
+{
+  if (header!=NULL) serial_dev.write (header, strlen(header));
+  serial_dev.write (pktData, strlen(pktData));
+  serial_dev.write ("\r\n", 2);
+  xSemaphoreGive(transmitSem);
+  if (showPackets) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.print ("--> ");
+      if (header != NULL) Serial.print (header);
+      Serial.print (pktData);
+      Serial.println ("");
+      xSemaphoreGive(displaySem);
+    }
+  }
+}
+#endif
 
 void txPacket (char *pktData)
 {
-  if (!client.connected()) return;
-  if (pktData== NULL) return;
-  if (xSemaphoreTake(transmitSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-    client.println (pktData);
-    client.flush();
-    xSemaphoreGive(transmitSem);
-    if (showPackets) {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        Serial.print ("--> ");
-        Serial.print (pktData);
-        Serial.println ("");
-        xSemaphoreGive(displaySem);
-      }
-    }
-  }
-  else {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        Serial.println ("ERROR: Could not get semaphore to transmit data");
-        xSemaphoreGive(displaySem);
-      }
-    }
-  }
+  txPacket (NULL, pktData);
 }

@@ -364,7 +364,7 @@ void util_format_spiffs()
   SPIFFS.format();
 }
 
-
+#ifdef USEWIFI
 void getHttp2File (fs::FS &fs, char *url, char *fileName)
 {
   HTTPClient *httpClient = NULL;
@@ -459,9 +459,11 @@ void closeHttpStream(HTTPClient *http)
     http = NULL;
   }
 }
+#endif
 
 void defaultCertExists(fs::FS &fs)
 {
+  #ifdef USEWIFI
   if(!fs.exists(CERTFILE)){
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
       Serial.print ("Missing default certificate file, creating ");
@@ -481,5 +483,6 @@ void defaultCertExists(fs::FS &fs)
       defCertFile.close();
     }
   }
+  #endif
 }
 #endif

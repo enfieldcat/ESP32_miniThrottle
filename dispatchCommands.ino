@@ -148,9 +148,7 @@ void setRoute (uint8_t routeNr)
           }
         }
         else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-          Serial.print ("route: turnout ");
-          Serial.print (start);
-          Serial.println (" not found");
+          Serial.printf ("route: turnout %s not found\r\n", start);
           xSemaphoreGive(displaySem);
         }
         n++;

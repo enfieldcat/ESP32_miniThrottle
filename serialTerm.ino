@@ -116,7 +116,7 @@ void process (uint8_t *inBuffer)
   else if (nparam==1 && strcmp (param[0], "memory") == 0)        showMemory          ();
   else if (nparam<=2 && strcmp (param[0], "name") == 0)          mt_set_name         (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "nvs") == 0)           mt_dump_nvs         (nparam, param);
-  #ifdef USEWIFI
+  #ifdef OTAUPDATE
   else if (nparam<=2 && strcmp (param[0], "ota") == 0)           mt_ota              (nparam, param);
   #endif
   else if (nparam==1 && strcmp (param[0], "pins")  == 0)         showPinConfig       ();
@@ -133,6 +133,9 @@ void process (uint8_t *inBuffer)
   #endif
   else if (nparam>=2 && strcmp (param[0], "sendcmd") == 0)       mt_sendcmd          (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "speedstep") == 0)     mt_set_speedStep    (nparam, param);
+  #ifdef WARNCOLOR
+  else if (nparam<=2 && strcmp (param[0], "warnspeed") == 0)     mt_set_warnspeed    (nparam, param);
+  #endif
   #ifdef USEWIFI
   else if (nparam<=4 && strcmp (param[0], "wifi") == 0)          mt_set_wifi         (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "wifiscan") == 0)      mt_set_wifiscan     (nparam, param);
@@ -152,7 +155,9 @@ void process (uint8_t *inBuffer)
   else if (nparam==1 && strcmp (param[0], "nobidirectional") == 0) mt_setbidirectional (false);
   else if (nparam==1 && strcmp (param[0], "sortdata")        == 0) nvs_put_int    ("sortData", 1);
   else if (nparam==1 && strcmp (param[0], "nosortdata")      == 0) nvs_put_int    ("sortData", 0);
-  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  else if (nparam==1 && strcmp (param[0], "buttonstop")      == 0) nvs_put_int    ("buttonStop", 1);
+  else if (nparam==1 && strcmp (param[0], "nobuttonstop")    == 0) nvs_put_int    ("buttonStop", 0);
+  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000))   == pdTRUE) {
     Serial.println ("Command not recognised.");
     xSemaphoreGive(displaySem);
   }
@@ -204,7 +209,7 @@ void mt_export()
     Serial.println ("#");
     Serial.println ("# MiniThrottle export");
     Serial.println ("#");
-    Serial.println ("#####################");
+    Serial.println ("###########################");
     Serial.println ("#");
     Serial.println ("# Delete any security information like WiFi passwords before posting to web");
     Serial.print   ("# Software Vers: ");
@@ -215,21 +220,22 @@ void mt_export()
     Serial.print   (__DATE__);
     Serial.print   (" ");
     Serial.println (__TIME__);
-    Serial.print   ("# Display Type: ");
+    Serial.print   ("# Display Type:  ");
     Serial.println (DISPLAY);
+    #ifndef USEWIFI
+    Serial.println ("# Direct serial connection to DCC++");
+    #endif
+    Serial.println ("#");
+    Serial.println ("###########################");
     Serial.println ("#");
     nvs_get_string ("tname", msgBuffer, "none", sizeof(msgBuffer));
-    if (strcmp (msgBuffer, "none") != 0) {
-      Serial.printf ("name %s\r\n", msgBuffer);
-    }
+    if (strcmp (msgBuffer, "none") != 0) Serial.printf ("name %s\r\n", msgBuffer);
+    count = nvs_get_int ("cpuspeed", -1);
+    if (count>0) Serial.printf ("cpuspeed %d\r\n", count);
     count = nvs_get_int ("detentCount", -1);
-    if (count >= 0) {
-      Serial.printf ("detentcount %d\r\n", count);
-    }
+    if (count >= 0) Serial.printf ("detentcount %d\r\n", count);
     count = nvs_get_int ("debounceTime", -1);
-    if (count >= 0) {
-      Serial.printf ("debouncetime %d\r\n", count);
-    }
+    if (count >= 0) Serial.printf ("debouncetime %d\r\n", count);
     count = nvs_get_int ("routeDelay", -1);
     if (count >= 0) Serial.printf ("routedelay %d\r\n", count);
     count = nvs_get_int ("speedStep", -1);
@@ -248,7 +254,20 @@ void mt_export()
     if (count > -1) Serial.printf ("font %d\r\n", count);
     count = nvs_get_int ("screenRotate", -1);
     if (count > -1) Serial.printf ("rotatedisplay %d\r\n", count);
+    count = nvs_get_int ("warnspeed", -1);
+    if (count > -1) Serial.printf ("warnspeed %d\r\n", count);
+    count = nvs_get_int ("buttonStop", -1);
+    if (count > -1) {
+      if (count == 0) Serial.printf ("no");
+      Serial.printf ("buttonstop\r\n");
+    }
     #ifdef USEWIFI
+    count = nvs_get_int ("mdns", -1);
+    if (count > -1) {
+      Serial.printf ("mdns o");
+      if (count == 0) Serial.printf ("ff\r\n");
+      else Serial.printf ("n\r\n");
+    }
     count = nvs_get_int ("defaultProto", -1);
     if (count >= 0) {
       Serial.print ("protocol ");
@@ -494,6 +513,9 @@ void mt_sys_config()   // display all known configuration data
     Serial.print  ("Sort Menu Data: ");
     if (nvs_get_int ("sortData", SORTDATA) == 1) Serial.println ("Yes");
     else Serial.println ("No");
+    Serial.print ("Enc Button-Stop: ");
+    if (nvs_get_int ("buttonStop", 1) == 1) Serial.println ("Yes");
+    else Serial.println ("No");    
     xSemaphoreGive(displaySem);
   }
   #ifdef USEWIFI
@@ -817,6 +839,7 @@ void set_mdns(int nparam, char **param)
   }
 }
 
+#ifdef OTAUPDATE
 /*
  * Over the air update controls
  */
@@ -839,6 +862,7 @@ void mt_ota (int nparam, char **param)
     }
   }
 }
+#endif
 
 void mt_set_server (int nparam, char **param)  // set details about remote servers
 {
@@ -1163,7 +1187,6 @@ void mt_dump (char* memblk, int memsize)
 }
 
 
-
 void mt_set_cpuspeed(int nparam, char **param)
 {
   int storedSpeed;
@@ -1205,7 +1228,34 @@ void mt_set_cpuspeed(int nparam, char **param)
   }
 }
 
-
+#ifdef WARNCOLOR
+void mt_set_warnspeed(int nparam, char **param)
+{
+  int warnspeed;
+  
+  if (nparam==1) {
+    warnspeed = nvs_get_int("warnSpeed", 90);
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.printf (" * Warn speed: %d%%\r\n", warnspeed);
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else if (util_str_isa_int (param[1])) {
+    warnspeed = util_str2int(param[1]);
+    if (warnspeed>=50 && warnspeed<=101) {
+      nvs_put_int ("warnSpeed", warnspeed);
+    }
+    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.printf ("Warning speed should be between 50 and 101%\r\n");
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.printf ("Warning speed should be between 50 and 101%\r\n");
+    xSemaphoreGive(displaySem);
+  }
+}
+#endif
 
 void showPinConfig()  // Display pin out selection
 {
@@ -1231,7 +1281,7 @@ void showPinConfig()  // Display pin out selection
     Serial.printf  ("I2C - SCK      = %2d\r\n", SCK_PIN);
     #endif
     #ifdef SPI_RESET
-    Serial.printf  ("SPI - reset    = %2d\r\n", SPI_RESET);
+    Serial.printf  ("SPI - Reset    = %2d\r\n", SPI_RESET);
     #endif
     #ifdef SPI_CS
     Serial.printf  ("SPI - CS       = %2d\r\n", SPI_CS);
@@ -1240,19 +1290,22 @@ void showPinConfig()  // Display pin out selection
     Serial.printf  ("SPI - DC       = %2d\r\n", SPI_DC);
     #endif
     #ifdef SPI_SCL
-    Serial.printf  ("SPI - clock/SCL= %2d\r\n", SPI_SCL);
+    Serial.printf  ("SPI - Clock/SCL= %2d\r\n", SPI_SCL);
     #endif
     #ifdef SPI_SDA
-    Serial.printf  ("SPI - data/SDA = %2d\r\n", SPI_SDA);
+    Serial.printf  ("SPI - Data/SDA = %2d\r\n", SPI_SDA);
+    #endif
+    #ifdef BACKLIGHTPIN
+    Serial.printf  ("Backlight      = %2d\r\n", BACKLIGHTPIN);
     #endif
     #ifdef ENCODE_UP
-    Serial.printf  ("Encoder up     = %2d\r\n", ENCODE_UP);
+    Serial.printf  ("Encoder Up     = %2d\r\n", ENCODE_UP);
     #endif
     #ifdef ENCODE_DN
-    Serial.printf  ("Encoder down   = %2d\r\n", ENCODE_DN);
+    Serial.printf  ("Encoder Down   = %2d\r\n", ENCODE_DN);
     #endif
     #ifdef ENCODE_SW
-    Serial.printf  ("Encoder switch = %2d\r\n", ENCODE_SW);
+    Serial.printf  ("Encoder Switch = %2d\r\n", ENCODE_SW);
     #endif
     #ifdef DIRFWDPIN
     Serial.printf  ("Direction Fwd  = %2d\r\n", DIRFWDPIN);
@@ -1261,39 +1314,39 @@ void showPinConfig()  // Display pin out selection
     Serial.printf  ("Direction Rev  = %2d\r\n", DIRREVPIN);
     #endif
     #ifdef TRACKPWR
-    Serial.printf  ("Trk Power indc = %2d\r\n", TRACKPWR);
+    Serial.printf  ("Trk Power Indc = %2d\r\n", TRACKPWR);
     #endif
     #ifdef TRACKPWRINV
-    Serial.printf  ("Trk Power indc = %2d (Inverted)\r\n", TRACKPWRINV);
+    Serial.printf  ("Trk Power Indc = %2d (Inverted)\r\n", TRACKPWRINV);
     #endif
     #ifdef TRAINSETLEN
     Serial.printf  ("Bidirectional  = %2d\r\n", TRAINSETPIN);
     #endif
     #ifdef F1LED
-    Serial.printf  ("Func 10x indc  = %2d\r\n", F1LED);
+    Serial.printf  ("Func 10x Indc  = %2d\r\n", F1LED);
     #endif
     #ifdef F2LED
-    Serial.printf  ("Func 20x indc  = %2d\r\n", F2LED);
+    Serial.printf  ("Func 20x Indc  = %2d\r\n", F2LED);
     #endif    
     #ifdef SPEEDOPIN
-    Serial.printf  ("Speedometer out= %2d\r\n", SPEEDOPIN);
+    Serial.printf  ("Speedometer Out= %2d\r\n", SPEEDOPIN);
     #endif
     #ifdef BRAKEPRESPIN
-    Serial.printf  ("Brake pressure = %2d\r\n", BRAKEPRESPIN);
+    Serial.printf  ("Brake Pressure = %2d\r\n", BRAKEPRESPIN);
     #endif
     #ifdef POTTHROTPIN
-    Serial.printf  ("Throttle poten = %2d\r\n", POTTHROTPIN);
+    Serial.printf  ("Throttle Poten = %2d\r\n", POTTHROTPIN);
     #endif
     #ifdef keynone
-    Serial.printf  ("No keyboard pins\r\n");
+    Serial.printf  ("No Keyboard Pins\r\n");
     #else
-    Serial.printf ("Keyboard rows (%d) ", sizeof(rows));
+    Serial.printf ("Keyboard Rows (%d rows) ", sizeof(rows));
     for (uint8_t n=0; n<sizeof(rows); n++) {
       if (n>0) Serial.print (", ");
       Serial.printf ("%2d", rows[n]);
     }
     Serial.println ("");
-    Serial.printf ("Keyboard cols (%d) ", sizeof(cols));
+    Serial.printf ("Keyboard Cols (%d cols) ", sizeof(cols));
     for (uint8_t n=0; n<sizeof(cols); n++) {
       if (n>0) Serial.print (", ");
       Serial.printf ("%2d", cols[n]);
@@ -1353,6 +1406,13 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    permanent setting, DCC++ only, restart required");
       }
     }
+    if (all || strcmp(param[1], "bidirectional")==0) {
+      Serial.println ((const char*) "[no]bidirectional");
+      if (!summary) {
+        Serial.println ((const char*) "    turn bidirectional (AKA \"train set\") mode on/off as default setting");
+        Serial.println ((const char*) "    permanent setting, default nobidirectional");
+      }
+    }
     #ifdef BRAKEPRESPIN
     if (all || strcmp(param[1], "brake")==0) {
       Serial.println ((const char*) "brake [<up-rate> <down-rate>]");
@@ -1364,6 +1424,13 @@ void help(int nparam, char **param)  // show help data
       }
     }
     #endif
+    if (all || strcmp(param[1], "buttonstop")==0) {
+      Serial.println ((const char*) "[no]buttonstop");
+      if (!summary) {
+        Serial.println ((const char*) "    permit/prevents encoder button doing a stop operation when driving locos");
+        Serial.println ((const char*) "    permanent setting");
+      }
+    }
     if (all || strcmp(param[1], "config")==0) {
       Serial.println ((const char*) "config");
       if (!summary) {
@@ -1387,8 +1454,8 @@ void help(int nparam, char **param)  // show help data
       #endif
       Serial.println ((const char*) "|0}]");
       if (!summary) {
-        Serial.println ((const char*) "    Set CPU speed in MHz, try to use the lowest viable to save power consumption");
-        Serial.println ((const char*) "    Use zero to use factory default speed");
+        Serial.println ((const char*) "    Set CPU speed in MHz, lower speeds conserve power but are less responsive");
+        Serial.println ((const char*) "    Use zero to use speed selected at install time");
         Serial.println ((const char*) "    permanent setting, restart required");
       }
     }
@@ -1552,13 +1619,6 @@ void help(int nparam, char **param)  // show help data
       }
     }
     #endif
-    if (all || strcmp(param[1], "speedstep")==0) {
-      Serial.println ((const char*) "speedstep [<1-9>]");
-      if (!summary) {
-        Serial.println ((const char*) "    Set the speed change set be each thottle click");
-        Serial.println ((const char*) "    permanent setting");
-      }
-    }
     #ifdef USEWIFI
     if (all || strcmp(param[1], "showkeepalive")==0) {
       Serial.println ((const char*) "[no]showkeepalive");
@@ -1589,13 +1649,22 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    permanent setting, default sortdata");
       }
     }
-    if (all || strcmp(param[1], "bidirectional")==0) {
-      Serial.println ((const char*) "[no]bidirectional");
+    if (all || strcmp(param[1], "speedstep")==0) {
+      Serial.println ((const char*) "speedstep [<1-9>]");
       if (!summary) {
-        Serial.println ((const char*) "    turn bidirectional (AKA \"train set\") mode on/off as default setting");
-        Serial.println ((const char*) "    permanent setting, default nobidirectional");
+        Serial.println ((const char*) "    Set the speed change set be each thottle click");
+        Serial.println ((const char*) "    permanent setting");
       }
     }
+    #ifdef WARNCOLOR
+    if (all || strcmp(param[1], "warnspeed")==0) {
+      Serial.println ((const char*) "warnspeed [<50-101>]");
+      if (!summary) {
+        Serial.println ((const char*) "    change speed graph color when percentage warnspeed is exceeded");
+        Serial.println ((const char*) "    permanent setting");
+      }
+    }
+    #endif
     #ifdef USEWIFI
     if (all || strcmp(param[1], "wifi")==0) {
       Serial.println ((const char*) "wifi [<index> <ssid> [<password>]]");

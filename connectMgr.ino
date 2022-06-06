@@ -207,10 +207,7 @@ void connect2server (char *server, int port)
     // Print diagnostic
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
       Serial.println ("");
-      Serial.print   ("Connected to server: ");
-      Serial.print   (server);
-      Serial.print   (":");
-      Serial.println (port);
+      Serial.printf  ("Connected to server: %s:%d\r\n", server, port);
       xSemaphoreGive(displaySem);
     }
     for (uint8_t n=0; n<INITWAIT && cmdProtocol==UNDEFINED; n++) {
@@ -219,9 +216,7 @@ void connect2server (char *server, int port)
     if (cmdProtocol == UNDEFINED) {  // probe with JMRI if nothing received
       cmdProtocol = nvs_get_int ("defaultProto", JMRI);
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        Serial.print   ("Timeout on protocol identification: defaulting to ");
-        Serial.print   (protoList[cmdProtocol]);
-        Serial.println (" protocol");
+        Serial.printf   ("Timeout on protocol identification: defaulting to %s protocol\r\n", protoList[cmdProtocol]);
         xSemaphoreGive(displaySem);
       }
       if (cmdProtocol==DCCPLUS) {
@@ -338,8 +333,7 @@ void txPacket (char *header, char *pktData)
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
         Serial.print ("--> ");
         if (header != NULL) Serial.print (header);
-        Serial.print (pktData);
-        Serial.println ("");
+        Serial.println (pktData);
         xSemaphoreGive(displaySem);
       }
     }
@@ -354,6 +348,16 @@ void txPacket (char *header, char *pktData)
 #else
 void connectionManager()
 {
+  // Load stored data from Non-Volatile Storage (NVS)
+  dccPopulateLoco();
+  dccPopulateTurnout();
+  dccPopulateRoutes();
+  if (nvs_get_int("sortData", SORTDATA) == 1) {
+    sortLoco();
+    sortTurnout();
+    sortRoute();
+  }
+  // Connect to DCC++ over serial connection
   if (xSemaphoreTake(transmitSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
     serial_dev.begin (DCCSPEED, SERIAL_8N1, DCCRX, DCCTX);
     cmdProtocol = DCCPLUS;
@@ -361,6 +365,9 @@ void connectionManager()
     // Once connected, we can listen for returning packets
     xTaskCreate(receiveNetData, "Network_In", 4096, NULL, 4, NULL);
   }
+  delay (1000);
+  // Send initial data
+  setInitialData();
 }
 
 // Transmit a packet
@@ -374,8 +381,7 @@ void txPacket (char *header, char *pktData)
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
       Serial.print ("--> ");
       if (header != NULL) Serial.print (header);
-      Serial.print (pktData);
-      Serial.println ("");
+      Serial.println (pktData);
       xSemaphoreGive(displaySem);
     }
   }

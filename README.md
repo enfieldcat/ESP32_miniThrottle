@@ -1,8 +1,9 @@
 ESP32 based JMRI miniThrottle
 =============================
 Development for model train throttle controller.
-It uses either JMRI or DCC++ protocols to conect to a control station.
+It uses either JMRI or DCC++ protocols to connect to a control station over WiFi.
 The default is configurable.
+If using DCC++ a direct serial connection (WiFi-Free) connection is possible. This may provide sufficient control for small layouts with a panel mounted throttle.
 
 Status:
 -------
@@ -14,15 +15,15 @@ Description:
 ------------
 Uses a esp32 module as the core for a JMRI (Java Model Railroad Interface), or DCC++ throttle using the WiThrotttle protocol.
 It has some limited DCC++ support, to communicate directly to DCC++ without the need of a control station.
-It can use one of several display types. The prototype tests against SSD106 and SSD1327 over I2C interface.
+It can use one of several display types.
 The supported display should be any supported by the lcdgfx library, although a minimum display width of 128 pixels is recommended.
 Rotary encoder support is provided using the ESP32Encoder library.
 The display and rotary encoder from the minimum configuration, but a membrane keypad is a highly recommended to enable seleting functions.
 Several different keypad combinations are supported including 3x4, 4x4, 5x4 combinations.
 Other optional hardware includes 3 position switch (reversing lever), 3v voltmeter (speedometer), slide potentiometer (thottle lever), various LED indicators (track power, bidirectional (trainset) mode, function +10 and function +20.
 
-The thottle should allow locomotives, turnouts and routes to be controlled.
-Advanced setup and diagnostics can be set and viewed using 115200 baud serial interface.
+The thottle also allows locomotives, turnouts and routes to be controlled.
+Advanced setup and diagnostics can be set and viewed using 115200 baud serial interface, this is generally the USB interface on most Esp32 modules.
 
 In bidirectional mode, the mid point of the potentiometer slider is stop, down is reverse speed, and up is forward speed. Or when using the encoder to adjust speed rotating past stop will reverse the direction of movement.
 
@@ -31,8 +32,10 @@ Configuration:
 Use a serial terminal to connect to a "console" which will allow WiFi networks to be defined. Up to 4 networks can be defined.
 The serial terminal can also be used to define the locomotive roster and turnouts when using a direct connection to DCC++.
 
-The serial terminal runs at 115200, 8 bits, no parity, 1 stop bit. Line terminator is line feed (LF) character.
+The serial terminal to console runs at 115200, 8 bits, no parity, 1 stop bit. Line terminator is line feed (LF) character.
 Run "help summary" at prompt to get list of configuration commands.
+
+If using serial direct to DCC++ a second serial port is opened for this and also runs at 115200 bits per second.
 
 For hardware configuration and setting of default values, edit miniThrottle.h - these should not change over time.
 Configurable settings are stored in Non Volatile memory.

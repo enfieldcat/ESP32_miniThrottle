@@ -1,8 +1,10 @@
 /*
  * Use this file to centralise any defines and includes
  */
+// Used for process / thread control
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+// Used for user interfaces
 #include "lcdgfx.h"
 #include <Keypad.h>
 #include <ESP32Encoder.h>
@@ -10,28 +12,32 @@
 #include <Preferences.h>
 #include <esp_partition.h>
 
+// Project identity and version
+#define PRODUCTNAME "MiniThrottle" // Branding name
+#define VERSION     "0.4a"         // Version string
+
+// Optionally include file support, it will be enabled if OTAUPDATE is defined
+// Can be used to store certificates, command sequences etc.
+#define FILESUPPORT
+
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC++ (WiFi free)
+// It is expected most users will want to use miniThrottle as a WiFi device.
+// Comment out "#define USEWIFI" to use direct serial connection to DCC++
 #define USEWIFI
 #ifdef USEWIFI
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <ESPmDNS.h>
+// #define OTAUPDATE   "https://conferre.cf/projects/miniThrottle/"   // default location for over the air update, comment out if not required
 #else
 #define DCCRX 33
 #define DCCTX 32
 #define DCCSPEED 115200
 #endif
 
-// Project identity and version
-#define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.4"          // Version string
-#ifdef USEWIFI
-#define OTAUPDATE   "https://conferre.cf/projects/miniThrottle/"   // default location for over the air update, comment out if not required
-#endif
-
 #ifdef OTAUPDATE
-// Name of default certificate file used for Over The Air Update using http/https, say for a club standard build from the club web server
-#define CERTFILE     "/rootCACertificate"
+// NB: OTA update may have limited applicability
+// Name of default certificate file used for Over The Air Update using https, say for a club standard build from the club web server
 #include <esp_ota_ops.h>
 #include <mbedtls/sha256.h>
 #ifndef FILESUPPORT
@@ -42,6 +48,7 @@
 // Local filesystem can potentially be used to store https certificates, command sequences or icons/images
 #ifdef FILESUPPORT
 #ifdef USEWIFI
+#define CERTFILE     "/rootCACertificate"
 #include <HTTPClient.h>
 #endif
 #include <FS.h>
@@ -51,21 +58,25 @@
 #endif
 
 // Uncomment these to enable debug options on startup
-// #define DELAYONSTART 20000
-// #define SHOWPACKETSONSTART 1
+//#define DELAYONSTART 20000
+//#define SHOWPACKETSONSTART 1
 
 // Select one display board type
-//#define SSD1306      // SSD1306 128x64     I2C
+#define SSD1306      // SSD1306 128x64     I2C
 //#define SSD1327      // SSD1327 128x128    I2C
 //#define ST7735       // ST7735  128x160x16 SPI
-#define ST7789       // ST7789  135x240x16 SPI
+//#define ST7789       // ST7789  135x240x16 SPI
 //#define ILI9341      // ILI9341 240x320x16 SPI
+
+// Display board may have a built in backlight, eg in Lilygo, in which case you probably want this
+// if no backlight, eg monochrome displays or external pin which can be attached to pull up resistor, this is not needed
+//BACKLIGHTPIN 32
 
 // Define keypad things, Define one type of keypad
 //#define keynone
 //#define key1x5
-#define key3x4
-//#define key4x4
+//#define key3x4
+#define key4x4
 //#define key4x5
 
 // Default settings
@@ -73,7 +84,8 @@
 #define HOST    "192.168.4.1"
 #define PORT    12090
 #define NAME    "mThrottle"
-#define DCCACKTIMEOUT 3000
+#define DCCACKTIMEOUT 500
+// DCC++ can appear very sluggish if an ack is expected for each packet, sometimes permit it to miss a packet
 
 // Define Pin Assignments
 // Manually check before compiling that pins are not duplicated
@@ -119,9 +131,9 @@
 // define either of TRACKPWR or TRACKPWRINV or neither. do not set both
 // #define TRACKPWR       02   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
 // #define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
-#define ENCODE_UP      39   // encoder up bounce
-#define ENCODE_DN      36   // encoder down bounce
-#define ENCODE_SW      34   // encoder switch
+#define ENCODE_UP      16   // encoder up bounce
+#define ENCODE_DN      39   // encoder down bounce
+#define ENCODE_SW      36   // encoder switch
 //#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
 //#define DIRREVPIN      33   // Direction sw spdt center off LOW active
 //#define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
@@ -152,62 +164,43 @@
 //#define F2LED          12
 
 
-// Define application things
-#define MAXFUNCTIONS   30   // only expect 0-29 supported
-#define MAXCONSISTSIZE  4   // max number of locomotives to drive in one session
-#define MAXPARAMS      43   // Maximum number of parameters a serial console comand can have, 43 => route of up to 20 switches
-#define NAMELENGTH     32   // Length of names for locos, turnoutss, routes etc
-#define SSIDLENGTH     33   // Length to permit SSIDs and passwords
-#define SORTDATA        1   // 0 = unsorted, 1 = sorted lists of data
-
-// Select one CPU board type, adjust pin mappings as most convienent
-//#define WEMOS 1
-//#define DEVKIT 1
-
-// Define Network and buffer sizes
-#define WIFINETS        4   // Count of number network credentials to store
-#define BUFFSIZE      250   // Keyboard buffer size
-#define NETWBUFFSIZE 1024   // Network packet size
-#define JMRIMAXFIELDS  64   // Max fields per JMRI received packet
-#define MAXSUBTOKEN     4   // Max sub tokens per JMRI field
-#define DEBOUNCEMS     33   // millis to wait for switch / keypad debounce
-#define INITWAIT        5   // seconds to wait for first packet from server to ID protocol
-#define BUMPCOUNT     100   // re-evalute loco count every N times through loco control routine
-
-// Divisor for converting uSeconds to Seconds
-#define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
-
-// DCC++ Values
-#define CALLBACKNUM 10812
-#define CALLBACKSUB 22112
-
 // Define display things
+// Need to know how to address each display type
+//     I2C = SDA, SCK. Addr
+//     SPI = RESET, CS, DC, SCL, SCA
+// Other data
+//     DISPLAY      - Useful to have a human readible form of display name
+//     COLORDISPLAY - Define if we support colours, otherwise monochrome
+//     SCALEFONT    - Define if speed should be shown in larger font
+//     SCREENROTATE - Number of rotatable directions if screen is rotatable
+//
 #ifdef SSD1306
-// #define SCREENINVERT
 #define DISPLAYADDR  0x3c    // i2c display addr
 #define SDA_PIN        05    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
 #define SCK_PIN        04    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
 #define SCREENROTATE    2    // Screen can be rotated to 1 of 2 positions
 #define DISPLAY "sdd1306"
 #endif
+//
 #ifdef SSD1327
 #define DISPLAYADDR  0x3c    // i2c display addr
 #define SDA_PIN        22    // i2c SDA pin, normally 21
 #define SCK_PIN        23    // i2c SCK pin, normally 22
 #define DISPLAY "sdd1327"
-// No SCREENROTATE
 #endif
+//
 #ifdef ST7735
-#define SPI_RESET      22
-#define SPI_CS         -1
-#define SPI_DC         27
-#define SPI_SCL        -1
-#define SPI_SDA        -1
+#define SPI_RESET      27
+#define SPI_CS         16
+#define SPI_DC         12
+#define SPI_SCL        14
+#define SPI_SDA        13
 #define DISPLAY "st7735"
 #define COLORDISPLAY
 #define SCALEFONT
 #define SCREENROTATE    4    // 4 different rotation positions
 #endif
+//
 #ifdef ST7789
 #define SPI_RESET      27
 #define SPI_CS         26
@@ -219,7 +212,8 @@
 #define SCALEFONT
 #define SCREENROTATE    4    // 4 different rotation positions
 #endif
-#ifdef ILI9341               // HSPI_HD   = 4, HSPI_WP = 2, HSPI_MISO = 12
+//
+#ifdef ILI9341
 #define SPI_RESET      27
 #define SPI_CS         -1
 #define SPI_DC         12
@@ -231,6 +225,9 @@
 #define SCREENROTATE    4    // 4 different rotation positions
 #endif
 
+//
+// for colour displays, set your preferences here
+//
 #ifdef COLORDISPLAY
 #define BACKCOLOR   RGB_COLOR16(0,0,0)         // Background RGB color
 #define STDCOLOR    RGB_COLOR16(255,255,255)   // Std foreground
@@ -307,6 +304,38 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 #endif
 
 
+/* ****************************************************************************
+ * 
+ * Beyond this point there probably isn't anything too interesting as far as
+ * application configuration goes.
+ * 
+ **************************************************************************** */
+
+// Define application things
+#define MAXFUNCTIONS   30   // only expect 0-29 supported
+#define MAXCONSISTSIZE  4   // max number of locomotives to drive in one session
+#define MAXPARAMS      43   // Maximum number of parameters a serial console comand can have, 43 => route of up to 20 switches
+#define NAMELENGTH     32   // Length of names for locos, turnoutss, routes etc
+#define SSIDLENGTH     33   // Length to permit SSIDs and passwords
+#define SORTDATA        1   // 0 = unsorted, 1 = sorted lists of data
+
+// Define Network and buffer sizes
+#define WIFINETS        4   // Count of number network credentials to store
+#define BUFFSIZE      250   // Keyboard buffer size
+#define NETWBUFFSIZE 1024   // Network packet size
+#define JMRIMAXFIELDS  64   // Max fields per JMRI received packet
+#define MAXSUBTOKEN     4   // Max sub tokens per JMRI field
+#define DEBOUNCEMS     33   // millis to wait for switch / keypad debounce
+#define INITWAIT        5   // seconds to wait for first packet from server to ID protocol
+#define BUMPCOUNT     100   // re-evalute loco count every N times through loco control routine
+
+// Divisor for converting uSeconds to Seconds
+#define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
+
+// DCC++ Values
+#define CALLBACKNUM 10812
+#define CALLBACKSUB 22112
+
 
 /*
  * **********  ENUMERATIONS  *********************************************************************
@@ -355,7 +384,7 @@ struct route_s {
 };
 
 /*
- * Not required by Throttle, but useful debug tool for inspecting NVS
+ * Not absolutely required by Throttle functionality, but useful debug tool for inspecting NVS
  * Inspired by https://github.com/Edzelf/ESP32-Show_nvs_keys/blob/master/Show_nvs_keys.ino
  * Reference: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/storage/nvs_flash.html
  */

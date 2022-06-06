@@ -178,9 +178,10 @@ void locomotiveDriver()
             sprintf (displayLine, "%s %3d",   dirString[calcDirection], calcSpeed);
           }
         }
-        #ifdef WARNCOLOR
-        if (calcSpeed >= warnSpeed) display.setColor (WARNCOLOR);
-        #endif
+        // Can be annoying to change text color, default to only change graph colour if present
+        //#ifdef WARNCOLOR
+        //if (calcSpeed >= warnSpeed) display.setColor (WARNCOLOR);
+        //#endif
         #ifdef SCALEFONT
         uint8_t speedPosition = ((charsPerLine>>1) - strlen(displayLine)) * selFontWidth;
         display.printFixedN(speedPosition, ((speedLine+1)*selFontHeight), displayLine, STYLE_NORMAL, 1);
@@ -279,7 +280,7 @@ void locomotiveDriver()
             // now set increased speed for other controlled locos, based on initial loco speed
             targetSpeed = locoRoster[initialLoco].speed;
             for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && n != initialLoco) {
-              setLocoSpeed (n, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+              setLocoSpeed (n, targetSpeed, locoRoster[initialLoco].direction);
               if (dirChange) {
                 setLocoDirection (n, locoRoster[initialLoco].direction);
               }
@@ -391,12 +392,29 @@ void locomotiveDriver()
           #endif
           break;
         case '#':
+        case 'S':
           uint8_t check = 0;
           for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && locoRoster[n].speed>0) check++;
           if (check == 0) {
             locoCount = mkCabMenu();
           }
-          else displayTempMessage ("Warning:", "Cannot enter Cab menu when speed > 0", true);
+          else {
+            if (commandChar == '#' || nvs_get_int ("buttonStop", 1) == 0) displayTempMessage ("Warning:", "Cannot enter Cab menu when speed > 0", true);
+            else {
+              speedChange = true;
+              targetSpeed = 0;
+              #ifdef BRAKEPRESPIN
+              brakedown(locoRoster[initialLoco].speed);
+              #endif
+              for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
+                setLocoSpeed (n, targetSpeed, locoRoster[initialLoco].direction);
+              }
+              if (showPackets && xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+                Serial.println ("Executed button-stop");
+                xSemaphoreGive(displaySem);
+              }
+            }
+          }
           refreshDisplay = true;
           break;
         }
@@ -446,10 +464,7 @@ void locomotiveDriver()
       for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && locoRoster[n].speed > 0) {
         commandChar = 'Z';
         if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-          Serial.print ("No escape permitted, loco speed not zero: ");
-          Serial.print (locoRoster[n].name);
-          Serial.print (" = ");
-          Serial.println (locoRoster[n].speed);
+          Serial.printf ("No escape permitted, loco speed not zero: %s = %d", locoRoster[n].name, locoRoster[n].speed);
           xSemaphoreGive(displaySem);
         }
       }

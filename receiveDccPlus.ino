@@ -18,59 +18,67 @@ void processDccPacket (char *packet)
  */
 void dccLocoStatus (char* locoStatus)
 {
-   int16_t locoID = -9999;
-   int16_t locoVoid = -9999;
-   int16_t  locoSpeed = -9999;
-   uint16_t locoFunc = 9999;
-   uint8_t next, maxIdx, curIdx;
-   uint8_t result = 0;
-   char *ptr;
+  int16_t locoID = -9999;
+  int16_t locoVoid = -9999;
+  int16_t  locoSpeed = -9999;
+  uint16_t locoFunc = 9999;
+  uint8_t next, maxIdx, curIdx;
+  uint8_t result = 0;
+  char *ptr;
 
-   maxIdx = strlen(locoStatus);
-   for (uint8_t n=(strlen(locoStatus)-1); n<0 && locoStatus[n]!=' ' && locoStatus[n]!='>'; n--) locoStatus[n] = '\0'; // truncate trailing chars
-   for (next=0; locoStatus[next]!=' ' && next<strlen(locoStatus); next++);  // extract loco id
-   locoStatus[next++] = '\0';
-   curIdx = next;
-   if (ptr!=NULL && strlen(ptr)>0) {
-     locoID = util_str2int(locoStatus);
-   }
-   ptr = locoStatus + next;
-   for (next=0; ptr[next]!=' ' && next<strlen(ptr); next++);  // extract loco void
-   curIdx = curIdx + next + 1;
-   if (curIdx > maxIdx) return;
-   ptr[next++] = '\0';
-   if (ptr!=NULL && strlen(ptr)>0) {
-     locoVoid = util_str2int(ptr);
-   }
-   ptr = ptr + next;
-   for (next=0; ptr[next]!=' ' && next<strlen(ptr); next++);  // extract loco speed
-   curIdx = curIdx + next + 1;
-   if (curIdx > maxIdx) return;
-   ptr[next++] = '\0';
-   if (ptr!=NULL && strlen(ptr)>0) {
-     locoSpeed = util_str2int(ptr);
-   }
-   ptr = ptr + next;
-   for (next=0; ptr[next]!=' ' && next<strlen(ptr); next++);  // extract loco functions
-   curIdx = curIdx + next + 1;
-   if (curIdx > maxIdx) return;
-   ptr[next++] = '\0';
-   if (ptr!=NULL && strlen(ptr)>0) {
-     locoFunc = util_str2int(ptr);
-   }
-   if (locoID != -9999) {
-     for (next=0; next<locomotiveCount+MAXCONSISTSIZE && locoRoster[next].id!=locoID; next++);
-     if (next==locomotiveCount+MAXCONSISTSIZE) return;
-     if (locoFunc>=0 && locoFunc != 9999 && xSemaphoreTake(functionSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-       locoRoster[next].function = locoFunc;
-       xSemaphoreGive(functionSem);
-     }
-     if (locoSpeed>=-1 && locoSpeed <256 && xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-       if (locoRoster[next].steps > 126) locoRoster[next].speed = (int16_t) ((locoSpeed >> 1) -1);
-       xSemaphoreGive(velociSem);
-     }
-   }
-   xQueueSend (dccAckQueue, &result, 0);
+  xQueueSend (dccAckQueue, &result, 0);   // Ack even if garbled.
+  maxIdx = strlen(locoStatus);
+  for (uint8_t n=(strlen(locoStatus)-1); n<0 && locoStatus[n]!=' ' && locoStatus[n]!='>'; n--) locoStatus[n] = '\0'; // truncate trailing chars
+  for (next=0; locoStatus[next]!=' ' && next<strlen(locoStatus); next++);  // extract loco id
+  locoStatus[next++] = '\0';
+  curIdx = next;
+  if (ptr!=NULL && strlen(ptr)>0) {
+    locoID = util_str2int(locoStatus);
+  }
+  else return;
+  ptr = locoStatus + next;
+  for (next=0; ptr[next]!=' ' && next<strlen(ptr); next++);  // extract loco void
+  curIdx = curIdx + next + 1;
+  if (curIdx > maxIdx) return;
+  ptr[next++] = '\0';
+  if (ptr!=NULL && strlen(ptr)>0) {
+    locoVoid = util_str2int(ptr);
+  }
+  else return;
+  ptr = ptr + next;
+  for (next=0; ptr[next]!=' ' && next<strlen(ptr); next++);  // extract loco speed
+  curIdx = curIdx + next + 1;
+  if (curIdx > maxIdx) return;
+  ptr[next++] = '\0';
+  if (ptr!=NULL && strlen(ptr)>0) {
+    locoSpeed = util_str2int(ptr);
+  }
+  else return;
+  ptr = ptr + next;
+  for (next=0; ptr[next]!=' ' && next<strlen(ptr); next++);  // extract loco functions
+  curIdx = curIdx + next + 1;
+  if (curIdx > maxIdx) return;
+  ptr[next++] = '\0';
+  if (ptr!=NULL && strlen(ptr)>0) {
+    locoFunc = util_str2int(ptr);
+  }
+  else return;
+  if (locoID != -9999) {
+    for (next=0; next<locomotiveCount+MAXCONSISTSIZE && locoRoster[next].id!=locoID; next++);
+    if (next==locomotiveCount+MAXCONSISTSIZE) return;
+    if (locoFunc>=0 && locoFunc != 9999 && xSemaphoreTake(functionSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      locoRoster[next].function = locoFunc;
+      xSemaphoreGive(functionSem);
+    }
+    if (locoSpeed>=-1 && locoSpeed <256 && xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (locoRoster[next].steps > 126) locoRoster[next].speed = (int16_t) ((locoSpeed >> 1) -1);
+      xSemaphoreGive(velociSem);
+    }
+  }
+  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    Serial.printf ("Invalid loco ID in status update\r\n");
+    xSemaphoreGive(displaySem);
+  }
 }
 
 void dccSpeedChange (char* speedSet)
@@ -81,8 +89,9 @@ void dccSpeedChange (char* speedSet)
   int16_t maxLocoArray = locomotiveCount + MAXCONSISTSIZE;
   char *token;
   char *remain = speedSet;
-  uint8_t result = 0;
+  uint8_t result = 15;
 
+  xQueueSend (dccAckQueue, &result, 0);
   int len = strlen (speedSet);
   while (speedSet[len-1]=='>' || speedSet[len-1]=='*' || speedSet[len-1]==' ') len--;
   speedSet[len] = '\0';
@@ -104,7 +113,6 @@ void dccSpeedChange (char* speedSet)
       speedChange = true;
     }
   }
-  xQueueSend (dccAckQueue, &result, 0);
 }
 
 /*
@@ -113,6 +121,7 @@ void dccSpeedChange (char* speedSet)
 void dccAckTurnout (char *ack)
 {
   uint8_t result = 255;
+  xQueueSend (dccAckQueue, &result, 0);
   for (uint8_t n=0; n<strlen(ack); n++) if (ack[n]==' ') {
     ack[n]='\0';
     result = ack[n+1];
@@ -123,13 +132,11 @@ void dccAckTurnout (char *ack)
     turnoutList[n].state = result;
     n = turnoutCount;
   }
-  result = util_str2int (ack);
-  xQueueSend (dccAckQueue, &result, 0);
 }
 
 void dccAckTurnout ()
 {
-  uint8_t result = 255;
+  char result = 15;
   xQueueSend (dccAckQueue, &result, 0);
 }
 
@@ -140,6 +147,7 @@ void dccPowerChange(char state)
 {
   uint8_t result = 0;
 
+  xQueueSend (dccAckQueue, &result, 0);
   if (state == '1') {
     trackPower = true;
     #ifdef TRACKPWR
@@ -158,7 +166,6 @@ void dccPowerChange(char state)
     digitalWrite(TRACKPWRINV, HIGH);  // Off or unknown
     #endif
   }
-  xQueueSend (dccAckQueue, &result, 0);
 }
 
 /*
@@ -169,6 +176,7 @@ void dccComment(char* comment)
   int len = strlen (comment);
   uint8_t result = 0;
 
+  xQueueSend (dccAckQueue, &result, 0);
   // drop trailing chars
   while (comment[len-1]=='>' || comment[len-1]=='*' || comment[len-1]==' ') len--;
   if (len>(sizeof(lastMessage)-1)) len=sizeof(lastMessage)-1;
@@ -180,7 +188,6 @@ void dccComment(char* comment)
   else len = 0;
   // copy to lastMessage buffer
   strcpy (lastMessage, &comment[len]);
-  xQueueSend (dccAckQueue, &result, 0);
 }
 
 /*
@@ -290,7 +297,7 @@ void dccPopulateTurnout()
       sprintf (commandBuffer, "<T %s %s>", turnoutData[n].sysName, curData);
       curData = curData + (2*NAMELENGTH);
       txPacket (commandBuffer);
-      if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) { // wait for ack
+      if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(5000)) != pdPASS) { // wait for ack - wait longer than usual
         // wait for ack
         if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
           Serial.println ("Warning: No response for defining turnout");

@@ -110,7 +110,6 @@ void switchMonitor(void *pvParameters)
             case ENCODE_SW:
               if (readChar==0) {
                 if (showKeypad) Serial.println (submitKey);
-                if (drivingLoco) xQueueSend (keyboardQueue, &escapeKey, 0);
                 xQueueSend (keyboardQueue, &submitKey, 0);
               }
               break;

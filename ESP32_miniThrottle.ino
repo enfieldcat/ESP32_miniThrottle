@@ -185,21 +185,29 @@ void setup()  {
   }
   // Configure I/O pins
   #ifdef TRACKPWR
-  pinMode(TRACKPWR, OUTPUT); digitalWrite(TRACKPWR, LOW);
+  pinMode(TRACKPWR, OUTPUT);
+  digitalWrite(TRACKPWR, LOW);
   #endif
   #ifdef TRACKPWRINV
-  pinMode(TRACKPWRINV, OUTPUT); digitalWrite(TRACKPWRINV, HIGH);
+  pinMode(TRACKPWRINV, OUTPUT);
+  digitalWrite(TRACKPWRINV, HIGH);
   #endif
   #ifdef F1LED
-  pinMode(F1LED, OUTPUT); digitalWrite(F1LED, LOW);
+  pinMode(F1LED, OUTPUT);
+  digitalWrite(F1LED, LOW);
   #endif
   #ifdef F2LED
-  pinMode(F2LED, OUTPUT); digitalWrite(F2LED, LOW);
+  pinMode(F2LED, OUTPUT);
+  digitalWrite(F2LED, LOW);
   #endif
   #ifdef TRAINSETLED
   pinMode(TRAINSETLED, OUTPUT);
   if (bidirectionalMode) digitalWrite(TRAINSETLED, HIGH);
   else digitalWrite(TRAINSETLED, LOW);
+  #endif
+  #ifdef BACKLIGHTPIN
+  pinMode(BACKLIGHTPIN, OUTPUT);
+  digitalWrite (BACKLIGHTPIN, 1);
   #endif
   #ifdef SPEEDOPIN
   dacWrite (SPEEDOPIN, 0);

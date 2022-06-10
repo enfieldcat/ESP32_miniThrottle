@@ -88,6 +88,11 @@ void process (uint8_t *inBuffer)
   for (n=nparam; n<MAXPARAMS; n++) param[n] = NULL;
   if (strlen(param[0]) == 0) return;
   else if (nparam>=4 && strcmp (param[0], "add") == 0)           mt_add_gadget       (nparam, param);
+  #ifdef BACKLIGHTPIN
+  #ifndef BACKLIGHTREF
+  else if (nparam<=2 && strcmp (param[0], "backlight") == 0)     mt_set_backlight    (nparam, param);
+  #endif
+  #endif
   #ifdef BRAKEPRESPIN
   else if ((nparam==1 || nparam==3) && strcmp (param[0], "brake") == 0) mt_brake     (nparam, param);
   #endif
@@ -192,6 +197,45 @@ void mt_brake (int nparam, char **param)
     }
   }
 }
+#endif
+
+// Only support backlight if there is a backlight pin without a backlight ADC reference
+#ifdef BACKLIGHTPIN
+#ifndef BACKLIGHTREF
+void mt_set_backlight (int nparam, char **param)
+{
+  uint16_t val = 200;
+  if (nparam==1) {
+    val = nvs_get_int ("backlightValue", 200);
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.printf ("backlight = %d\r\n", val);
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else {
+    if (util_str_isa_int(param[1])) {
+      val = util_str2int(param[1]);
+      if (val>=0 && val<=255) {
+        backlightValue = val;
+        nvs_put_int ("backlightValue", backlightValue);
+        ledcWrite(0, backlightValue);
+      }
+      else {
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          Serial.println ("backlight value should be less than 256");
+          xSemaphoreGive(displaySem);
+        }
+      }
+    }
+    else {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        Serial.println ("backlight value should be less than 256");
+        xSemaphoreGive(displaySem);
+      }
+    }
+  }
+}
+#endif
 #endif
 
 /*
@@ -1297,6 +1341,9 @@ void showPinConfig()  // Display pin out selection
     #endif
     #ifdef BACKLIGHTPIN
     Serial.printf  ("Backlight      = %2d\r\n", BACKLIGHTPIN);
+    #ifdef BACKLIGHTREF
+    Serial.printf  ("Backlight Ref  = %2d\r\n", BACKLIGHTREF);
+    #endif
     #endif
     #ifdef ENCODE_UP
     Serial.printf  ("Encoder Up     = %2d\r\n", ENCODE_UP);
@@ -1406,6 +1453,17 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    permanent setting, DCC++ only, restart required");
       }
     }
+    #ifdef BACKLIGHTPIN
+    #ifndef BACKLIGHTREF
+    if (all || strcmp(param[1], "backlight")==0) {
+      Serial.println ((const char*) "backlight [0-255]");
+      if (!summary) {
+        Serial.println ((const char*) "    Display backlight intensity setting");
+        Serial.println ((const char*) "    permanent setting, default nobidirectional");
+      }
+    }
+    #endif
+    #endif
     if (all || strcmp(param[1], "bidirectional")==0) {
       Serial.println ((const char*) "[no]bidirectional");
       if (!summary) {

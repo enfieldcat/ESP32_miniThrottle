@@ -31,10 +31,12 @@ void switchMonitor(void *pvParameters)
   #ifndef ENCODE_SW
   #ifndef DIRFWDPIN
   #ifndef DIRREVPIN
+  #ifndef BACKLIGHTREF
   // No work for this thread if none of the above are defined
   Serial.println ("No switches or encoder defined");
   vTaskDelete( NULL );
   return;
+  #endif
   #endif
   #endif
   #endif
@@ -81,6 +83,12 @@ void switchMonitor(void *pvParameters)
   }
   while (true) {
     changed = false;
+    #ifdef BACKLIGHTPIN
+    #ifdef BACKLIGHTREF
+    backlightValue = (analogRead(BACKLIGHTREF))>>2;
+    ledcWrite(0, backlightValue);
+    #endif
+    #endif
     for (uint8_t n=0; n<sizeof(toggleSwitch)-1; n++) {
       readChar = digitalRead(toggleSwitch[n]);
       if (lastRead[n] != readChar) {

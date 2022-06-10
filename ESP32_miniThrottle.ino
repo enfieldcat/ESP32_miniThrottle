@@ -67,6 +67,9 @@ static uint8_t debounceTime = DEBOUNCEMS;
 static uint8_t cmdProtocol  = UNDEFINED;
 static uint8_t nextThrottle = 'A';
 static uint8_t screenRotate = 0;
+#ifdef BACKLIGHTPIN
+static uint16_t backlightValue = 200;
+#endif
 static char ssid[SSIDLENGTH];
 static char tname[SSIDLENGTH];
 static char remServerType[10] = { "" };  // eg: JMRI
@@ -184,6 +187,7 @@ void setup()  {
     setCpuFrequencyMhz (cpuSpeed);
   }
   // Configure I/O pins
+  // Track power indicator
   #ifdef TRACKPWR
   pinMode(TRACKPWR, OUTPUT);
   digitalWrite(TRACKPWR, LOW);
@@ -192,6 +196,7 @@ void setup()  {
   pinMode(TRACKPWRINV, OUTPUT);
   digitalWrite(TRACKPWRINV, HIGH);
   #endif
+  // function key indicators off
   #ifdef F1LED
   pinMode(F1LED, OUTPUT);
   digitalWrite(F1LED, LOW);
@@ -200,18 +205,34 @@ void setup()  {
   pinMode(F2LED, OUTPUT);
   digitalWrite(F2LED, LOW);
   #endif
+  // trainset mode indicator
   #ifdef TRAINSETLED
   pinMode(TRAINSETLED, OUTPUT);
   if (bidirectionalMode) digitalWrite(TRAINSETLED, HIGH);
   else digitalWrite(TRAINSETLED, LOW);
   #endif
+  // Read a backlight reference ADC pin and set backlight PWM using this
   #ifdef BACKLIGHTPIN
   pinMode(BACKLIGHTPIN, OUTPUT);
-  digitalWrite (BACKLIGHTPIN, 1);
+  #ifdef BACKLIGHTREF
+  analogReadResolution(10);
+  adcAttachPin(BACKLIGHTREF);
+  analogSetPinAttenuation(BACKLIGHTREF, ADC_11db);  // param 2 = attenuation, range 0-3 sets FSD: 0:ADC_0db=800mV, 1:ADC_2_5db=1.1V, 2:ADC_6db=1.35V, 3:ADC_11db=2.6V
+  backlightValue = (analogRead(BACKLIGHTREF))>>2;
+  #else
+  // digitalWrite (BACKLIGHTPIN, 1);
+  backlightValue = nvs_get_int ("backlightValue", 200);
   #endif
+  ledcSetup(0, 50, 8);
+  ledcAttachPin(BACKLIGHTPIN, 0);
+  ledcWrite(0, backlightValue);
+  // analogWrite(BACKLIGHTPIN, backlightValue);
+  #endif
+  // Set speedometer initial position
   #ifdef SPEEDOPIN
   dacWrite (SPEEDOPIN, 0);
   #endif
+  // Set brake initial position
   #ifdef BRAKEPRESPIN
   dacWrite (BRAKEPRESPIN, 0);
   #endif

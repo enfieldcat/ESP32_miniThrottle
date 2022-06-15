@@ -385,7 +385,7 @@ void getHttp2File (fs::FS &fs, char *url, char *fileName)
       xSemaphoreGive(displaySem);
     }
   }
-  nvs_get_string ("web_certFile", http_certFile, CERTFILE, sizeof(http_certFile));
+  nvs_get_string ((char*) "web_certFile", http_certFile, CERTFILE, sizeof(http_certFile));
   if (http_certFile[0]!='\0') rootCACertificate = util_loadFile(SPIFFS, http_certFile);
   else rootCACertificate = NULL;
   WiFiClient *inStream = getHttpStream(url, rootCACertificate, httpClient);

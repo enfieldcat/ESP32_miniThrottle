@@ -101,7 +101,7 @@ void process (uint8_t *inBuffer)
   else if (nparam==3 && (strcmp (param[0], "del") == 0 || strcmp (param[0], "delete") == 0)) mt_del_gadget (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "debouncetime") == 0)  mt_set_debounceTime (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "detentcount") == 0)   mt_set_detentCount  (nparam, param);
-  else if (nparam<=2 && strcmp (param[0], "dump") == 0)          mt_dump_data        (nparam, param);
+  else if (nparam<=2 && strcmp (param[0], "dump") == 0)          mt_dump_data        (nparam, (const char**) param);
   else if (nparam==1 && strcmp (param[0], "export") == 0)        mt_export           ();
   #ifdef FILESUPPORT
   else if (nparam==3 && strcmp (param[1], "del")   == 0 && strcmp (param[0], "file") == 0) util_deleteFile (SPIFFS, param[2]);
@@ -158,10 +158,10 @@ void process (uint8_t *inBuffer)
   else if (nparam==1 && strcmp (param[0], "noshowkeypad")    == 0) showKeypad    = false;
   else if (nparam==1 && strcmp (param[0], "bidirectional")   == 0) mt_setbidirectional (true);
   else if (nparam==1 && strcmp (param[0], "nobidirectional") == 0) mt_setbidirectional (false);
-  else if (nparam==1 && strcmp (param[0], "sortdata")        == 0) nvs_put_int    ("sortData", 1);
-  else if (nparam==1 && strcmp (param[0], "nosortdata")      == 0) nvs_put_int    ("sortData", 0);
-  else if (nparam==1 && strcmp (param[0], "buttonstop")      == 0) nvs_put_int    ("buttonStop", 1);
-  else if (nparam==1 && strcmp (param[0], "nobuttonstop")    == 0) nvs_put_int    ("buttonStop", 0);
+  else if (nparam==1 && strcmp (param[0], "sortdata")        == 0) nvs_put_int    ((char*) "sortData", 1);
+  else if (nparam==1 && strcmp (param[0], "nosortdata")      == 0) nvs_put_int    ((char*) "sortData", 0);
+  else if (nparam==1 && strcmp (param[0], "buttonstop")      == 0) nvs_put_int    ((char*) "buttonStop", 1);
+  else if (nparam==1 && strcmp (param[0], "nobuttonstop")    == 0) nvs_put_int    ((char*) "buttonStop", 0);
   else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000))   == pdTRUE) {
     Serial.println ("Command not recognised.");
     xSemaphoreGive(displaySem);
@@ -172,8 +172,8 @@ void process (uint8_t *inBuffer)
 void mt_brake (int nparam, char **param)
 {
   if (nparam==1) {
-    int brakeup = nvs_get_int ("brakeup", 1);
-    int brakedown = nvs_get_int ("brakedown", 20);
+    int brakeup = nvs_get_int ( "brakeup", 1);
+    int brakedown = nvs_get_int ("(char*) brakedown", 20);
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
       Serial.print ("brake-up = ");
       Serial.print (brakeup);
@@ -185,9 +185,9 @@ void mt_brake (int nparam, char **param)
   else if (nparam == 3) {
     if (util_str_isa_int(param[1]) && util_str_isa_int(param[2])) {
       int val = util_str2int(param[1]);
-      if (val > 0 && val<10) nvs_put_int ("brakeup", val);
+      if (val > 0 && val<10) nvs_put_int ( "brakeup", val);
       val = util_str2int(param[2]);
-      if (val > 0 && val<100) nvs_put_int ("brakedown", val);
+      if (val > 0 && val<100) nvs_put_int ( "brakedown", val);
     }
     else {
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
@@ -206,7 +206,7 @@ void mt_set_backlight (int nparam, char **param)
 {
   uint16_t val = 200;
   if (nparam==1) {
-    val = nvs_get_int ("backlightValue", 200);
+    val = nvs_get_int ( "backlightValue", 200);
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
       Serial.printf ("backlight = %d\r\n", val);
       xSemaphoreGive(displaySem);
@@ -217,7 +217,7 @@ void mt_set_backlight (int nparam, char **param)
       val = util_str2int(param[1]);
       if (val>=0 && val<=255) {
         backlightValue = val;
-        nvs_put_int ("backlightValue", backlightValue);
+        nvs_put_int ( "backlightValue", backlightValue);
         ledcWrite(0, backlightValue);
       }
       else {
@@ -265,7 +265,7 @@ void mt_export()
     Serial.print   (" ");
     Serial.println (__TIME__);
     Serial.print   ("# Display Type:  ");
-    Serial.println (DISPLAY);
+    Serial.println (DISPLAYNAME);
     #ifndef USEWIFI
     Serial.println ("# Direct serial connection to DCC++");
     #endif
@@ -274,45 +274,45 @@ void mt_export()
     Serial.println ("#");
     nvs_get_string ("tname", msgBuffer, "none", sizeof(msgBuffer));
     if (strcmp (msgBuffer, "none") != 0) Serial.printf ("name %s\r\n", msgBuffer);
-    count = nvs_get_int ("cpuspeed", -1);
+    count = nvs_get_int ( "cpuspeed", -1);
     if (count>0) Serial.printf ("cpuspeed %d\r\n", count);
-    count = nvs_get_int ("detentCount", -1);
+    count = nvs_get_int ( "detentCount", -1);
     if (count >= 0) Serial.printf ("detentcount %d\r\n", count);
-    count = nvs_get_int ("debounceTime", -1);
+    count = nvs_get_int ( "debounceTime", -1);
     if (count >= 0) Serial.printf ("debouncetime %d\r\n", count);
-    count = nvs_get_int ("routeDelay", -1);
+    count = nvs_get_int ( "routeDelay", -1);
     if (count >= 0) Serial.printf ("routedelay %d\r\n", count);
-    count = nvs_get_int ("speedStep", -1);
+    count = nvs_get_int ( "speedStep", -1);
     if (count >= 0) Serial.printf ("speedstep %d\r\n", count);
-    count = nvs_get_int ("brakeup", -1);
+    count = nvs_get_int ( "brakeup", -1);
     if (count >= 0 || nvs_get_int ("brakedown", -1) >= 0){
       Serial.printf ("brake %d %d\r\n", nvs_get_int ("brakeup", 1), nvs_get_int ("brakedown", 20));
     }
-    count = nvs_get_int ("sortData", -1);
+    count = nvs_get_int ( "sortData", -1);
     if (count == 0) Serial.println ("nosortdata");
     else if (count == 1) Serial.println ("sortdata");
-    count = nvs_get_int ("bidirectional", -1);
+    count = nvs_get_int ( "bidirectional", -1);
     if (count == 0) Serial.println ("nobidirectional");
     else if (count == 1) Serial.println ("bidirectional");
-    count = nvs_get_int ("fontIndex", -1);
+    count = nvs_get_int ( "fontIndex", -1);
     if (count > -1) Serial.printf ("font %d\r\n", count);
-    count = nvs_get_int ("screenRotate", -1);
+    count = nvs_get_int ( "screenRotate", -1);
     if (count > -1) Serial.printf ("rotatedisplay %d\r\n", count);
-    count = nvs_get_int ("warnspeed", -1);
+    count = nvs_get_int ( "warnspeed", -1);
     if (count > -1) Serial.printf ("warnspeed %d\r\n", count);
-    count = nvs_get_int ("buttonStop", -1);
+    count = nvs_get_int ( "buttonStop", -1);
     if (count > -1) {
       if (count == 0) Serial.printf ("no");
       Serial.printf ("buttonstop\r\n");
     }
     #ifdef USEWIFI
-    count = nvs_get_int ("mdns", -1);
+    count = nvs_get_int ( "mdns", -1);
     if (count > -1) {
       Serial.printf ("mdns o");
       if (count == 0) Serial.printf ("ff\r\n");
       else Serial.printf ("n\r\n");
     }
-    count = nvs_get_int ("defaultProto", -1);
+    count = nvs_get_int ( "defaultProto", -1);
     if (count >= 0) {
       Serial.print ("protocol ");
       if (count == JMRI) Serial.println ("jmri");
@@ -572,7 +572,7 @@ void mt_sys_config()   // display all known configuration data
   }
 }
 
-void mt_sys_restart (char *reason) // restart the throttle
+void mt_sys_restart (const char *reason) // restart the throttle
 {
   setDisconnected();
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
@@ -679,10 +679,10 @@ void mt_set_rotateDisp (int nparam, char **param)  // Rotation of screen
   uint8_t rotateIndex;
   #if SCREENROTATE == 2
   uint8_t opts = 2;
-  char *rotateOpts[] = {"0 deg (Normal)", "180 deg (Invert)"};
+  const char *rotateOpts[] = {"0 deg (Normal)", "180 deg (Invert)"};
   #else
   uint8_t opts = 4;
-  char *rotateOpts[] = {"0 deg (Normal)", "90 deg Right", "180 deg (Invert)", "90 deg Left"};
+  const char *rotateOpts[] = {"0 deg (Normal)", "90 deg Right", "180 deg (Invert)", "90 deg Left"};
   #endif
   if (nparam == 1) {
     rotateIndex = nvs_get_int ("screenRotate", 0);
@@ -1115,10 +1115,10 @@ void mt_setbidirectional (bool setting)
 
 
 
-void mt_dump_data (int nparam, char **param)  // set details about remote servers
+void mt_dump_data (int nparam, const char **param)  // set details about remote servers
 {
   if (nparam == 1) {
-    char *newParams[] = {"void", "loco", "turnout", "turnoutstate", "route", "routestate"};
+    const char *newParams[] = {"void", "loco", "turnout", "turnoutstate", "route", "routestate"};
     for (uint8_t n=0; n<5; n++) {
       mt_dump_data (2, &newParams[n]);
     }
@@ -1278,24 +1278,24 @@ void mt_set_warnspeed(int nparam, char **param)
   int warnspeed;
   
   if (nparam==1) {
-    warnspeed = nvs_get_int("warnSpeed", 90);
+    warnspeed = nvs_get_int((char*) "warnSpeed", 90);
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-      Serial.printf (" * Warn speed: %d%%\r\n", warnspeed);
+      Serial.printf ((char*) " * Warn speed: %d%%\r\n", warnspeed);
       xSemaphoreGive(displaySem);
     }
   }
   else if (util_str_isa_int (param[1])) {
     warnspeed = util_str2int(param[1]);
     if (warnspeed>=50 && warnspeed<=101) {
-      nvs_put_int ("warnSpeed", warnspeed);
+      nvs_put_int ( "warnSpeed", warnspeed);
     }
     else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-      Serial.printf ("Warning speed should be between 50 and 101%\r\n");
+      Serial.printf ((char*) "Warning speed should be between 50 and 101%\r\n");
       xSemaphoreGive(displaySem);
     }
   }
   else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-    Serial.printf ("Warning speed should be between 50 and 101%\r\n");
+    Serial.printf ((char*) "Warning speed should be between 50 and 101%\r\n");
     xSemaphoreGive(displaySem);
   }
 }
@@ -1309,17 +1309,17 @@ void showPinConfig()  // Display pin out selection
   #endif
 
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-    Serial.println ("Hardware configuration, check pin numbers are not duplicated");
-    Serial.println ("Console - Tx   =  1");
-    Serial.println ("Console - Rx   =  3");
+    Serial.println ((char*) "Hardware configuration, check pin numbers are not duplicated");
+    Serial.println ((char*) "Console - Tx   =  1");
+    Serial.println ((char*) "Console - Rx   =  3");
     #ifdef DCCTX
-    Serial.printf  ("DCC - Tx       = %2d\r\n", DCCTX);
+    Serial.printf  ((char*) "DCC - Tx       = %2d\r\n", DCCTX);
     #endif
     #ifdef DCCRX
-    Serial.printf  ("DCC - Rx       = %2d\r\n", DCCRX);
+    Serial.printf  ((char*) "DCC - Rx       = %2d\r\n", DCCRX);
     #endif
     #ifdef SDA_PIN
-    Serial.printf  ("I2C - SDA      = %2d\r\n", SDA_PIN);
+    Serial.printf  ((char*) "I2C - SDA      = %2d\r\n", SDA_PIN);
     #endif
     #ifdef SCK_PIN
     Serial.printf  ("I2C - SCK      = %2d\r\n", SCK_PIN);

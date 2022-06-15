@@ -237,7 +237,7 @@ void connect2server (char *server, int port)
 
 // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/protocols/mdns.html
 // Use this pattern to return service list
-void mdnsLookup (char *service)
+void mdnsLookup (const char *service)
 {
   static const char * if_str[] = {"STA", "AP", "ETH", "MAX"};
   static const char * ip_protocol_str[] = {"V4", "V6", "MAX"};
@@ -286,7 +286,7 @@ void mdnsLookup (char *service)
 }
 
 // mdns lookup of service, returns port number and writes the IP address to the buffer pointed to by *addr
-int mdnsLookup (char *service, char *addr)
+int mdnsLookup (const char *service, char *addr)
 {
   int retVal = 0;
 
@@ -320,7 +320,7 @@ int mdnsLookup (char *service, char *addr)
 }
 
 // Transmit a packet
-void txPacket (char *header, char *pktData)
+void txPacket (const char *header, const char *pktData)
 {
   if (!client.connected()) return;
   if (pktData == NULL) return;
@@ -371,7 +371,7 @@ void connectionManager()
 }
 
 // Transmit a packet
-void txPacket (char *header, char *pktData)
+void txPacket (const char *header, const char *pktData)
 {
   if (header!=NULL) serial_dev.write (header, strlen(header));
   serial_dev.write (pktData, strlen(pktData));
@@ -388,7 +388,7 @@ void txPacket (char *header, char *pktData)
 }
 #endif
 
-void txPacket (char *pktData)
+void txPacket (const char *pktData)
 {
   txPacket (NULL, pktData);
 }

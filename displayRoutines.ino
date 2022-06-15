@@ -86,7 +86,7 @@ void mkLocoMenu()
     && client.connected()
     #endif
     ) {
-    result = displayMenu (locoMenu, locomotiveCount+2, lastLocoMenuOption);
+    result = displayMenu ((const char**) locoMenu, locomotiveCount+2, lastLocoMenuOption);
     if (result == (locomotiveCount + 2)) result = 0;
     else if (result == (locomotiveCount + 1)) {
       // Deal with ad-hoc entry of locomotive
@@ -141,13 +141,13 @@ void mkTurnoutMenu()
     && client.connected()
     #endif
     ) {
-    result = displayMenu (switchMenu, turnoutCount+1, lastSwitchMenuOption);
+    result = displayMenu ((const char**) switchMenu, turnoutCount+1, lastSwitchMenuOption);
     if (result == (turnoutCount+1)) result = 0;  // give option to go to previous menu
     if (result > 0) {
       lastSwitchMenuOption = result - 1;
       if (turnoutList[result-1].state == turnoutState[0].state) option = 0;
       else option = 1;
-      reqState = displayMenu (stateMenu, turnoutStateCount, option);
+      reqState = displayMenu ((const char**) stateMenu, turnoutStateCount, option);
       if (reqState != 0) {
         setTurnout (result-1, reqState-1);
       }
@@ -174,7 +174,7 @@ void mkRouteMenu()
     && client.connected()
     #endif
     ) {
-    result = displayMenu (routeMenu, routeCount+1, lastRouteMenuOption);
+    result = displayMenu ((const char**)routeMenu, routeCount+1, lastRouteMenuOption);
     if (result == (routeCount+1)) result = 0;  // give option to go to previous menu
     if (result > 0) {
       lastRouteMenuOption = result - 1;
@@ -192,7 +192,7 @@ void mkPowerMenu()
 //  while (result != 0) {  // expected usage is is to return to main menuol 
     if (trackPower) option = 0;
     else option = 1;
-    result = displayMenu((char**)PowerOptions , 2, option);
+    result = displayMenu(PowerOptions , 2, option);
     if (result != 0) setTrackPower (result);
 //  }
 }
@@ -208,7 +208,7 @@ void mkConfigMenu()
   int portNum;
 
   while (result != 0) {
-    result = displayMenu ((char**) configMenu, 11, (result-1));
+    result = displayMenu (configMenu, 11, (result-1));
     switch (result) {
       case 1:
         if (displayYesNo ("Bidirectional mode?")) bidirectionalMode = true;
@@ -286,7 +286,7 @@ void mkCVMenu()
       && client.connected()
       #endif
       ) {
-      result = displayMenu ((char**)cvMenu, 6, lastCvMenuOption);
+      result = displayMenu (cvMenu, 6, lastCvMenuOption);
       if (result > 0) lastCvMenuOption = result - 1;
       switch (result) {
         case 1:
@@ -392,10 +392,10 @@ void mkFontMenu()
   for (uint8_t n=0; n<sizeof(fontWidth); n++) sprintf (fontMenu[n], "%s (%dx%d chars)", fontLabel[n], (screenWidth/fontWidth[n]), (screenHeight/fontHeight[n]));
   sprintf (fontMenu[sizeof(fontWidth)], prevMenuOption);
   for (uint8_t n=0;n<sizeof(fontWidth) + 1; n++) mp[n] = (char*) &fontMenu[n];
-  result = displayMenu (mp, (sizeof(fontWidth) + 1), 1);
+  result = displayMenu ((const char**) mp, (sizeof(fontWidth) + 1), 1);
   if (result > 0 && result <= sizeof(fontWidth)) {
     result--;
-    nvs_put_int ("fontIndex", result);
+    nvs_put_int ( "fontIndex", result);
     setupFonts();
   }
 }
@@ -411,16 +411,16 @@ void mkSpeedStepMenu()
   for (uint8_t n=0; n<9 ;n++) sprintf (speedMenu[n], "%d/click",  n+1);
   sprintf (speedMenu[9], prevMenuOption);
   for (uint8_t n=0; n<10; n++) mp[n] = (char*) &speedMenu[n];
-  result = displayMenu (mp, 10, speedStep-1);
+  result = displayMenu ((const char **) mp, 10, speedStep-1);
   if (result > 0 && result <= 9) {
-    nvs_put_int ("speedStep", result);
+    nvs_put_int ( "speedStep", result);
   }
 }
 
 
 void mkCpuSpeedMenu()
 {
-  char *cpuMenu[] = {"80MHz", "160MHz", "240MHz", "Prev. Menu"};
+  const char *cpuMenu[] = {"80MHz", "160MHz", "240MHz", "Prev. Menu"};
   uint8_t result;
 
   switch (nvs_get_int ("cpuspeed", 0)) {
@@ -437,13 +437,13 @@ void mkCpuSpeedMenu()
   result = displayMenu (cpuMenu, 4, result);
   switch (result) {
     case 1:
-      nvs_put_int ("cpuspeed", 80);
+      nvs_put_int ( "cpuspeed", 80);
       break;
     case 2:
-      nvs_put_int ("cpuspeed", 160);
+      nvs_put_int ( "cpuspeed", 160);
       break;
     case 3:
-      nvs_put_int ("cpuspeed", 240);
+      nvs_put_int ( "cpuspeed", 240);
       break;
   }
 }
@@ -451,13 +451,13 @@ void mkCpuSpeedMenu()
 
 void mkProtoPref()
 {
-  char *protoMenu[] = {"JMRI", "DCC++", "Prev. Menu"};
+  const char *protoMenu[] = {"JMRI", "DCC++", "Prev. Menu"};
   int defProto = cmdProtocol - 1;
   if (defProto < 0) defProto = 0;
   uint8_t result = displayMenu (protoMenu, 3, defProto);
   if (result > 0 && result<3) {
     cmdProtocol = result;
-    nvs_put_int ("defaultProto", result);
+    nvs_put_int ( "defaultProto", result);
   }
 }
 
@@ -470,13 +470,13 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
   uint8_t retval = 0;
   uint8_t limit = locomotiveCount + MAXCONSISTSIZE;
 
-  result = displayMenu((char**)CABOptions , 5, 2);
+  result = displayMenu((const char**)CABOptions , 5, 2);
   if (result == 1) {     // Add loco, should only show locos we don't yet own
     char *addOpts [locomotiveCount+1];
     for (uint8_t n = 0; n<locomotiveCount; n++) if (!locoRoster[n].owned) addOpts[option++] = locoRoster[n].name;
-    addOpts[option++] = (const char*) "Enter loco ID";
-    addOpts[option++] = (const char*) "Return";
-    result = displayMenu ((char**) addOpts, option, 0);
+    addOpts[option++] = (char*) "Enter loco ID";
+    addOpts[option++] = (char*) "Return";
+    result = displayMenu ((const char**) addOpts, option, 0);
     if (result != 0 && result < option) {
       if (result < option -1) {
         option = 255;
@@ -546,8 +546,8 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
     for (uint8_t n = 0; n<limit; n++) if (locoRoster[n].owned && (n != initialLoco || count == 1)) {
       removeOpts[option++] = locoRoster[n].name;
     }
-    removeOpts[option++] = (const char*) "Return";
-    result = displayMenu ((char**) removeOpts, option, 0);
+    removeOpts[option++] = (char*) "Return";
+    result = displayMenu ((const char**) removeOpts, option, 0);
     if (result != 0 && result != option) {
       result--;
       for (uint8_t n=0; n<limit; n++) {
@@ -575,10 +575,10 @@ void mkRotateMenu()
   #else
   #if SCREENROTATE == 2
   uint8_t opts = 3;
-  char *rotateMenu[] = {"0 deg (Normal)", "180 deg (Invert)", "Prev. Menu"};
+  const char *rotateMenu[] = {"0 deg (Normal)", "180 deg (Invert)", "Prev. Menu"};
   #else
   uint8_t opts = 5;
-  char *rotateMenu[] = {"0 deg (Normal)", "90 deg Right", "180 deg (Invert)", "90 deg Left", "Prev. Menu"};
+  const char *rotateMenu[] = {"0 deg (Normal)", "90 deg Right", "180 deg (Invert)", "90 deg Left", "Prev. Menu"};
   #endif
   uint8_t result = displayMenu (rotateMenu, opts, 0);
   if (result > 0 && result < opts) {
@@ -632,7 +632,7 @@ void displayInfo()
 }
 
 //
-uint8_t displayMenu (char **menuItems, uint8_t itemCount, uint8_t selectedItem)
+uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selectedItem)
 {
   uint8_t currentItem = selectedItem;
   uint8_t displayLine;
@@ -689,7 +689,7 @@ uint8_t displayMenu (char **menuItems, uint8_t itemCount, uint8_t selectedItem)
 }
 
 
-void displayScreenLine (char *menuItem, uint8_t lineNr, bool inverted)
+void displayScreenLine (const char *menuItem, uint8_t lineNr, bool inverted)
 {
   char linedata[charsPerLine+1];
 
@@ -739,12 +739,12 @@ int16_t wait4cv()
 }
 
 
-uint8_t displayTempMessage (char *header, char *message, bool wait4response)
+uint8_t displayTempMessage (const char *header, const char *message, bool wait4response)
 {
   uint8_t lineNr = 0;
   uint8_t offset = 0;
   char lineData[charsPerLine+1];
-  char *charPtr = message;
+  char *charPtr = (char *) message;
 
   display.clear();
   if (header!=NULL) displayScreenLine (header, lineNr++, true);
@@ -774,7 +774,7 @@ uint8_t displayTempMessage (char *header, char *message, bool wait4response)
   return (lineNr);
 }
 
-bool displayYesNo (char *question)
+bool displayYesNo (const char *question)
 {
   uint8_t baseLine = displayTempMessage (NULL, question, false) + 1;
   uint8_t command = 255;
@@ -793,7 +793,7 @@ bool displayYesNo (char *question)
   return (option);
 }
 
-int enterNumber(char *prompt)
+int enterNumber(const char *prompt)
 {
   #ifdef keynone
   displayTempMessage ("Warning:", "Cannot enter number without a keypad", true);
@@ -835,7 +835,7 @@ int enterNumber(char *prompt)
   #endif
 }
 
-char* enterAddress(char *prompt)
+char* enterAddress(const char *prompt)
 {
   static char retVal[16];
   char displayVal[17];

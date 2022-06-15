@@ -75,7 +75,7 @@ void keepAlive(void *pvParameters)
  * Keep keep alive transmit data separate from normal keep alive transmits so that
  * console show flags are separate from normal packet transmit reporting
  */
-void sendKeepAlive(char *pktData)
+void sendKeepAlive(const char *pktData)
 {
   if (xSemaphoreTake(transmitSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
     if (pktData!= NULL) {

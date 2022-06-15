@@ -75,7 +75,7 @@ void setTrackPower (uint8_t desiredState)
   }
 }
 
-void setTurnout (uint8_t turnoutNr, char desiredState)
+void setTurnout (uint8_t turnoutNr, const char desiredState)
 {
   char outPacket[21];
   //char string[6];

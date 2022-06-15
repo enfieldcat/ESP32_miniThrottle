@@ -166,7 +166,7 @@ void setup()  {
   Serial.print   (" ");
   Serial.println (__TIME__);
   Serial.print   ("Display Type:  ");
-  Serial.println (DISPLAY);
+  Serial.println (DISPLAYNAME);
   Serial.print   ("Throttle Name: ");
   Serial.println (tname);
   debounceTime = nvs_get_int ("debounceTime", DEBOUNCEMS);
@@ -294,8 +294,8 @@ void loop()
   delay (250);
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
     Serial.print ("Start device display (");
-    #ifdef DISPLAY
-    Serial.print (DISPLAY);
+    #ifdef DISPLAYNAME
+    Serial.print (DISPLAYNAME);
     Serial.print (", ");
     #endif
     #ifdef SCREENROTATE
@@ -371,7 +371,7 @@ void loop()
     if (true) {
       while (true) {
         #endif
-        answer = displayMenu ((char**)baseMenu, 6, lastMainMenuOption);
+        answer = displayMenu ((const char**)baseMenu, 6, lastMainMenuOption);
         if (answer > 0) lastMainMenuOption = answer - 1;
         switch (answer) {
           case 1:

@@ -230,7 +230,7 @@ class ota_control {
      *   4. image transfer failed or mismatches sha256 checksum
      *   5. cannot setup connection to server
      */
-    bool update(char *baseurl, const char *cert, char *metadata)
+    bool update(const char *baseurl, const char *cert, const char *metadata)
     {
       bool retVal = false;
       char url[132];

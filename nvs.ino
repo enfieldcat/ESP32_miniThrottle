@@ -32,19 +32,19 @@ void nvs_init()
   prefs.begin ("Throttle");  
 }
 
-void nvs_get_string (char *strName, char *strDest, char *strDefault, int strSize)
+void nvs_get_string (const char *strName, char *strDest, const char *strDefault, int strSize)
 {
   if (prefs.getString(strName, strDest, strSize) == 0) {
     strcpy (strDest, strDefault);
   }  
 }
 
-void nvs_get_string (char *strName, char *strDest, int strSize)
+void nvs_get_string (const char *strName, char *strDest, int strSize)
 {
   prefs.getString(strName, strDest, strSize);
 }
 
-void nvs_put_string (char *strName, char *value)
+void nvs_put_string (const char *strName, const char *value)
 {
   char oldval[80];
   oldval[0] = '\0';
@@ -55,12 +55,12 @@ void nvs_put_string (char *strName, char *value)
   }
 }
 
-int nvs_get_int (char *intName, int intDefault)
+int nvs_get_int (const char *intName, int intDefault)
 {
   return (prefs.getInt (intName, intDefault));
 }
 
-void nvs_put_int (char *intName, int value)
+void nvs_put_int (const char *intName, int value)
 {
   int oldval = nvs_get_int (intName, value+1);
   if (value != oldval) {
@@ -69,14 +69,14 @@ void nvs_put_int (char *intName, int value)
   }
 }
 
-double nvs_get_double (char *doubleName, double doubleDefault)
+double nvs_get_double (const char *doubleName, double doubleDefault)
 {
   double retval = prefs.getDouble (doubleName, doubleDefault);
   if (isnan(retval)) retval = doubleDefault; 
   return (retval);
 }
 
-void nvs_put_double (char *doubleName, double value)
+void nvs_put_double (const char *doubleName, double value)
 {
   double oldval = nvs_get_double (doubleName, value+1.00);
   if (value != oldval) {
@@ -85,14 +85,14 @@ void nvs_put_double (char *doubleName, double value)
   }
 }
 
-float nvs_get_float (char *floatName, float floatDefault)
+float nvs_get_float (const char *floatName, float floatDefault)
 {
   float retval = prefs.getFloat (floatName, floatDefault);
   if (isnan(retval)) retval = floatDefault; 
   return (retval);
 }
 
-void nvs_put_float (char *floatName, float value)
+void nvs_put_float (const char *floatName, float value)
 {
   float oldval = nvs_get_float (floatName, value+1.00);
   if (value != oldval) {
@@ -106,7 +106,7 @@ int nvs_get_freeEntries()
   return (prefs.freeEntries());
 }
 
-void nvs_put_string (char* nameSpace, char* key, char* value)
+void nvs_put_string (const char* nameSpace, const char* key, const char* value)
 {
   Preferences tpref;
 
@@ -115,7 +115,7 @@ void nvs_put_string (char* nameSpace, char* key, char* value)
   tpref.end();
 }
 
-void nvs_get_string (char* nameSpace, char *strName, char *strDest, char *strDefault, int strSize)
+void nvs_get_string (const char* nameSpace, const char *strName, char *strDest, const char *strDefault, int strSize)
 {
   Preferences tpref;
 
@@ -126,7 +126,7 @@ void nvs_get_string (char* nameSpace, char *strName, char *strDest, char *strDef
   tpref.end();
 }
 
-void nvs_del_key (char* nameSpace, char* key)
+void nvs_del_key (const char* nameSpace, const char* key)
 {
   Preferences tpref;
 
@@ -136,7 +136,7 @@ void nvs_del_key (char* nameSpace, char* key)
 }
 
 // return a pointer to an array of num_entries structures with key[16], value[data_size]
-void* nvs_extractStr (char *nameSpace, int numEntries, int dataSize)
+void* nvs_extractStr (const char *nameSpace, int numEntries, int dataSize)
 {
   int   readCnt = 0;
   int   retOffset = 0;
@@ -221,7 +221,7 @@ void* nvs_extractStr (char *nameSpace, int numEntries, int dataSize)
 
 // Count the number of entries in an NVS partition of a certain type
 // type may be "all" to count all entries
-int nvs_count (char* target, char* type)
+int nvs_count (const char* target, const char* type)
 {
   nvs_page *nsbuff = NULL;
   nvs_page *dabuff = NULL;
@@ -298,7 +298,7 @@ int nvs_count (char* target, char* type)
  * Inspired by https://github.com/Edzelf/ESP32-Show_nvs_keys/blob/master/Show_nvs_keys.ino
  * Reference: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/storage/nvs_flash.html
  */
-void nvs_dumper(char *target)
+void nvs_dumper(const char *target)
 {
   uint32_t nsoffset = 0;
   uint32_t daoffset = 0;
@@ -418,7 +418,9 @@ void nvs_dumper(char *target)
                         break;
                     }
                     typePtr = NULL;
-                    for (uint8_t n=0; n<sizeof(nvs_index_ref) && typePtr==NULL; n++) if (nvs_index_ref[n] == dabuff->Entry[j].Type) typePtr = nvs_descrip[n];
+                    for (uint8_t n=0; n<sizeof(nvs_index_ref) && typePtr==NULL; n++)
+                      if (nvs_index_ref[n] == dabuff->Entry[j].Type)
+                        typePtr = (char*) nvs_descrip[n];
                     if (typePtr == NULL) typePtr = (char*) "Unknown";
                     sprintf (outline, "%4d | %03d | %-8s | %-15s | %s", page,  j,// Print page and entry nr
                        typePtr,                                                  // Print the data type

@@ -14,7 +14,7 @@
 
 // Project identity and version
 #define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.4b"         // Version string
+#define VERSION     "0.4c"         // Version string
 
 // Optionally include file support, it will be enabled if OTAUPDATE is defined
 // Can be used to store certificates, command sequences etc.
@@ -28,7 +28,7 @@
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <ESPmDNS.h>
-// #define OTAUPDATE   "https://conferre.cf/projects/miniThrottle/"   // default location for over the air update, comment out if not required
+//#define OTAUPDATE   "https://conferre.cf/projects/miniThrottle/"   // default location for over the air update, comment out if not required
 #else
 #define DCCRX 33
 #define DCCTX 32
@@ -173,7 +173,7 @@
 //     I2C = SDA, SCK. Addr
 //     SPI = RESET, CS, DC, SCL, SCA
 // Other data
-//     DISPLAY      - Useful to have a human readible form of display name
+//     DISPLAYNAME      - Useful to have a human readible form of display name
 //     COLORDISPLAY - Define if we support colours, otherwise monochrome
 //     SCALEFONT    - Define if speed should be shown in larger font
 //     SCREENROTATE - Number of rotatable directions if screen is rotatable
@@ -183,14 +183,14 @@
 #define SDA_PIN        05    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
 #define SCK_PIN        04    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
 #define SCREENROTATE    2    // Screen can be rotated to 1 of 2 positions
-#define DISPLAY "sdd1306"
+#define DISPLAYNAME "sdd1306"
 #endif
 //
 #ifdef SSD1327
 #define DISPLAYADDR  0x3c    // i2c display addr
 #define SDA_PIN        22    // i2c SDA pin, normally 21
 #define SCK_PIN        23    // i2c SCK pin, normally 22
-#define DISPLAY "sdd1327"
+#define DISPLAYNAME "sdd1327"
 #endif
 //
 #ifdef ST7735
@@ -199,7 +199,7 @@
 #define SPI_DC         12
 #define SPI_SCL        14
 #define SPI_SDA        13
-#define DISPLAY "st7735"
+#define DISPLAYNAME "st7735"
 #define COLORDISPLAY
 #define SCALEFONT
 #define SCREENROTATE    4    // 4 different rotation positions
@@ -211,7 +211,7 @@
 #define SPI_DC         12
 #define SPI_SCL        14
 #define SPI_SDA        13
-#define DISPLAY "st7789"
+#define DISPLAYNAME "st7789"
 #define COLORDISPLAY
 #define SCALEFONT
 #define SCREENROTATE    4    // 4 different rotation positions
@@ -223,7 +223,7 @@
 #define SPI_DC         12
 #define SPI_SCL        14
 #define SPI_SDA        13
-#define DISPLAY "ili9341"
+#define DISPLAYNAME "ili9341"
 #define COLORDISPLAY
 #define SCALEFONT
 #define SCREENROTATE    4    // 4 different rotation positions
@@ -420,4 +420,4 @@ struct nvs_page                                     // For nvs entries
 } ;
 
 uint8_t nvs_index_ref[] = { 0x01,      0x02,       0x04,       0x08,       0x11,     0x12,      0x14,      0x18,      0x21,     0x41,   0x42,       0x48,      0xff};
-char *nvs_descrip[]     = { "uint8_t", "uint16_t", "uint32_t", "uint64_t", "int8_t", "int16_t", "int32_t", "int64_t", "String", "Blob", "BlobData", "BlobIdx", "Unused" };
+const char *nvs_descrip[]     = { "uint8_t", "uint16_t", "uint32_t", "uint64_t", "int8_t", "int16_t", "int32_t", "int64_t", "String", "Blob", "BlobData", "BlobIdx", "Unused" };

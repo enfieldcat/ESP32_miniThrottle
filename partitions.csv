@@ -1,0 +1,32 @@
+# the partitions below assume a 4M flash memory
+# Ref: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/partition-tables.html
+#
+# The bootstrap appears to be quite particular that
+# the first program space is at 0x10000.
+#
+# If you are not using OTA to update partitions
+# then this partition is suitable for miniThrottle
+#  * 64K Bootstrap space (36K Reserved, 28K Unused)
+#  * 28K Unused
+#  * 2M Program
+#  * 64K NVS
+#  * 1.875M File-System
+# Name,   Type, SubType, Offset,  Size,    Flags
+factory,  app,  factory, 0x10000, 0x200000,
+nvs,      data, nvs,     0x210000,0x10000,
+spiffs,   data, spiffs,  0x220000,0x1E0000,
+#
+# If you are using OTA (Over The Air update) then
+# comment out the entries above, and uncomment the
+# entries from otadata onwards below.
+#  * 56K Bootstrap space (36K reserved, 20K Unused)
+#  * 8K OTA
+#  * 2 x 1.875M Program - OTA updates non-active program partition
+#  * 64K NVS
+#  * 128K File-System
+# Name,   Type, SubType, Offset,  Size,    Flags
+#otadata,  data, ota,     0xe000,  0x2000,
+#app0,     app,  ota_0,   0x10000, 0x1E0000,
+#app1,     app,  ota_1,   0x1F0000,0x1E0000,
+#nvs,      data, nvs,     0x3D0000,0x10000,
+#spiffs,   data, spiffs,  0x3E0000,0x20000,

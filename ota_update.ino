@@ -329,19 +329,19 @@ void OTAcheck4update()
   if (strncmp (ota_url, "https://", 8) == 0) {
     rootCACertificate = util_loadFile(SPIFFS, web_certFile);
     if (rootCACertificate == NULL) {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print ("When using https for OTA, place root certificate in file ");
         Serial.println (CERTFILE);
         xSemaphoreGive(displaySem);
       }
     }
   }
-  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ("WARNING: using unencrypted link for OTA update. https:// is preferred.");
     xSemaphoreGive(displaySem);
   }
   if (theOtaControl.update (ota_url, rootCACertificate, "metadata.php")) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println (theOtaControl.get_status_message());
       Serial.println ("OTA update successful, will reboot in 10 seconds.");
       xSemaphoreGive(displaySem);

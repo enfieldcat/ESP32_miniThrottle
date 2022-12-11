@@ -1,3 +1,4 @@
+#ifndef NODISPLAY
 #ifndef keynone
 void keypadMonitor(void *pvParameters)
 // This is the keypad monitor task.
@@ -10,6 +11,11 @@ void keypadMonitor(void *pvParameters)
   char inChar = 'A';
   char lastKey = 'A';
   bool keyRelPending = false;
+
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s keypadHandler(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    xSemaphoreGive(displaySem);
+  }
 
   keypad.setDebounceTime(debounceTime);
 
@@ -66,4 +72,5 @@ void keypadMonitor(void *pvParameters)
   }
   vTaskDelete( NULL );
 }
-#endif
+#endif   // keynone
+#endif   // NODISPLAY

@@ -29,19 +29,39 @@ Preferences prefs;
 
 void nvs_init()
 {
-  prefs.begin ("Throttle");  
+  if (xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    prefs.begin ("Throttle");  
+    xSemaphoreGive(nvsSem);
+  }
+  else {
+    semFailed ("nvsSem", __FILE__, __LINE__);
+  }
 }
 
 void nvs_get_string (const char *strName, char *strDest, const char *strDefault, int strSize)
 {
-  if (prefs.getString(strName, strDest, strSize) == 0) {
+  if (xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (prefs.getString(strName, strDest, strSize) == 0) {
+      strcpy (strDest, strDefault);
+    }  
+    xSemaphoreGive(nvsSem);
+  }
+  else {
     strcpy (strDest, strDefault);
-  }  
+    semFailed ("nvsSem", __FILE__, __LINE__);
+  }
 }
 
 void nvs_get_string (const char *strName, char *strDest, int strSize)
 {
-  prefs.getString(strName, strDest, strSize);
+  if (xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    prefs.getString(strName, strDest, strSize);
+    xSemaphoreGive(nvsSem);
+  } 
+  else {
+    strcpy (strDest, "");
+    semFailed ("nvsSem", __FILE__, __LINE__);
+  }
 }
 
 void nvs_put_string (const char *strName, const char *value)
@@ -49,29 +69,49 @@ void nvs_put_string (const char *strName, const char *value)
   char oldval[80];
   oldval[0] = '\0';
   nvs_get_string (strName, oldval, "", 80);
-  if (strcmp (oldval, value) != 0) {
+  if (strcmp (oldval, value) != 0 && xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     prefs.putString (strName, value);
+    xSemaphoreGive(nvsSem);
     configHasChanged = true;
+  }
+  else {
+    semFailed ("nvsSem", __FILE__, __LINE__);
   }
 }
 
 int nvs_get_int (const char *intName, int intDefault)
 {
-  return (prefs.getInt (intName, intDefault));
+  int retVal = -1;
+  if (xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    retVal = prefs.getInt (intName, intDefault);
+    xSemaphoreGive(nvsSem);
+  }
+  else {
+    semFailed ("nvsSem", __FILE__, __LINE__);
+  }
+  return (retVal);
 }
 
 void nvs_put_int (const char *intName, int value)
 {
   int oldval = nvs_get_int (intName, value+1);
-  if (value != oldval) {
+  if (value != oldval && xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     prefs.putInt (intName, value);
     configHasChanged = true;
+    xSemaphoreGive(nvsSem);
   }
 }
 
 double nvs_get_double (const char *doubleName, double doubleDefault)
 {
-  double retval = prefs.getDouble (doubleName, doubleDefault);
+  double retval = doubleDefault;
+  if (xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    retval = prefs.getDouble (doubleName, doubleDefault);
+    xSemaphoreGive(nvsSem);
+  }
+  else {
+    semFailed ("nvsSem", __FILE__, __LINE__);
+  }
   if (isnan(retval)) retval = doubleDefault; 
   return (retval);
 }
@@ -79,15 +119,26 @@ double nvs_get_double (const char *doubleName, double doubleDefault)
 void nvs_put_double (const char *doubleName, double value)
 {
   double oldval = nvs_get_double (doubleName, value+1.00);
-  if (value != oldval) {
+  if (value != oldval && xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     prefs.putDouble (doubleName, value);
+    xSemaphoreGive(nvsSem);
     configHasChanged = true;
+  }
+  else {
+    semFailed ("nvsSem", __FILE__, __LINE__);
   }
 }
 
 float nvs_get_float (const char *floatName, float floatDefault)
 {
-  float retval = prefs.getFloat (floatName, floatDefault);
+  float retval = floatDefault;
+  if (xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    retval = prefs.getFloat (floatName, floatDefault);
+    xSemaphoreGive(nvsSem);
+  }
+  else {
+    semFailed ("nvsSem", __FILE__, __LINE__);
+  }
   if (isnan(retval)) retval = floatDefault; 
   return (retval);
 }
@@ -95,44 +146,80 @@ float nvs_get_float (const char *floatName, float floatDefault)
 void nvs_put_float (const char *floatName, float value)
 {
   float oldval = nvs_get_float (floatName, value+1.00);
-  if (value != oldval) {
+  if (value != oldval && xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     prefs.putFloat (floatName, value);
+    xSemaphoreGive(nvsSem);
     configHasChanged = true;
+  }
+  else {
+    semFailed ("nvsSem", __FILE__, __LINE__);
   }
 }
 
 int nvs_get_freeEntries()
 {
-  return (prefs.freeEntries());
+  int retVal = 0;
+  if (xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    retVal = prefs.freeEntries();
+    xSemaphoreGive(nvsSem);
+  }
+  else {
+    semFailed ("nvsSem", __FILE__, __LINE__);
+  }
+  return (retVal);
 }
 
 void nvs_put_string (const char* nameSpace, const char* key, const char* value)
 {
   Preferences tpref;
 
-  tpref.begin(nameSpace);
-  tpref.putString (key, value);
-  tpref.end();
+  if (xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    prefs.end();   // Should only ever have one set of preferences open at a time
+    tpref.begin(nameSpace);
+    tpref.putString (key, value);
+    tpref.end();
+    prefs.begin ("Throttle");  
+    xSemaphoreGive(nvsSem);
+  }
+  else {
+    semFailed ("nvsSem", __FILE__, __LINE__);
+  }
 }
 
 void nvs_get_string (const char* nameSpace, const char *strName, char *strDest, const char *strDefault, int strSize)
 {
   Preferences tpref;
 
-  tpref.begin(nameSpace);
-  if (tpref.getString(strName, strDest, strSize) == 0) {
-    strcpy (strDest, strDefault);
-  }  
-  tpref.end();
+  if (xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    prefs.end();   // Should only ever have one set of preferences open at a time
+    tpref.begin(nameSpace);
+    if (tpref.getString(strName, strDest, strSize) == 0) {
+      strcpy (strDest, strDefault);
+    }  
+    tpref.end();
+    prefs.begin ("Throttle");  
+    xSemaphoreGive(nvsSem);
+  }
+  else {
+    semFailed ("nvsSem", __FILE__, __LINE__);
+  }
 }
 
 void nvs_del_key (const char* nameSpace, const char* key)
 {
   Preferences tpref;
 
-  tpref.begin(nameSpace);
-  tpref.remove (key);
-  tpref.end();
+  if (xSemaphoreTake(nvsSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    prefs.end();   // Should only ever have one set of preferences open at a time
+    tpref.begin(nameSpace);
+    tpref.remove (key);
+    tpref.end();
+    prefs.begin ("Throttle");  
+    xSemaphoreGive(nvsSem);
+  }
+  else {
+    semFailed ("nvsSem", __FILE__, __LINE__);
+  }
 }
 
 // return a pointer to an array of num_entries structures with key[16], value[data_size]
@@ -322,13 +409,13 @@ void nvs_dumper(const char *target)
     part = esp_partition_get (partIt);
     esp_partition_iterator_release (partIt);
     sprintf (outline, "NVS partition size: %d bytes", part->size);
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println (outline);
       xSemaphoreGive(displaySem);
     }
     while (nsoffset < part->size) {
       if (esp_partition_read (part, nsoffset, nsbuff, sizeof(nvs_page)) != ESP_OK) {
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.println ("Error reading NVS data");
           xSemaphoreGive(displaySem);
         }
@@ -342,7 +429,7 @@ void nvs_dumper(const char *target)
         if ( bitmap == 2 ) {
           if (nsbuff->Entry[i].Ns == 0 && (target==NULL || strcmp(target, nsbuff->Entry[i].Key)==0)) {
             sprintf (outline, "--- Namespace = %s ---------------------------------", nsbuff->Entry[i].Key);
-            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               Serial.println (outline);
               sprintf (outline, "%4s | %3s | %-8s | %-15s | %s", "Page", "Key", "Type", "Name", "Value");
               Serial.println (outline);
@@ -353,7 +440,7 @@ void nvs_dumper(const char *target)
             page = 0;
             while (daoffset < part->size) {
               if (esp_partition_read (part, daoffset, dabuff, sizeof(nvs_page)) != ESP_OK) {
-                if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+                if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                   Serial.println ("Error reading NVS data");
                   xSemaphoreGive(displaySem);
                 }
@@ -426,7 +513,7 @@ void nvs_dumper(const char *target)
                        typePtr,                                                  // Print the data type
                        dabuff->Entry[j].Key,                                     // Print the key
                        dataPtr );                                                // Print the data
-                    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+                    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                       Serial.println (outline);
                       xSemaphoreGive(displaySem);
                     }
@@ -447,7 +534,7 @@ void nvs_dumper(const char *target)
     }
   }
   else {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("NVS partition not found");
       xSemaphoreGive(displaySem);
     }

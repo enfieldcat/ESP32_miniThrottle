@@ -8,10 +8,14 @@ void serialConsole(void *pvParameters)
   uint8_t bufferPtr = 0;
   uint8_t inBuffer[BUFFSIZE];
 
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-    Serial.println ("Console ready");
-    Serial.println ("Type \"help\" or \"help summary\" or \"help <command>\" for more information.");
-    Serial.println ("");
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s serialConsole(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    xSemaphoreGive(displaySem);
+  }
+
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Console ready\r\n", getTimeStamp());
+    Serial.printf ("Type \"help\" or \"help summary\" or \"help <command>\" for more information.\r\n\r\n");
     xSemaphoreGive(displaySem);
   }
   // Serial.print ("> ");
@@ -21,7 +25,7 @@ void serialConsole(void *pvParameters)
       if (inChar == 8 || inChar == 127) {
         if (bufferPtr > 0) {
           bufferPtr--;
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.print ((char)0x08);
             Serial.print ((char) ' ');
             Serial.print ((char)0x08);
@@ -31,20 +35,20 @@ void serialConsole(void *pvParameters)
       }
       else {
         if (inChar == '\n' || inChar == '\r') {
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.println ("");
             xSemaphoreGive(displaySem);
           }
           if (bufferPtr>0) {
             inBuffer[bufferPtr] = '\0';
-            process(inBuffer);
+            processSerialCmd (inBuffer);
             bufferPtr = 0;
           }
           // Serial.print ("> ");
         }
         else if (bufferPtr < BUFFSIZE-1) {
           inBuffer[bufferPtr++] = inChar;
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.print ((char)inChar);
             xSemaphoreGive(displaySem);
           }
@@ -53,19 +57,24 @@ void serialConsole(void *pvParameters)
     }
     delay(10);
   }
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-    Serial.println ("All console services stopping");
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s All console services stopping\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
   vTaskDelete( NULL );
 }
 
-void process (uint8_t *inBuffer)
+void processSerialCmd (uint8_t *inBuffer)
 {
   char   *param[MAXPARAMS];
   uint8_t nparam;
   uint8_t n;
   bool inSpace = false;
+
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s processSerialCmd(%s)\r\n", getTimeStamp(), inBuffer);
+    xSemaphoreGive(displaySem);
+  }
 
   #ifdef FILESUPPORT
   if (writingFile) {
@@ -98,8 +107,9 @@ void process (uint8_t *inBuffer)
   #endif
   else if (nparam==1 && strcmp (param[0], "config")  == 0)       mt_sys_config       ();
   else if (nparam<=2 && strcmp (param[0], "cpuspeed") == 0)      mt_set_cpuspeed     (nparam, param);
-  else if (nparam==3 && (strcmp (param[0], "del") == 0 || strcmp (param[0], "delete") == 0)) mt_del_gadget (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "debouncetime") == 0)  mt_set_debounceTime (nparam, param);
+  else if (nparam<=2 && strcmp (param[0], "debug") == 0)         mt_set_debug        (nparam, param);
+  else if (nparam==3 && (strcmp (param[0], "del") == 0 || strcmp (param[0], "delete") == 0)) mt_del_gadget (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "detentcount") == 0)   mt_set_detentCount  (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "dump") == 0)          mt_dump_data        (nparam, (const char**) param);
   else if (nparam==1 && strcmp (param[0], "export") == 0)        mt_export           ();
@@ -113,7 +123,9 @@ void process (uint8_t *inBuffer)
   #ifdef USEWIFI
   else if (nparam==4 && strcmp (param[1], "download") == 0 && strcmp (param[0], "file") == 0) getHttp2File (SPIFFS, param[2], param[3]);
   #endif
+  #ifndef NODISPLAY
   else if (nparam<=2 && strcmp (param[0], "font") == 0)          mt_set_font         (nparam, param);
+  #endif
   else if (nparam<=2 && strcmp (param[0], "help") == 0)          help                (nparam, param);
   #ifdef USEWIFI
   else if (nparam<=2 && strcmp (param[0], "mdns") == 0)          set_mdns            (nparam, param);
@@ -125,7 +137,7 @@ void process (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "ota") == 0)           mt_ota              (nparam, param);
   #endif
   else if (nparam==1 && strcmp (param[0], "pins")  == 0)         showPinConfig       ();
-  #ifdef USEWIFI
+  #ifndef SERIALCTRL
   else if (nparam<=2 && strcmp (param[0], "protocol") == 0)      mt_set_protocol     (nparam, param);
   #endif
   else if (nparam==1 && strcmp (param[0], "restart") == 0)       mt_sys_restart      ("command line request");
@@ -133,13 +145,17 @@ void process (uint8_t *inBuffer)
   #ifdef SCREENROTATE
   else if (nparam<=2 && strcmp (param[0], "rotatedisplay") == 0) mt_set_rotateDisp   (nparam, param);
   #endif
-  #ifdef USEWIFI
+  #ifndef SERIALCTRL
   else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
   #endif
   else if (nparam>=2 && strcmp (param[0], "sendcmd") == 0)       mt_sendcmd          (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "speedstep") == 0)     mt_set_speedStep    (nparam, param);
   #ifdef WARNCOLOR
   else if (nparam<=2 && strcmp (param[0], "warnspeed") == 0)     mt_set_warnspeed    (nparam, param);
+  #endif
+  #ifdef WEBLIFETIME
+  else if (nparam<=2 && strcmp (param[0], "webuser") == 0)       mt_set_webuser      (nparam, param);
+  else if (nparam<=2 && strcmp (param[0], "webpass") == 0)       mt_set_webpass      (nparam, param);
   #endif
   #ifdef USEWIFI
   else if (nparam<=4 && strcmp (param[0], "wifi") == 0)          mt_set_wifi         (nparam, param);
@@ -148,21 +164,25 @@ void process (uint8_t *inBuffer)
   else if (nparam==1 && strcmp (param[0], "locos") == 0)         displayLocos        ();
   else if (nparam==1 && strcmp (param[0], "turnouts") == 0)      displayTurnouts     ();
   else if (nparam==1 && strcmp (param[0], "routes") == 0)        displayRoutes       ();
-  else if (nparam==1 && strcmp (param[0], "showpackets")     == 0) showPackets   = true;
-  else if (nparam==1 && strcmp (param[0], "noshowpackets")   == 0) showPackets   = false;
-  #ifdef USEWIFI
-  else if (nparam==1 && strcmp (param[0], "showkeepalive")   == 0) showKeepAlive = true;
-  else if (nparam==1 && strcmp (param[0], "noshowkeepalive") == 0) showKeepAlive = false;
+  else if (nparam==1 && strcmp (param[0], "showpackets")     == 0) showPackets    = true;
+  else if (nparam==1 && strcmp (param[0], "noshowpackets")   == 0) showPackets    = false;
+  #ifndef SERIALCTRL
+  else if (nparam==1 && strcmp (param[0], "showkeepalive")   == 0) showKeepAlive  = true;
+  else if (nparam==1 && strcmp (param[0], "noshowkeepalive") == 0) showKeepAlive  = false;
   #endif
-  else if (nparam==1 && strcmp (param[0], "showkeypad")      == 0) showKeypad    = true;
-  else if (nparam==1 && strcmp (param[0], "noshowkeypad")    == 0) showKeypad    = false;
+  #ifdef WEBLIFETIME
+  else if (nparam==1 && strcmp (param[0], "showweb")         == 0) showWebHeaders = true;
+  else if (nparam==1 && strcmp (param[0], "noshowweb")       == 0) showWebHeaders = false;
+  #endif
+  else if (nparam==1 && strcmp (param[0], "showkeypad")      == 0) showKeypad     = true;
+  else if (nparam==1 && strcmp (param[0], "noshowkeypad")    == 0) showKeypad     = false;
   else if (nparam==1 && strcmp (param[0], "bidirectional")   == 0) mt_setbidirectional (true);
   else if (nparam==1 && strcmp (param[0], "nobidirectional") == 0) mt_setbidirectional (false);
   else if (nparam==1 && strcmp (param[0], "sortdata")        == 0) nvs_put_int    ((char*) "sortData", 1);
   else if (nparam==1 && strcmp (param[0], "nosortdata")      == 0) nvs_put_int    ((char*) "sortData", 0);
   else if (nparam==1 && strcmp (param[0], "buttonstop")      == 0) nvs_put_int    ((char*) "buttonStop", 1);
   else if (nparam==1 && strcmp (param[0], "nobuttonstop")    == 0) nvs_put_int    ((char*) "buttonStop", 0);
-  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000))   == pdTRUE) {
+  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT))   == pdTRUE) {
     Serial.println ("Command not recognised.");
     xSemaphoreGive(displaySem);
   }
@@ -174,7 +194,7 @@ void mt_brake (int nparam, char **param)
   if (nparam==1) {
     int brakeup = nvs_get_int ( "brakeup", 1);
     int brakedown = nvs_get_int ("(char*) brakedown", 20);
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("brake-up = ");
       Serial.print (brakeup);
       Serial.print (", brake-down = ");
@@ -190,7 +210,7 @@ void mt_brake (int nparam, char **param)
       if (val > 0 && val<100) nvs_put_int ( "brakedown", val);
     }
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("brake-up and brake-down values should both be integer");
         xSemaphoreGive(displaySem);
       }
@@ -207,7 +227,7 @@ void mt_set_backlight (int nparam, char **param)
   uint16_t val = 200;
   if (nparam==1) {
     val = nvs_get_int ( "backlightValue", 200);
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("backlight = %d\r\n", val);
       xSemaphoreGive(displaySem);
     }
@@ -221,14 +241,14 @@ void mt_set_backlight (int nparam, char **param)
         ledcWrite(0, backlightValue);
       }
       else {
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.println ("backlight value should be less than 256");
           xSemaphoreGive(displaySem);
         }
       }
     }
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("backlight value should be less than 256");
         xSemaphoreGive(displaySem);
       }
@@ -249,7 +269,7 @@ void mt_export()
   char varName[16];
   char msgBuffer[BUFFSIZE];
 
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ("#");
     Serial.println ("# MiniThrottle export");
     Serial.println ("#");
@@ -265,9 +285,13 @@ void mt_export()
     Serial.print   (" ");
     Serial.println (__TIME__);
     Serial.print   ("# Display Type:  ");
+    #ifdef NODISPLAY
+    Serial.println ("No Display");
+    #else
     Serial.println (DISPLAYNAME);
-    #ifndef USEWIFI
-    Serial.println ("# Direct serial connection to DCC++");
+    #endif
+    #ifdef SERIALCTRL
+    Serial.println ("# Direct serial connection to DCC-Ex");
     #endif
     Serial.println ("#");
     Serial.println ("###########################");
@@ -294,10 +318,14 @@ void mt_export()
     count = nvs_get_int ( "bidirectional", -1);
     if (count == 0) Serial.println ("nobidirectional");
     else if (count == 1) Serial.println ("bidirectional");
+    #ifndef NODISPLAY
     count = nvs_get_int ( "fontIndex", -1);
     if (count > -1) Serial.printf ("font %d\r\n", count);
+    #endif
+    #ifdef SCREENROTATE
     count = nvs_get_int ( "screenRotate", -1);
     if (count > -1) Serial.printf ("rotatedisplay %d\r\n", count);
+    #endif
     count = nvs_get_int ( "warnspeed", -1);
     if (count > -1) Serial.printf ("warnspeed %d\r\n", count);
     count = nvs_get_int ( "buttonStop", -1);
@@ -346,7 +374,7 @@ void mt_export()
     if (count > 0) {
       nvsData = (char*) nvs_extractStr ((char*)namespaces[n], count, BUFFSIZE);
       nvsPtr = nvsData;
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         for (int j=0; j<count; j++) {
           Serial.print ("add ");
           Serial.print (namespaces[n]);
@@ -382,7 +410,7 @@ void mt_sendcmd (int nparam, char **param)
 
 
 /*
- * When running DCC++ use this to add Loco,turnout or route
+ * When running DCC-Ex use this to add Loco,turnout or route
  */
 void mt_add_gadget (int nparam, char **param)
 {
@@ -399,7 +427,7 @@ void mt_add_gadget (int nparam, char **param)
       nvs_put_string (param[1], param[2], dataBuffer);
     }
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print   ("Error: ");
         Serial.print   (param[1]);
         Serial.println (" number must be between 1 and 10239");
@@ -418,7 +446,7 @@ void mt_add_gadget (int nparam, char **param)
       nvs_put_string (param[1], param[2], dataBuffer);
     }
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print   ("Error: ");
         Serial.print   (param[1]);
         Serial.println (" control method must be one of DCC, SERVO, VPIN");
@@ -437,7 +465,7 @@ void mt_add_gadget (int nparam, char **param)
           nvs_get_string ("turnout", param[n], dataBuffer, "not found", sizeof(dataBuffer));
           if (strcmp (dataBuffer, "not found") == 0) {
             isOK = false;
-            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               Serial.print   ("Error: ");
               Serial.print   (param[n]);
               Serial.println (" does not match any defined turnout name, names are case sensitive");
@@ -447,7 +475,7 @@ void mt_add_gadget (int nparam, char **param)
         }
         else {
           isOK = false;
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.print   ("Error: Turnout state should be either C or T, found ");
             Serial.print   (param[n+1]);
             Serial.println ("instead");
@@ -465,7 +493,7 @@ void mt_add_gadget (int nparam, char **param)
       }
     }
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("Route definition should be followed by turnout-name and state pairs");
         Serial.print   ("Maximum pair count is: ");
         Serial.println ((MAXPARAMS - 3) / 2);
@@ -474,7 +502,7 @@ void mt_add_gadget (int nparam, char **param)
     }
   }
   else {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print   ("Error: ");
       Serial.print   (param[1]);
       Serial.println (" not a recognised parameter, should be: loco, turnout, route");
@@ -491,7 +519,7 @@ void mt_del_gadget (int nparam, char **param)
       nvs_del_key (param[1], param[2]);
     }
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print   ("Error: ");
         Serial.print   (param[1]);
         Serial.println (" number must be between 1 and 10239");
@@ -500,7 +528,7 @@ void mt_del_gadget (int nparam, char **param)
     }
   }
   else {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print   ("Error: ");
       Serial.print   (param[1]);
       Serial.println (" not a recognised parameter, should be: loco, turnout, route");
@@ -521,19 +549,19 @@ void mt_dump_nvs (int nparam, char **param)
 
 void mt_sys_config()   // display all known configuration data
 {
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println("--- Throttle config -------------------------");
     xSemaphoreGive(displaySem);
   }
   mt_set_name         (1, NULL);
-  #ifdef USEWIFI
+  #ifndef SERIALCTRL
   mt_set_server       (1, NULL);
   mt_set_wifi         (1, NULL);
   #endif
   mt_set_debounceTime (1, NULL);
   mt_set_detentCount  (1, NULL);
   showPinConfig       ();
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println("--- Server side data ------------------------");
     if (strlen(remServerType)>0) {
       Serial.print   ("   Server Type: ");
@@ -562,11 +590,11 @@ void mt_sys_config()   // display all known configuration data
     else Serial.println ("No");    
     xSemaphoreGive(displaySem);
   }
-  #ifdef USEWIFI
+  #ifndef SERIALCTRL
   mt_set_protocol (1, NULL);
   #endif
   mt_set_speedStep (1, NULL);
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println("---------------------------------------------");
     xSemaphoreGive(displaySem);
   }
@@ -574,11 +602,21 @@ void mt_sys_config()   // display all known configuration data
 
 void mt_sys_restart (const char *reason) // restart the throttle
 {
+  int maxLocoArray = locomotiveCount + MAXCONSISTSIZE;
+
   setDisconnected();
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-    Serial.print ("Restarting system: ");
-    Serial.println (reason);
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("Restarting system: %s\r\n", reason);
     xSemaphoreGive(displaySem);
+  }
+  for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
+    setLocoSpeed (n, 0, STOP);
+    setLocoOwnership (n, false);
+    if (cmdProtocol==DCCPLUS) locoRoster[n].owned = false;
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("-> Stopping loco: %s\r\n", locoRoster[n].name);
+      xSemaphoreGive(displaySem);
+    }
   }
   esp_restart();  
 }
@@ -586,7 +624,7 @@ void mt_sys_restart (const char *reason) // restart the throttle
 void mt_set_detentCount (int nparam, char **param) //set count of clicks required on rotary encoder
 {
   if (nparam == 1) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Detent Count  = ");
       Serial.println (nvs_get_int ("detentCount", 2));
       xSemaphoreGive(displaySem);
@@ -597,7 +635,7 @@ void mt_set_detentCount (int nparam, char **param) //set count of clicks require
     int count;
     count = strtol (param[1], &tptr, 10);
     if (count<1 || count>10) {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("Detent count should be between 1 and 10");
         xSemaphoreGive(displaySem);
       }
@@ -611,10 +649,8 @@ void mt_set_detentCount (int nparam, char **param) //set count of clicks require
 void mt_set_debounceTime (int nparam, char **param) //set count of clicks required on rotary encoder
 {
   if (nparam == 1) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-      Serial.print ("Debounce time = ");
-      Serial.print (nvs_get_int ("debounceTime", DEBOUNCEMS));
-      Serial.println ("mS");
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("Debounce time = %dmS\r\n", nvs_get_int ("debounceTime", DEBOUNCEMS));
       xSemaphoreGive(displaySem);
     }
   }
@@ -623,7 +659,7 @@ void mt_set_debounceTime (int nparam, char **param) //set count of clicks requir
     int count;
     count = strtol (param[1], &tptr, 10);
     if (count<1 || count>200) {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("Debounce time should be between 1 and 200");
         xSemaphoreGive(displaySem);
       }
@@ -631,7 +667,7 @@ void mt_set_debounceTime (int nparam, char **param) //set count of clicks requir
     else {
       nvs_put_int ("debounceTime", count);
       if (configHasChanged) {
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.println ("Change becomes effective on restart");
           xSemaphoreGive(displaySem);
         }
@@ -640,13 +676,45 @@ void mt_set_debounceTime (int nparam, char **param) //set count of clicks requir
   }
 }
 
+void mt_set_debug (int nparam, char **param) //set debug level
+{
+  if (nparam == 1) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("Debug Level = %d\r\n", nvs_get_int ("debuglevel", DEBOUNCEMS));
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else {
+    char *tptr;
+    int count;
+    count = strtol (param[1], &tptr, 10);
+    if (count<0 || count>3) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.println ("Debug level is between 0 (terse) and 3 (verbose)");
+        xSemaphoreGive(displaySem);
+      }
+    }
+    else {
+      nvs_put_int ("debuglevel", count);
+      debuglevel = count;
+      if (configHasChanged) {
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.println ("Debug level becomes effective immediately and remains effective on restart");
+          xSemaphoreGive(displaySem);
+        }
+      }
+    }
+  }
+}
+
+#ifndef NODISPLAY
 void mt_set_font (int nparam, char **param)  // set font
 {
   uint8_t fontIndex;
   
   if (nparam == 1) {
     fontIndex = nvs_get_int ("fontIndex", 1);
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("Current font %d: %s\n", fontIndex, fontLabel[fontIndex]);
       Serial.println ("Font options are:");
       for (uint8_t n=0; n<sizeof(fontWidth); n++) {
@@ -661,17 +729,18 @@ void mt_set_font (int nparam, char **param)  // set font
       if (fontIndex >= 0 && fontIndex < sizeof(fontWidth)) {
         nvs_put_int ("fontIndex", fontIndex);
       }
-      else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf ("Font index should be between 0 and %d\r\n", sizeof(fontWidth) - 1);
         xSemaphoreGive(displaySem);
       }
     }
-    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("Font index should be between 0 and %d\r\n", sizeof(fontWidth) - 1);
       xSemaphoreGive(displaySem);
     }
   }
 }
+#endif
 
 #ifdef SCREENROTATE
 void mt_set_rotateDisp (int nparam, char **param)  // Rotation of screen
@@ -686,7 +755,7 @@ void mt_set_rotateDisp (int nparam, char **param)  // Rotation of screen
   #endif
   if (nparam == 1) {
     rotateIndex = nvs_get_int ("screenRotate", 0);
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("Screen orientation is: %d, %s\r\n", rotateIndex, rotateOpts[rotateIndex]);
       Serial.printf ("Rotation Options are:\r\n");
       for (uint8_t n=0; n<opts; n++) {
@@ -701,12 +770,12 @@ void mt_set_rotateDisp (int nparam, char **param)  // Rotation of screen
       if (rotateIndex >= 0 && rotateIndex < opts) {
         nvs_put_int ("screenRotate", rotateIndex);
       }
-      else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf ("Rotate index should be between 0 and %d\r\n", opts - 1);
         xSemaphoreGive(displaySem);
       }
     }
-    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("Rotate index should be between 0 and %d\r\n", opts - 1);
       xSemaphoreGive(displaySem);
     }
@@ -718,7 +787,7 @@ void mt_set_rotateDisp (int nparam, char **param)  // Rotation of screen
 void mt_set_name (int nparam, char **param)   // Set name of throttle
 {
   if (nparam == 1) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Throttle Name: ");
       Serial.println (tname);
       xSemaphoreGive(displaySem);
@@ -732,13 +801,52 @@ void mt_set_name (int nparam, char **param)   // Set name of throttle
 }
 
 
+#ifdef WEBLIFETIME
+void mt_set_webuser (int nparam, char **param)   // Set name of web user
+{
+  char webuser[64];
+
+  if (nparam == 1) {
+    nvs_get_string ("webuser", webuser, WEBUSER, sizeof(webuser));
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.print ("Web user name: ");
+      Serial.println (webuser);
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else {
+    if (strlen (param[1]) > (sizeof(webuser)-1)) param[1][sizeof(webuser)-1] = '\0';
+    nvs_put_string ("webuser", param[1]);
+  }
+}
+
+void mt_set_webpass (int nparam, char **param)   // Set password of web user
+{
+  char webpass[64];
+
+  if (nparam == 1) {
+    nvs_get_string ("webpass", webpass, WEBPASS, sizeof(webpass));
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.print ("Web user password: ");
+      Serial.println (webpass);
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else {
+    if (strlen (param[1]) > (sizeof(webpass)-1)) param[1][sizeof(webpass)-1] = '\0';
+    nvs_put_string ("webpass", param[1]);
+  }
+}
+#endif
+
+
 void mt_set_speedStep(int nparam, char **param)
 {
   uint8_t speedStep = 4;
 
   if (nparam==1) {
     speedStep = nvs_get_int ("speedStep", 4);
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Speed adjust per click: ");
       Serial.println (speedStep);
       xSemaphoreGive(displaySem);
@@ -750,14 +858,14 @@ void mt_set_speedStep(int nparam, char **param)
       nvs_put_int ("speedStep", speedStep);
     }
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print ("Speed adjust per click must be  between 1 and 9");
         xSemaphoreGive(displaySem);
       }
     }
   }
   else {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Speed adjust per click must be numeric");
       xSemaphoreGive(displaySem);
     }    
@@ -774,7 +882,7 @@ void mt_set_wifi (int nparam, char **param)  // set WiFi parameters
   char outBuffer[80];
   
   if (nparam<=2) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("WiFi Network table");
       sprintf (outBuffer, "%5s | %-32s | %s", "Idx", "SSID", "Password");
       Serial.println (outBuffer);
@@ -809,7 +917,7 @@ void mt_set_wifi (int nparam, char **param)  // set WiFi parameters
   // index = (uint8_t) tlong;
   if (tlong<0 || tlong >= (int) WIFINETS) {
     sprintf (outBuffer, "WiFi index must be between 0 and %d", (WIFINETS - 1));
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println (outBuffer);
       xSemaphoreGive(displaySem);
     }
@@ -834,7 +942,7 @@ void mt_set_wifiscan(int nparam, char **param)
   int use_multiwifi = 99;
   
   if (nparam==1) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("wifi scan: ");
       use_multiwifi = nvs_get_int ("use_multiwifi", 0);
       if (use_multiwifi == 0) Serial.println ("disabled");
@@ -846,7 +954,7 @@ void mt_set_wifiscan(int nparam, char **param)
     if (strcmp (param[1], "disabled") == 0) use_multiwifi = 0;
     else if (strcmp (param[1], "enabled") == 0) use_multiwifi = 1;
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("wifiscan should be enabled or disabled");
         xSemaphoreGive(displaySem);
       }
@@ -859,7 +967,7 @@ void mt_set_wifiscan(int nparam, char **param)
 void set_mdns(int nparam, char **param)
 {
   if (nparam==1) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("mDNS lookup: O");
       if (nvs_get_int ("mdns", 1) == 1) Serial.println ("n");
       else Serial.println ("ff");
@@ -874,7 +982,7 @@ void set_mdns(int nparam, char **param)
   }
   else {
     if (param[1][0] != '_') {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("if searching for service prefix service name with \"_\".");
         xSemaphoreGive(displaySem);
       }
@@ -890,7 +998,7 @@ void set_mdns(int nparam, char **param)
 void mt_ota (int nparam, char **param)
 {
 
-  if ((nparam==1 || strcmp(param[1], "status") == 0) && xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if ((nparam==1 || strcmp(param[1], "status") == 0) && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ((char *) OTAstatus());
     xSemaphoreGive(displaySem);
   }
@@ -900,7 +1008,7 @@ void mt_ota (int nparam, char **param)
     else if (strncmp(param[1], "http://", 7) == 0 || strncmp(param[1], "https://", 8) == 0) {
       nvs_put_string ("ota_url", param[1]);
     }
-    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("ota parameter not understood: ");
       Serial.println (param[1]);
     }
@@ -917,7 +1025,7 @@ void mt_set_server (int nparam, char **param)  // set details about remote serve
   char outBuffer[80];
   
   if (nparam<=2) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("DCC Server Table");
       Serial.println ("  Idx | Server");
       for (uint8_t index=0; index<WIFINETS; index++) {
@@ -946,7 +1054,7 @@ void mt_set_server (int nparam, char **param)  // set details about remote serve
   // index = (uint8_t) tlong;
   if (tlong<0 || tlong >= (int) WIFINETS) {
     sprintf (outBuffer, "Server index must be between 0 and %d", (WIFINETS - 1));
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println (outBuffer);
       xSemaphoreGive(displaySem);
     }
@@ -970,10 +1078,10 @@ void mt_set_server (int nparam, char **param)  // set details about remote serve
 void mt_set_protocol(int nparam, char **param)
 {
   if (nparam==1) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Default protocol is ");
       if (nvs_get_int ("defaultProto", JMRI) == JMRI) Serial.println ("JMRI");
-      else Serial.println ("DCC++");
+      else Serial.println ("DCC-Ex");
       xSemaphoreGive(displaySem);
     }
   }
@@ -983,7 +1091,7 @@ void mt_set_protocol(int nparam, char **param)
       else nvs_put_int ("defaultProto", DCCPLUS);
     }
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("protocol should be one of: jmri, dcc++");
         xSemaphoreGive(displaySem);
       }
@@ -997,10 +1105,10 @@ void displayLocos()  // display locomotive data
 {
   const static char dirIndic[3][5] = { "Fwd", "Stop", "Rev" };
   char outBuffer[80];
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Locomotive Count = ");
     Serial.println (locomotiveCount);
-    if (locomotiveCount > 0) {
+    if (locomotiveCount > 0 && locomotiveCount<255 && locoRoster!=NULL) {
       sprintf (outBuffer, "%6s | %-16s | %-4s | %s", "ID", "Name", "Dir", "Speed");
       Serial.println (outBuffer);
       for (uint8_t n=0; n<locomotiveCount; n++) {
@@ -1015,10 +1123,10 @@ void displayLocos()  // display locomotive data
 void displayTurnouts()  // display known data about switches / points
 {
   char outBuffer[50];
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("TurnOut (switch/point) statuses = ");
     Serial.println (turnoutStateCount);
-    if (turnoutStateCount>0) {
+    if (turnoutStateCount>0 && turnoutStateCount<255) {
       Serial.println ("   ID | State");
       for (uint8_t n=0; n<turnoutStateCount; n++) {
         sprintf (outBuffer, "  %3d | %s", turnoutState[n].state, turnoutState[n].name);
@@ -1027,7 +1135,7 @@ void displayTurnouts()  // display known data about switches / points
     }
     Serial.print   ("Turnout (switch/point) count = ");
     Serial.println (turnoutCount);
-    if (turnoutCount > 0) {
+    if (turnoutCount > 0 && turnoutCount<255 && turnoutList!=NULL) {
       sprintf (outBuffer, "%-16s | %-16s | %s", "System-Name", "User-Name", "State");
       Serial.println (outBuffer);
       for (uint8_t n=0; n<turnoutCount; n++) {
@@ -1042,10 +1150,10 @@ void displayTurnouts()  // display known data about switches / points
 void displayRoutes()  // display known data about switches / points
 {
   char outBuffer[40];
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Route statuses = ");
     Serial.println (routeStateCount);
-    if (routeStateCount>0 && routeState != NULL) {
+    if (routeStateCount>0 && routeStateCount<255 && routeState != NULL) {
       Serial.println ("   ID | State");
       for (uint8_t n=0; n<routeStateCount; n++) {
         sprintf (outBuffer, "  %3d | %s", routeState[n].state, routeState[n].name);
@@ -1054,7 +1162,7 @@ void displayRoutes()  // display known data about switches / points
     }
     Serial.print   ("Routes count = ");
     Serial.println (routeCount);
-    if (routeCount > 0 && routeList != NULL) {
+    if (routeCount > 0 && routeCount<255 && routeList != NULL) {
       sprintf (outBuffer, "%-16s | %-16s | %s", "System-Name", "User-Name", "State");
       Serial.println (outBuffer);
       for (uint8_t n=0; n<routeCount; n++) {
@@ -1070,7 +1178,7 @@ void mt_set_routedelay (int nparam, char **param)
 {
   if (nparam == 1) {
     int dval = nvs_get_int("routeDelay", 2);
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Delay between switch changes when setting routes is option ");
       Serial.print (dval);
       Serial.print (" => ");
@@ -1093,13 +1201,13 @@ void mt_set_routedelay (int nparam, char **param)
       if (dval>=0 && dval<(sizeof(routeDelay)/sizeof(uint16_t))) {
         nvs_put_int ("routeDelay", dval);
       }
-      else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print ("routedelay value should be less than ");
         Serial.println (sizeof(routeDelay)/sizeof(uint16_t));
         xSemaphoreGive(displaySem);
       }
     }
-    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("routedelay value should be an integer");
       xSemaphoreGive(displaySem);
     }
@@ -1131,7 +1239,7 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
       blk_size = sizeof(struct locomotive_s);
       blk_count = locomotiveCount + MAXCONSISTSIZE;
       blk_start = (char*) locoRoster;
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print (MAXCONSISTSIZE);
         Serial.println (" additional slots allocated for ad-hoc loco IDs");
         xSemaphoreGive(displaySem);
@@ -1157,22 +1265,31 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
       blk_count = routeStateCount;
       blk_start = (char*) routeState;
     }
+    #ifdef RELAYPORT
+    else if (strcmp (param[1], "relay") == 0) {
+      if (remoteSys != NULL) {
+        blk_size = sizeof(struct relayConnection_s);
+        blk_count = maxRelay;
+        blk_start = (char*) remoteSys;
+      }
+    }
+    #endif
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("dump parameter not recognised");
         xSemaphoreGive(displaySem);
       }
       return;
     }
     if (blk_start == NULL || blk_count == 0) {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print   (param[1]);
         Serial.println (": No data available to dump");
         xSemaphoreGive(displaySem);
       }
       return;
     }
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print   ("--- ");
       Serial.print   (param[1]);
       Serial.print   ("(n=");
@@ -1203,7 +1320,7 @@ void mt_dump (char* memblk, int memsize)
   int rowoffset;
 
   // Leave the calling routine to grab the serial display semaphore
-  // if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  // if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     sprintf (message, "--- Address 0x%08x, Size %d bytes ", (uint32_t) memblk, memsize);
     for (rowoffset=strlen(message); rowoffset<77; rowoffset++) strcat (message, "-");
     Serial.println (message);
@@ -1237,7 +1354,7 @@ void mt_set_cpuspeed(int nparam, char **param)
   int xtal;
 
   if (nparam==1) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       storedSpeed = nvs_get_int ("cpuspeed", 0);
       Serial.printf (" * CPU speed: %dMHz, Xtal freq: %dMHz\r\n", getCpuFrequencyMhz(), getXtalFrequencyMhz());
       if (storedSpeed==0) Serial.println (" * Using default CPU speed");
@@ -1261,12 +1378,12 @@ void mt_set_cpuspeed(int nparam, char **param)
       nvs_put_int ("cpuspeed", storedSpeed);
       // wait for reboot to reset speed, or we may have unwanted WiFi errors
     }
-    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("Invalid CPU speed specified");
       xSemaphoreGive(displaySem);
     }
   }
-  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ("Use integer value to set CPU speed.");
     xSemaphoreGive(displaySem);
   }
@@ -1279,7 +1396,7 @@ void mt_set_warnspeed(int nparam, char **param)
   
   if (nparam==1) {
     warnspeed = nvs_get_int((char*) "warnSpeed", 90);
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ((char*) " * Warn speed: %d%%\r\n", warnspeed);
       xSemaphoreGive(displaySem);
     }
@@ -1289,12 +1406,12 @@ void mt_set_warnspeed(int nparam, char **param)
     if (warnspeed>=50 && warnspeed<=101) {
       nvs_put_int ( "warnSpeed", warnspeed);
     }
-    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ((char*) "Warning speed should be between 50 and 101%\r\n");
       xSemaphoreGive(displaySem);
     }
   }
-  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ((char*) "Warning speed should be between 50 and 101%\r\n");
     xSemaphoreGive(displaySem);
   }
@@ -1308,7 +1425,7 @@ void showPinConfig()  // Display pin out selection
   uint8_t cols[] = { MEMBR_COLS };
   #endif
 
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ((char*) "Hardware configuration, check pin numbers are not duplicated");
     Serial.println ((char*) "Console - Tx   =  1");
     Serial.println ((char*) "Console - Rx   =  3");
@@ -1407,12 +1524,11 @@ void showPinConfig()  // Display pin out selection
 
 void showMemory()
 {
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("     Free Heap: "); Serial.print (util_ftos (ESP.getFreeHeap(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getFreeHeap()*100.0)/ESP.getHeapSize(), 1)); Serial.println ("%");
     Serial.print   (" Min Free Heap: "); Serial.print (util_ftos (ESP.getMinFreeHeap(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getMinFreeHeap()*100.0)/ESP.getHeapSize(), 1)); Serial.println ("%");
     Serial.print   ("     Heap Size: "); Serial.print (util_ftos (ESP.getHeapSize(), 0)); Serial.println (" bytes");
-    Serial.print   ("NVS Free Space: "); Serial.print (nvs_get_freeEntries()); Serial.println (" entries");
-    Serial.println ("NB: NVS Entries = a block count, first block holds name/id, plus 1 block for each 32 bytes data");
+    Serial.print   ("NVS Free Space: "); Serial.print (nvs_get_freeEntries()); Serial.println (" x 32 byte blocks");
     Serial.print   ("        Uptime: "); Serial.print (util_ftos (esp_timer_get_time() / (uS_TO_S_FACTOR * 60.0), 2)); Serial.println (" mins");
     Serial.print   ("      CPU Freq: "); Serial.print (util_ftos (ESP.getCpuFreqMHz(), 0)); Serial.println (" MHz");
     Serial.print   ("  Crystal Freq: "); Serial.print (util_ftos (getXtalFrequencyMhz(), 0)); Serial.println (" MHz");
@@ -1433,14 +1549,14 @@ void help(int nparam, char **param)  // show help data
     else if (strcmp(param[1], "all") == 0) all = true;
   }
   else all = true;
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ((const char*) "Running permanent settings without parameters prints current settings:");
     if (all || strcmp(param[1], "add")==0) {
       Serial.println ((const char*) "add loco <dcc-address> <description>");
       Serial.println ((const char*) "add turnout <name> {DCC|SERVO|VPIN} <dcc-definition>");
       Serial.println ((const char*) "add route <name> {<turnout-name> <state>} {<turnout-name> <state>}...");
       if (!summary) {
-        Serial.println ((const char*) "    Add a locomotive, turnout or route to DCC++ roster");
+        Serial.println ((const char*) "    Add a locomotive, turnout or route to DCC-Ex roster");
         Serial.println ((const char*) "    where for turnouts, definitions may be:");
         Serial.println ((const char*) "       DCC <linear-address>");
         Serial.println ((const char*) "       DCC <address> <sub-address>");
@@ -1450,7 +1566,7 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    And where for routes, turn-out state is one of:");
         Serial.println ((const char*) "       C - Closed");
         Serial.println ((const char*) "       T - Thrown");
-        Serial.println ((const char*) "    permanent setting, DCC++ only, restart required");
+        Serial.println ((const char*) "    permanent setting, DCC-Ex only, restart required");
       }
     }
     #ifdef BACKLIGHTPIN
@@ -1459,7 +1575,7 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "backlight [0-255]");
       if (!summary) {
         Serial.println ((const char*) "    Display backlight intensity setting");
-        Serial.println ((const char*) "    permanent setting, default nobidirectional");
+        Serial.println ((const char*) "    permanent setting, default 200");
       }
     }
     #endif
@@ -1517,11 +1633,17 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    permanent setting, restart required");
       }
     }
+    if (all || strcmp(param[1], "debug")==0) {
+      Serial.println ((const char*) "debug [<0-3>]");
+      if (!summary) {
+        Serial.println ((const char*) "    Set console message verboseness between 0 - terse, 3 - verbose");
+      }
+    }
     if (all || strcmp(param[1], "del")==0) {
       Serial.println ((const char*) "del {loco|turnout|route} <dcc-address|name>");
       if (!summary) {
-        Serial.println ((const char*) "    Delete a locomotive or turnout from DCC++ roster");
-        Serial.println ((const char*) "    permanent setting, DCC++ only, restart required");
+        Serial.println ((const char*) "    Delete a locomotive or turnout from DCC-Ex roster");
+        Serial.println ((const char*) "    permanent setting, DCC-Ex only, restart required");
       }
     }
     if (all || strcmp(param[1], "detentcount")==0) {
@@ -1535,6 +1657,13 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "dump {loco|turnout|turnoutstate|route|routestate}");
       if (!summary) {
         Serial.println ((const char*) "    Dump memory structures of objects");
+        Serial.println ((const char*) "    info only");
+      }
+    }
+    if (all || strcmp(param[1], "export")==0) {
+      Serial.println ((const char*) "export");
+      if (!summary) {
+        Serial.println ((const char*) "    export commands required to replicate this throttle's configuration");
         Serial.println ((const char*) "    info only");
       }
     }
@@ -1561,6 +1690,7 @@ void help(int nparam, char **param)  // show help data
       }
     }
     #endif
+    #ifndef NODISPLAY
     if (all || strcmp(param[1], "font")==0) {
       Serial.println ((const char*) "font [index]");
       if (!summary) {
@@ -1568,6 +1698,7 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    Permanent setting");
       }
     }
+    #endif
     if (all || strcmp(param[1], "help")==0) {
       Serial.println ((const char*) "help [summary|all|<command>]");
       if (!summary) {
@@ -1629,7 +1760,7 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    info only");
       }
     }
-    #ifdef USEWIFI
+    #ifndef SERIALCTRL
     if (all || strcmp(param[1], "protocol")==0) {
       Serial.println ((const char*) "protocol {jmri|dcc++}");
       if (!summary) {
@@ -1668,7 +1799,7 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    For testing and diagnotics only, use with care!");
       }
     }
-    #ifdef USEWIFI
+    #ifndef SERIALCTRL
     if (all || strcmp(param[1], "server")==0) {
       Serial.println ((const char*) "server [<index> <IP-address|DNS-name> [<port-number>]]");
       if (!summary) {
@@ -1677,7 +1808,7 @@ void help(int nparam, char **param)  // show help data
       }
     }
     #endif
-    #ifdef USEWIFI
+    #ifndef SERIALCTRL
     if (all || strcmp(param[1], "showkeepalive")==0) {
       Serial.println ((const char*) "[no]showkeepalive");
       if (!summary) {
@@ -1700,6 +1831,15 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    temporary setting");
       }
     }
+    #ifdef WEBLIFETIME
+    if (all || strcmp(param[1], "showweb")==0) {
+      Serial.println ((const char*) "[no]showweb");
+      if (!summary) {
+        Serial.println ((const char*) "    Show web server headers received and transmitted");
+        Serial.println ((const char*) "    temporary setting");
+      }
+    }
+    #endif
     if (all || strcmp(param[1], "sortdata")==0) {
       Serial.println ((const char*) "[no]sortdata");
       if (!summary) {
@@ -1719,6 +1859,22 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "warnspeed [<50-101>]");
       if (!summary) {
         Serial.println ((const char*) "    change speed graph color when percentage warnspeed is exceeded");
+        Serial.println ((const char*) "    permanent setting");
+      }
+    }
+    #endif
+    #ifdef WEBLIFETIME
+    if (all || strcmp(param[1], "webpass")==0) {
+      Serial.println ((const char*) "webpass [password]");
+      if (!summary) {
+        Serial.println ((const char*) "    change web user password for web authentication");
+        Serial.println ((const char*) "    permanent setting");
+      }
+    }
+    if (all || strcmp(param[1], "webuser")==0) {
+      Serial.println ((const char*) "webuser [User-Name]");
+      if (!summary) {
+        Serial.println ((const char*) "    change web user for web authentication");
         Serial.println ((const char*) "    permanent setting");
       }
     }

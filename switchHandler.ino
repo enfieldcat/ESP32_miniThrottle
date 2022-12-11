@@ -1,6 +1,7 @@
 /*
  * Handle switches, eg direction or rotary encoder
  */
+#ifndef NODISPLAY
 uint8_t toggleSwitch[] = {
   #ifdef ENCODE_SW
   (uint8_t)ENCODE_SW,
@@ -33,7 +34,10 @@ void switchMonitor(void *pvParameters)
   #ifndef DIRREVPIN
   #ifndef BACKLIGHTREF
   // No work for this thread if none of the above are defined
-  Serial.println ("No switches or encoder defined");
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s No switches or encoder defined\r\n", getTimeStamp());
+    xSemaphoreGive(displaySem);
+  }
   vTaskDelete( NULL );
   return;
   #endif
@@ -59,6 +63,11 @@ void switchMonitor(void *pvParameters)
   const uint8_t potLoopLimit = 10;
   uint8_t potLoopCount = 0;
   #endif
+
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s switchMonitor(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    xSemaphoreGive(displaySem);
+  }
 
   // deal with the encoder first
   #ifdef ENCODE_UP
@@ -185,6 +194,11 @@ void sendDirChange (uint8_t fwdPin, uint8_t revPin)
 {
   static char directionCode;
   
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s sendDirChange(%d, %d)\r\n", getTimeStamp(), fwdPin, revPin);
+    xSemaphoreGive(displaySem);
+  }
+
   if (fwdPin == 0) {       // Switch to forward
     directionCode = 'R';
     directionSetting = FORWARD;
@@ -212,6 +226,11 @@ void sendPotThrot (int8_t dir, int8_t speed)
   int16_t lastSpeed;
   #endif
 
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s sendPotThrot(%d, %d)\r\n", getTimeStamp(), dir, speed);
+    xSemaphoreGive(displaySem);
+  }
+
   for (int8_t n=0; n<limit; n++) if (locoRoster[n].owned) {
     if (locoRoster[n].steps!=128) tSpeed = ((speed<<7)/locoRoster[n].steps) -1;
     else tSpeed = speed -1;
@@ -221,22 +240,25 @@ void sendPotThrot (int8_t dir, int8_t speed)
       lastSpeed = locoRoster[n].speed;
       #endif
       if (tSpeed <= 0) {
-        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           setLocoSpeed (n, tSpeed, STOP);
           xSemaphoreGive(velociSem);
         }
+        else semFailed ("velociSem", __FILE__, __LINE__);
       }
       else if (dir!=UNCHANGED) {
-        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           setLocoSpeed (n, tSpeed, dir);
           xSemaphoreGive(velociSem);
         }
+        else semFailed ("velociSem", __FILE__, __LINE__);
       }
       else {
-        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           setLocoSpeed (n, tSpeed, locoRoster[n].direction);
           xSemaphoreGive(velociSem);
         }
+        else semFailed ("velociSem", __FILE__, __LINE__);
       }
       #ifdef BRAKEPRESPIN
       if (lastSpeed > tSpeed && (dir==UNCHANGED || dir==locoRoster[n].direction)) {
@@ -245,14 +267,16 @@ void sendPotThrot (int8_t dir, int8_t speed)
       #endif
     }
     if (dir!=UNCHANGED && dir!=locoRoster[n].direction) {
-      if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         setLocoDirection (n, dir);
         xSemaphoreGive(velociSem);
       }
+      else semFailed ("velociSem", __FILE__, __LINE__);
       #ifdef BRAKEPRESPIN
       brakedown(lastSpeed + tSpeed);
       #endif
     }
   }
 }
-#endif
+#endif     // POTTHROTPIN
+#endif     // NODISPLAY

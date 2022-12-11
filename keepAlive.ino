@@ -1,3 +1,6 @@
+/* ***********************************************************************\
+ * Only use keep alive packets if operating over a network
+\*********************************************************************** */
 #ifdef USEWIFI
 static TimerHandle_t keepAliveTimer = NULL;
 static QueueHandle_t keepAliveQueue = NULL;
@@ -19,6 +22,10 @@ void keepAlive(void *pvParameters)
   uint8_t queueData;
   bool turnOff = true;
 
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s keepAlive(NULL) (core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    xSemaphoreGive(displaySem);
+  }
   if (keepAliveQueue == NULL) {
     keepAliveQueue = xQueueCreate (1, sizeof(uint8_t));
   }
@@ -26,8 +33,8 @@ void keepAlive(void *pvParameters)
     keepAliveTimer = xTimerCreate ("keepAliveTimer", pdMS_TO_TICKS(keepAliveTime * 1000), pdTRUE, (void *) NULL, keepAliveTimerHandler);
   }
   if (keepAliveQueue == NULL || keepAliveTimer == NULL) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-      Serial.println ("Failed to create timer for keep alive packets");
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s Failed to create timer for keep alive packets\r\n", getTimeStamp());
       xSemaphoreGive(displaySem);
     }
   }
@@ -38,8 +45,8 @@ void keepAlive(void *pvParameters)
       while (lastTime > 0 && WiFi.status() == WL_CONNECTED) {
         while (lastTime > 0 && client.connected()) {
           if (xQueueReceive(keepAliveQueue, &queueData, pdMS_TO_TICKS((lastTime*1000)+1000)) != pdPASS) {
-            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-              Serial.println ("Missing keep-alive packet");
+            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              Serial.printf ("%s Missing keep-alive packet\r\n", getTimeStamp());
               xSemaphoreGive(displaySem);
             }
           }
@@ -62,11 +69,11 @@ void keepAlive(void *pvParameters)
   if (client.connected()) {
     sendKeepAlive ("*-");
   }
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ("Keep alive manager exits");
     xSemaphoreGive(displaySem);
   }
-  if (keepAliveTimer != NULL) xTimerDelete (keepAliveTimer, pdMS_TO_TICKS(2000));
+  if (keepAliveTimer != NULL) xTimerDelete (keepAliveTimer, pdMS_TO_TICKS(TIMEOUT));
   if (keepAliveQueue != NULL) vQueueDelete (keepAliveQueue);
   vTaskDelete( NULL );
 }
@@ -77,20 +84,23 @@ void keepAlive(void *pvParameters)
  */
 void sendKeepAlive(const char *pktData)
 {
-  if (xSemaphoreTake(transmitSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s sendKeepAlive(%s)\r\n", getTimeStamp(), pktData);
+    xSemaphoreGive(displaySem);
+  }
+  if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (pktData!= NULL) {
       client.println (pktData);
       client.flush();
     }
-    xSemaphoreGive(transmitSem);
+    xSemaphoreGive(tcpipSem);
     if (showKeepAlive) {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        Serial.print ("--> ");
-        if (pktData!= NULL) Serial.print (pktData);
-        Serial.println ("");
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (pktData!= NULL) Serial.printf ("--> %s\r\n", pktData);
         xSemaphoreGive(displaySem);
       }
     }
   }
+  else semFailed ("tcpipSem", __FILE__, __LINE__);
 }
 #endif

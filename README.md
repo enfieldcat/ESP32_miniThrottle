@@ -1,9 +1,9 @@
 ESP32 based JMRI miniThrottle
 =============================
 Development for model train throttle controller.
-It uses either JMRI or DCC++ protocols to connect to a control station over WiFi.
+It uses either JMRI or DCC-Ex protocols to connect to a control station over WiFi.
 The default is configurable.
-If using DCC++ a direct serial connection (WiFi-Free) connection is possible. This may provide sufficient control for small layouts with a panel mounted throttle.
+If using DCC-Ex a direct serial connection (WiFi-Free) connection is possible. This may provide sufficient control for small layouts with a panel mounted throttle.
 
 Status:
 -------
@@ -13,8 +13,8 @@ More documentation at https://conferre.cf/miniThrottle/miniIntro.php
 
 Description:
 ------------
-Uses a esp32 module as the core for a JMRI (Java Model Railroad Interface), or DCC++ throttle using the WiThrotttle protocol.
-It has some limited DCC++ support, to communicate directly to DCC++ without the need of a control station.
+Uses a esp32 module as the core for a JMRI (Java Model Railroad Interface), or DCC-Ex throttle using the WiThrotttle protocol.
+It has some limited DCC-Ex support, to communicate directly to DCC-Ex without the need of a control station.
 It can use one of several display types.
 The supported display should be any supported by the lcdgfx library, although a minimum display width of 128 pixels is recommended.
 Rotary encoder support is provided using the ESP32Encoder library.
@@ -30,12 +30,12 @@ In bidirectional mode, the mid point of the potentiometer slider is stop, down i
 Configuration:
 --------------
 Use a serial terminal to connect to a "console" which will allow WiFi networks to be defined. Up to 4 networks can be defined.
-The serial terminal can also be used to define the locomotive roster and turnouts when using a direct connection to DCC++.
+The serial terminal can also be used to define the locomotive roster and turnouts when using a direct connection to DCC-Ex.
 
 The serial terminal to console runs at 115200, 8 bits, no parity, 1 stop bit. Line terminator is line feed (LF) character.
 Run "help summary" at prompt to get list of configuration commands.
 
-If using serial direct to DCC++ a second serial port is opened for this and also runs at 115200 bits per second.
+If using serial direct to DCC-Ex a second serial port is opened for this and also runs at 115200 bits per second.
 
 For hardware configuration and setting of default values, edit miniThrottle.h - these should not change over time.
 Configurable settings are stored in Non Volatile memory.
@@ -44,6 +44,6 @@ Configurable settings are stored in Non Volatile memory.
 Tested interfaces:
 ------------------
 * JMRI: ESP_DCC https://www.instructables.com/DCC-Controller-2-Boards-1-PSU-No-Soldering/
-* DCC++ : https://github.com/DccPlusPlus/BaseStation/wiki
+* DCC-Ex : https://github.com/DccPlusPlus/BaseStation/wiki
 
 It is expected to work but NOT TESTED using JMRI https://www.jmri.org/ and Digitrax LNWI (LocoNet WiFi Interface)/

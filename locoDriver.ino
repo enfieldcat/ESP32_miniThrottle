@@ -1,6 +1,7 @@
 /*
  * Seprate locomotive control from other functions
  */
+#ifndef NODISPLAY
 void locomotiveDriver()
 {
   const char *dirString[] = {">>", "||", "<<", "??"};
@@ -26,6 +27,11 @@ void locomotiveDriver()
   bool inFunct = false;
   bool dirChange = false;
   bool brakeFlag = true;
+
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s locomotiveDriver()\r\n", getTimeStamp());
+    xSemaphoreGive(displaySem);
+  }
 
   potVal[0] = '\0';
   funVal[0] = '\0';
@@ -54,6 +60,9 @@ void locomotiveDriver()
   if (locoCount > 0) {
     locoRoster[initialLoco].direction = STOP;
     locoRoster[initialLoco].speed = 0;
+    #ifdef RELAYPORT
+    locoRoster[initialLoco].relayIdx = 240;
+    #endif
     #ifdef BRAKEPRESPIN
     brakePres = 0;
     #endif
@@ -108,7 +117,7 @@ void locomotiveDriver()
       if (enablePot) strcpy (potVal, "Pot");
       else potVal[0] = '\0';
       #endif
-      if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         calcDirection = locoRoster[initialLoco].direction;
         if (locoRoster[initialLoco].speed == -1) {
           calcSpeed = 0;
@@ -125,6 +134,7 @@ void locomotiveDriver()
         }
         xSemaphoreGive(velociSem);
       }
+      else semFailed ("velociSem", __FILE__, __LINE__);
       if (speedLine > linesPerScreen-4 || speedLine == (graphLine-1)) {
         if (brakeFlag) {
           sprintf (displayLine, "%s BRAKE %3s %3s",   dirString[calcDirection], potVal, trainModeString[m]);
@@ -199,10 +209,11 @@ void locomotiveDriver()
         int16_t xpos = 0;
         int16_t barHeight = selFontHeight - 1;
         uint16_t oldColor = display.getColor();
-        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           xpos = ((locoRoster[initialLoco].speed * (screenWidth-4)) / (locoRoster[initialLoco].steps-2)) + 2;
           xSemaphoreGive(velociSem);
-        }
+        } 
+        else semFailed ("velociSem", __FILE__, __LINE__);
         if (funcLine > 0 && (funcLine - graphLine) > 1) barHeight = (selFontHeight << 1) - 1;
         if (xpos<0) xpos = 1;
         #ifdef SPEEDBORDER
@@ -226,11 +237,12 @@ void locomotiveDriver()
       }
       // update speedo DAC, 3v voltmeter
       #ifdef SPEEDOPIN
-      if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         uint16_t speedo = (locoRoster[initialLoco].speed * 255) / locoRoster[initialLoco].steps;
         dacWrite (SPEEDOPIN, speedo);
         xSemaphoreGive(velociSem);
       }
+      else semFailed ("velociSem", __FILE__, __LINE__);
       #endif
     }
     if (funcChange && funcLine>0) {
@@ -247,7 +259,7 @@ void locomotiveDriver()
     if (xQueueReceive(keyboardQueue, &commandChar, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
       switch (commandChar) {
         case 'U':  // Increase forwardness.
-          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             dirChange = false;
             if (bidirectionalMode && locoRoster[initialLoco].direction != FORWARD) {
               if (locoRoster[initialLoco].speed > 0) {
@@ -287,9 +299,10 @@ void locomotiveDriver()
             }
             xSemaphoreGive(velociSem);
           }
+          else semFailed ("velociSem", __FILE__, __LINE__);
           break;
         case 'D':  // Increase reversedness
-          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             dirChange = false;
             // In bidirectional mode down is an increase of speed if in reverse
             if (bidirectionalMode && locoRoster[initialLoco].direction != FORWARD) {
@@ -334,9 +347,10 @@ void locomotiveDriver()
             }
             xSemaphoreGive(velociSem);
           }
+          else semFailed ("velociSem", __FILE__, __LINE__);
           break;
         case 'B':
-          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
               if (locoRoster[n].speed > 0) {
                 locoRoster[n].speed = 0;
@@ -346,10 +360,11 @@ void locomotiveDriver()
             }
             xSemaphoreGive(velociSem);
           }
+          else semFailed ("velociSem", __FILE__, __LINE__);
           break;
         case 'L':  // Left / Right = Reverse / Forward
         case 'R':
-          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             uint8_t intended_dir;
             if (commandChar == 'L') intended_dir = REVERSE;
             else intended_dir = FORWARD;
@@ -366,6 +381,7 @@ void locomotiveDriver()
             }
             xSemaphoreGive(velociSem);
           }
+          else semFailed ("velociSem", __FILE__, __LINE__);
           break;
         case 'X':
           if (functPrefix == 10) functPrefix = 0;
@@ -409,7 +425,7 @@ void locomotiveDriver()
               for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
                 setLocoSpeed (n, targetSpeed, locoRoster[initialLoco].direction);
               }
-              if (showPackets && xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+              if (showPackets && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 Serial.println ("Executed button-stop");
                 xSemaphoreGive(displaySem);
               }
@@ -419,25 +435,21 @@ void locomotiveDriver()
           break;
         }
       if (commandChar >= '0' && commandChar <= '9') {
-        if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           funcChange = true;
           functPrefix += (commandChar - '0');
           uint16_t mask = 1 << functPrefix;
           inFunct = true;
-          for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
-            if (cmdProtocol==JMRI) setLocoFunction (n, functPrefix, true);
-            else if ((mask & locoRoster[n].function) == 0) { // set if not yet set
-              locoRoster[n].function = locoRoster[n].function | mask;
-              setLocoFunction (n, functPrefix, true);
-            }
-            else {  // unset function
-              locoRoster[n].function = locoRoster[n].function & (~mask);
-              setLocoFunction (n, functPrefix, false);
-            }
+          if ((mask&defaultLeadVal) > 0) {
+            setLocoFunction (initialLoco, functPrefix, true);
+          }
+          else for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
+            setLocoFunction (n, functPrefix, true);
           }
           xSemaphoreGive(functionSem);
           if (speedLine <= linesPerScreen-4) speedChange = true; // update function flag in display
         }
+        else semFailed ("velociSem", __FILE__, __LINE__);
         if (cmdProtocol!=JMRI) {
           functPrefix = 0;
           inFunct = false;
@@ -451,19 +463,20 @@ void locomotiveDriver()
       }
     }
     if (inFunct && xQueueReceive(keyReleaseQueue, &releaseChar, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
-      if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         funcChange = true;
         inFunct = false;
         for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) setLocoFunction (n, functPrefix, false);
         functPrefix = 0;
         xSemaphoreGive(functionSem);
       }
+      else semFailed ("functionSem", __FILE__, __LINE__);
     }
     // Don't escape if speed is non zero
     if (commandChar == 'E') {
       for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && locoRoster[n].speed > 0) {
         commandChar = 'Z';
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("No escape permitted, loco speed not zero: %s = %d", locoRoster[n].name, locoRoster[n].speed);
           xSemaphoreGive(displaySem);
         }
@@ -472,7 +485,14 @@ void locomotiveDriver()
   }
   for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
     setLocoOwnership (n, false);
-    if (cmdProtocol==DCCPLUS) locoRoster[n].owned = false;
+    if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (cmdProtocol==DCCPLUS) locoRoster[n].owned = false;
+      #ifdef RELAYPORT
+      if (locoRoster[n].relayIdx == 240) locoRoster[n].relayIdx = 255;
+      #endif
+      xSemaphoreGive(velociSem);
+    }
+    else semFailed ("velociSem", __FILE__, __LINE__);
   }
   #ifdef BRAKEPRESPIN
   while (brakePres > 5) {
@@ -491,6 +511,11 @@ void brakeup ()
 {
   static int brakeup = nvs_get_int ("brakeup", 1);
 
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s brakeup()\r\n", getTimeStamp());
+    xSemaphoreGive(displaySem);
+  }
+
   if (brakePres < 255) {
     brakePres += brakeup;
     if (brakePres > 255) brakePres = 255;
@@ -501,6 +526,11 @@ void brakeup ()
 void brakedown (int steps)
 {
   static int brakedown = nvs_get_int ("brakedown", 20);
+
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s brakedown(%d)\r\n", getTimeStamp(), steps);
+    xSemaphoreGive(displaySem);
+  }
 
   if (brakedown < 1) brakedown = 1;
   if (brakePres > 0) {
@@ -521,9 +551,15 @@ void displayFunctions (uint8_t lineNr, uint32_t functions)
   uint8_t y;
   uint32_t mask = 0x01;
   bool set;
-  const char fTemplate[] = { "*1234567890123456789012345678" };
+  char fTemplate[32];
   char dis[2];
 
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s displayFunctions(%d, %d)\r\n", getTimeStamp(), lineNr, functions);
+    xSemaphoreGive(displaySem);
+  }
+
+  nvs_get_string ("funcOverlay", fTemplate, FUNCOVERLAY, sizeof(fTemplate));
   dis[1] = '\0';
   if (limit > 28) limit = 29;
   y = lineNr*selFontHeight;
@@ -552,3 +588,4 @@ void displayFunctions (uint8_t lineNr, uint32_t functions)
   display.setBackground (BACKCOLOR);
   #endif
 }
+#endif // NODISPLAY

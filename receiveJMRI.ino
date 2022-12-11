@@ -5,6 +5,11 @@ static uint8_t tokenTally;
 
 void processJmriPacket (char *packet)
 {
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s processJmriPacket(%s)\r\n", getTimeStamp(), packet);
+    xSemaphoreGive(displaySem);
+  }
+
   if (strncmp (packet, "PPA", 3) == 0) { // Track power
     // Power status
     dccPowerChange(packet[3]);
@@ -15,14 +20,12 @@ void processJmriPacket (char *packet)
     bool found = false;
 
      // only update if in known state
-    if (state == '2' || state == '4') {
+    if (state=='2' || state=='4' || state=='1' || state=='8') {
       // first attempt to find by name
       for (ptr=0; ptr<turnoutCount && !found; ptr++) {
         if (strcmp (turnoutList[ptr].sysName, &packet[4]) == 0) found = true;
       }
       if (!found) {
-        //char *tptr;
-        //int devNumber = strtol (&packet[4], &tptr, 10);
         for (ptr=0; ptr<turnoutCount && !found; ptr++) {
           if (strcmp (turnoutList[ptr].userName, &packet[4])) found = true;
         }
@@ -37,7 +40,7 @@ void processJmriPacket (char *packet)
     // Keep alive
     char *tptr;
     keepAliveTime = strtol ((const char*)&packet[1], &tptr, 10);
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print   ("Keep Alive interval set to ");
       Serial.print   (keepAliveTime);
       Serial.println (" seconds");
@@ -46,23 +49,11 @@ void processJmriPacket (char *packet)
   }
   else if (packet[0] == 'H') { // Info and alert messages
     if (packet[1] == 'M' || packet[1] == 'm') {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        if (packet[1] == 'M') Serial.print ("Error: ");
-        else Serial.print ("Info: ");
-        Serial.println ((char*) &packet[2]);
-        xSemaphoreGive(displaySem);
-      }
       if (strlen (&packet[2]) > sizeof(lastMessage)-1) strncpy (lastMessage, &packet[2], sizeof(lastMessage)-1);
       strcpy (lastMessage, &packet[2]);
       lastMessage[sizeof(lastMessage)-1] = '\0';
     }
     else if (packet[1] == 'T' || packet[1] == 't') {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
-        if (packet[1] == 'T') Serial.print ("Identity: ");
-        else Serial.print ("Description: ");
-        Serial.println ((char*) &packet[2]);
-        xSemaphoreGive(displaySem);
-      }
       if (packet[1] == 'T') {
         if (strlen (&packet[2]) > sizeof(remServerType)-1) strncpy (remServerType, &packet[2], sizeof(remServerType)-1);
         strcpy (remServerType, &packet[2]);
@@ -151,11 +142,12 @@ void processJmriPacket (char *packet)
           for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
             if ((locoNumber == 0 && throtId == locoRoster[ptr].throttleNr) || (locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type)) {
               if (locoNumber != 0) found = true;
-              if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+              if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 if (tptr[1] == '1') locoRoster[ptr].function = locoRoster[ptr].function | mask;
                 else locoRoster[ptr].function = locoRoster[ptr].function & mask;
                 xSemaphoreGive(functionSem);
               }
+              else semFailed ("functionSem", __FILE__, __LINE__);
             }
           }
           funcChange = true;
@@ -168,25 +160,27 @@ void processJmriPacket (char *packet)
           for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
             if ((locoNumber == 0 && throtId == locoRoster[ptr].throttleNr) || (locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type)) {
               if (locoNumber != 0) found = true;
-              if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+              if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 locoRoster[ptr].speed = velocity;
                 xSemaphoreGive(velociSem);
               }
+              else semFailed ("velociSem", __FILE__, __LINE__);
             }
           }
         }
         //
-        // Direction (Reverse?true) / Rigting
+        // Direction (Reverse?true)
         //
         else if (tptr[0] == 'R') {  // Direction / Reverse
           for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
             if ((locoNumber == 0 && throtId == locoRoster[ptr].throttleNr) || (locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type)) {
               if (locoNumber != 0) found = true;
-              if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+              if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 if (tptr[1] == '0') locoRoster[ptr].direction = REVERSE;
                 else locoRoster[ptr].direction = FORWARD;
                 xSemaphoreGive(velociSem);
               }
+              else semFailed ("velociSem", __FILE__, __LINE__);
             }
           }
         }
@@ -226,7 +220,7 @@ void processJmriPacket (char *packet)
     // Roster list
     //
     else if (strncmp (packet, "RL", 2) == 0 && (locomotiveCount == 0 || drivingLoco == false)) {
-      memBlock = malloc ((sizeof(struct locomotive_s) * tokenTally) + (sizeof(struct locomotive_s) * MAXCONSISTSIZE));
+      memBlock = malloc (sizeof(struct locomotive_s) * (tokenTally + MAXCONSISTSIZE));
       struct locomotive_s *locoData = (struct locomotive_s*) memBlock;
       locomotiveCount = 0;
       for (tokenPtr=0; tokenPtr<tokenTally; tokenPtr++) {
@@ -250,20 +244,24 @@ void processJmriPacket (char *packet)
         locoData[tokenPtr].owned     = false;
         locoData[tokenPtr].function  = 0;
         locoData[tokenPtr].throttleNr= 255;
+        locoData[tokenPtr].relayIdx  = 255;
+        locoData[tokenPtr].functionLatch = 65535;  // should not use in JMRI, but set it to all on => use default.
       }
       uint8_t maxLoco = tokenTally + MAXCONSISTSIZE;
       uint8_t n = 0;
       for (;tokenPtr < maxLoco; tokenPtr++) {
         sprintf (locoData[tokenPtr].name, "ad-hoc-%d", ++n);
-        locoData[tokenPtr].owned = false;
+        locoData[tokenPtr].owned    = false;
+        locoData[tokenPtr].relayIdx = 255;
       }
       if (locoRoster != NULL) free(locoRoster);   // free space if we had previously allocated it
       locoRoster      = locoData;
       locomotiveCount = tokenTally;
-      if (nvs_get_int("sortData", SORTDATA) == 1) sortLoco();
+      if (tokenTally>1 && nvs_get_int("sortData", SORTDATA) == 1) sortLoco();
     }
     //
     // Turnout states
+    // eg PTT]\[Turnouts}|{Turnout]\[Closed}|{2]\[Thrown}|{4]\[Unknown}|{1]\[Failed}|{8
     //
     else if (strcmp (packet, "PTT") == 0) {
       memBlock = malloc (sizeof(struct turnoutState_s) * (tokenTally - 1));
@@ -313,7 +311,7 @@ void processJmriPacket (char *packet)
       if (turnoutList != NULL) free(turnoutList);
       turnoutList  = turnoutData;
       turnoutCount = tokenTally;
-      if (nvs_get_int("sortData", SORTDATA) == 1) sortTurnout();
+      if (tokenTally>1 && nvs_get_int("sortData", SORTDATA) == 1) sortTurnout();
     }
     //
     // Route states, very similar structure to turnout states
@@ -366,7 +364,7 @@ void processJmriPacket (char *packet)
       if (routeList != NULL) free(routeList);
       routeList  = routeData;
       routeCount = tokenTally;
-      if (nvs_get_int("sortData", SORTDATA) == 1) sortRoute();
+      if (tokenTally>1 && nvs_get_int("sortData", SORTDATA) == 1) sortRoute();
     }
   }
 }

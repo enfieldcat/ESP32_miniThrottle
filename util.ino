@@ -28,6 +28,12 @@ bool util_str_isa_int (char *inString)
 }
 
 
+float util_str2float (char *string)
+{
+  return ((float)(strtod (string, NULL)));
+}
+
+
 /*
  * Homespun float to string function with dp decimal points
  */
@@ -59,6 +65,31 @@ char* util_bin2str (uint8_t inVal)
     if (mask == 16) strcat (retVal, "-");
   }
   return (retVal);
+}
+
+/*
+ * Return a printable time stamp
+ */
+char* getTimeStamp()
+{
+  static char retVal[9];
+  uint8_t secs;
+  uint32_t mins = esp_timer_get_time() / uS_TO_S_FACTOR;
+  secs = mins % 60;
+  mins = mins / 60;
+  sprintf (retVal, "%02d:%02d:%02d", mins/60, mins%60, secs);
+  return (retVal);
+}
+
+/*
+ * Print semaphore failure
+ */
+void semFailed (const char *semName, const char *fileName, const int line)
+{
+  if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Failed to acquire %s at %s %d\r\n", getTimeStamp(), semName, fileName, line);
+    xSemaphoreGive(displaySem);
+  }
 }
 
 /*
@@ -144,21 +175,21 @@ void sortRoute()
 // cf: https://github.com/espressif/arduino-esp32/blob/master/libraries/SPIFFS/examples/SPIFFS_Test/SPIFFS_Test.ino
 void util_listDir(fs::FS &fs, const char * dirname, uint8_t levels){
   char msgBuffer[80];
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf("Listing directory: %s\r\n", dirname);
     xSemaphoreGive(displaySem);
   }
 
   File root = fs.open(dirname);
   if(!root){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("- failed to open directory");
       xSemaphoreGive(displaySem);
     }
     return;
   }
   if(!root.isDirectory()){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println(" - not a directory");
       xSemaphoreGive(displaySem);
     }
@@ -167,12 +198,12 @@ void util_listDir(fs::FS &fs, const char * dirname, uint8_t levels){
 
   File file = root.openNextFile();
   while(file){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       for (uint8_t space=0; space<levels; space++) Serial.print ("  ");
       xSemaphoreGive(displaySem);
     }
     if(file.isDirectory()){
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print  ("  DIR : ");
         Serial.println((char*)file.name());
         xSemaphoreGive(displaySem);
@@ -180,7 +211,7 @@ void util_listDir(fs::FS &fs, const char * dirname, uint8_t levels){
       util_listDir(fs, file.name(), levels +1);
     } 
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print  ("  FILE: ");
         Serial.print  ((char*)file.name());
         sprintf (msgBuffer, "%d", (uint)file.size());
@@ -191,22 +222,22 @@ void util_listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     }
     file = root.openNextFile();
   }
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     sprintf (msgBuffer, "%d bytes used of %d available (%d%% used)", SPIFFS.usedBytes(), SPIFFS.totalBytes(), (SPIFFS.usedBytes()*100)/SPIFFS.totalBytes());
+    Serial.println (msgBuffer);
     xSemaphoreGive(displaySem);
   }
-  Serial.println (msgBuffer);
 }
 
 void util_deleteFile(fs::FS &fs, const char * path){
   if (!fs.exists(path)) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("  - File does not exist");
       xSemaphoreGive(displaySem);
     }
     return;
   }
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Deleting file: ");
     Serial.println ((char*) path);
     if(fs.remove(path)){
@@ -232,7 +263,7 @@ char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
 
   if (sizeOfFile!=NULL) *sizeOfFile = 0;
   if (!fs.exists(path)) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("  - File does not exist");
       xSemaphoreGive(displaySem);
     }
@@ -240,14 +271,14 @@ char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
   }
   File file = fs.open(path);
   if(!file){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println("  - failed to open file for reading");
       xSemaphoreGive(displaySem);
     }
     return (retval);
   }
   if(file.isDirectory()){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println("  - Cannot open directory for reading");
       xSemaphoreGive(displaySem);
     }
@@ -273,14 +304,14 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
   uint8_t bufPtr = 0;
   uint8_t cmdBuffer[BUFFSIZE];
   
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Reading file: ");
     Serial.println ((char*) path);
     xSemaphoreGive(displaySem);
   }
 
   if (!fs.exists(path)) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("  - File does not exist");
       xSemaphoreGive(displaySem);
     }
@@ -288,21 +319,21 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
   }
   File file = fs.open(path);
   if(!file){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println("  - failed to open file for reading");
       xSemaphoreGive(displaySem);
     }
     return;
   }
   if(file.isDirectory()){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println("  - Cannot open directory for reading");
       xSemaphoreGive(displaySem);
     }
     return;
   }
 
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {  
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {  
     Serial.println ("--- read from file -----------------------");
     Serial.println ("");
     while(file.available()){
@@ -311,7 +342,7 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
         Serial.print('\r');
         if (replay || bufPtr == BUFFSIZE){
           cmdBuffer[bufPtr] = '\0';
-          if (cmdBuffer[0] != '#') process(cmdBuffer); // if 1st char in line is a '#' it is a comment
+          if (cmdBuffer[0] != '#') processSerialCmd(cmdBuffer); // if 1st char in line is a '#' it is a comment
           bufPtr = 0;
         }
       }
@@ -330,7 +361,7 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
 
 void util_writeFile (fs::FS &fs, const char * path)
 {
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Writing file: ");
     Serial.print   ((char*) path);
     Serial.println ("  -  Use \".\" on a line of its own to stop writing.");
@@ -340,7 +371,7 @@ void util_writeFile (fs::FS &fs, const char * path)
   if (fs.exists(path)) fs.remove(path);
   writeFile = fs.open(path, FILE_WRITE);
   if(!writeFile){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println("  - failed to open file for writing");
       xSemaphoreGive(displaySem);
     }
@@ -374,13 +405,13 @@ void getHttp2File (fs::FS &fs, char *url, char *fileName)
 
   if (url == NULL || fileName == NULL) return;
   if (strncmp (url, "http://", 7) != 0 && strncmp (url, "https://", 8) != 0) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("URL should start with \"http://\" or \"https://\"");
       xSemaphoreGive(displaySem);
     }
   }
   if (fileName[0] != '/') {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("Filename should start with \"/\"");
       xSemaphoreGive(displaySem);
     }
@@ -393,7 +424,7 @@ void getHttp2File (fs::FS &fs, char *url, char *fileName)
     if (fs.exists(fileName)) fs.remove(fileName);
     writeFile = fs.open(fileName, FILE_WRITE);
     if(!writeFile){
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print  (fileName);
         Serial.println(" - failed to open file for writing");
         xSemaphoreGive(displaySem);
@@ -411,7 +442,7 @@ void getHttp2File (fs::FS &fs, char *url, char *fileName)
       writeFile.close();
     }
   }
-  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Failed to open URL: ");
     Serial.println (url);
     xSemaphoreGive(displaySem);
@@ -440,7 +471,7 @@ WiFiClient* getHttpStream (char *url, const char *cert, HTTPClient *http)
     retVal = http->getStreamPtr();
   }
   else if (httpCode<0) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("Error connecting to web server: %d on %s", httpCode, url);
       xSemaphoreGive(displaySem);
     }
@@ -459,21 +490,20 @@ void closeHttpStream(HTTPClient *http)
     http = NULL;
   }
 }
-#endif
+#endif  //  USEWIFI
 
 void defaultCertExists(fs::FS &fs)
 {
   #ifdef USEWIFI
   if(!fs.exists(CERTFILE)){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Missing default certificate file, creating ");
       Serial.println (CERTFILE);
       xSemaphoreGive(displaySem);
     }
-    // file.close();
     File defCertFile = fs.open( CERTFILE, FILE_WRITE);
     if(!defCertFile){
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println("  - failed to open file for writing");
         xSemaphoreGive(displaySem);
       }
@@ -483,6 +513,54 @@ void defaultCertExists(fs::FS &fs)
       defCertFile.close();
     }
   }
-  #endif
+  #endif  // USEWIFI
 }
-#endif
+
+void sampleConfigExists(fs::FS &fs)
+{
+  if(!fs.exists(DEFAULTCONF)){
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.print ("Missing sample configuration file, creating ");
+      Serial.println (DEFAULTCONF);
+      xSemaphoreGive(displaySem);
+    }
+    File defCertFile = fs.open(DEFAULTCONF, FILE_WRITE);
+    if(!defCertFile){
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.println("  - failed to open file for writing");
+        xSemaphoreGive(displaySem);
+      }
+    }
+    else {
+      defCertFile.print (sampleConfig);
+      defCertFile.close();
+    }
+  }
+}
+#endif    // FILESUPPORT
+
+#ifdef WEBLIFETIME
+void defaultCssFileExists(fs::FS &fs)
+{
+  if(!fs.exists(CSSFILE)){
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.print   ("Missing default css file, creating ");
+      Serial.println (CSSFILE);
+      xSemaphoreGive (displaySem);
+    }
+    // file.close();
+    File defCssFile = fs.open( CSSFILE, FILE_WRITE);
+    if(!defCssFile){
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.print   ("Failed to open file for writing: ");
+        Serial.println (CSSFILE);
+        xSemaphoreGive (displaySem);
+      }
+    }
+    else {
+      defCssFile.print (cssTemplate);
+      defCssFile.close ();
+    }
+  }
+}
+#endif  //  WEBLIFETIME

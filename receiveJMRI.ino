@@ -47,6 +47,13 @@ void processJmriPacket (char *packet)
       xSemaphoreGive(displaySem);
     }
   }
+  else if (strncmp (packet, "PFT", 3) == 0 && strlen(packet) > 7) { // Update fast clock
+    for (uint8_t n=3; n<strlen(packet); n++) if (packet[n]=='<') packet[n]='\0';
+    if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      fc_time = util_str2int(&packet[3]);
+      xSemaphoreGive(fastClockSem);
+    }
+  }
   else if (packet[0] == 'H') { // Info and alert messages
     if (packet[1] == 'M' || packet[1] == 'm') {
       if (strlen (&packet[2]) > sizeof(lastMessage)-1) strncpy (lastMessage, &packet[2], sizeof(lastMessage)-1);

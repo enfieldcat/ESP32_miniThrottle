@@ -782,7 +782,6 @@ void sendJMRIheader(struct relayConnection_s *thisRelay, char *inBuffer)
       sprintf (inBuffer, "PTL");
       for (uint8_t n=0; n<turnoutCount; n++) {
         sprintf (tBuffer, "]\\[%s}|{%s}|{%c", turnoutList[n].sysName, turnoutList[n].userName, turnoutList[n].state);
-        xSemaphoreGive(fastClockSem);
         strcat (inBuffer, tBuffer);
       }
       xSemaphoreGive(turnoutSem);

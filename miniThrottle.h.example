@@ -28,7 +28,9 @@
 // 2. to provide for web based configuration
 #define USEWIFI
 #ifdef USEWIFI
-//#define OTAUPDATE   "https://conferre.cf/projects/miniThrottle/"   // default location for over the air update, comment out if not required
+// default location for over the air update, comment out if not required
+// only works if WiFi enabled
+//#define OTAUPDATE   "https://conferre.cf/projects/miniThrottle/"
 #endif
 
 /* ***********************************************************************\
@@ -50,13 +52,11 @@
 #ifdef USEWIFI
 // Port number to relay to serial port, comment out to disable network relay to serial interface
 #define RELAYPORT 12090
-// Max simultaneous relay connections
-// The following sdk modification does not appear to work, The max number of connections appears to be 8
-// IDEs other than Arduino may allow you to tweak this for more connections, but testing shows a limit at 8 connections (Relay + web = max)
-// If you want to go beyond 8 concurrent relay connections you need to find sdkconfig.h, eg
-//    ./.arduino15/packages/esp32/hardware/esp32/1.0.6/tools/sdk/include/config/sdkconfig.h
+// Max simultaneous relay connections. The max number of connections is 8 if using std Arduino IDE
+// IDEs other than Arduino may allow you to tweak this for more connections,
+// see here to recompile libraries: https://espressif-docs.readthedocs-hosted.com/projects/arduino-esp32/en/latest/guides/guides.html
 // And change CONFIG_LWIP_MAX_SOCKETS to accomodate this value AND some extra eg web connections
-// eg #define CONFIG_LWIP_MAX_SOCKETS 20
+// eg #define CONFIG_LWIP_MAX_SOCKETS 16
 #define MAXRELAY 8
 // JMRI keepalive period when relaying withrottle, connection "dead" once 2nd keep alive packet is missed
 #define KEEPALIVETIMEOUT 10

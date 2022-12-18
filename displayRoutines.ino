@@ -221,6 +221,7 @@ void mkConfigMenu()
 {
   const char *configMenu[] = {"Bidirectional Mode", "CPU Speed", "Font", "Info", "Protocol", "Restart", "Rotate Screen", "Server IP", "Server Port", "Speed Step", "Prev. Menu"};
   char *address;
+  uint8_t reference[] = {1,2,3,4,5,6,7,8,9,10,11};
   uint8_t result = 1;
   char commandKey;
   char paramName[9];
@@ -230,8 +231,16 @@ void mkConfigMenu()
     Serial.printf ("%s mkConfigMenu()\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
+  #ifdef SERIALCTRL
+  reference[4] = 200;  // protocol, serial => DCC-Ex direct connection
+  reference[7] = 200;  // Server IP, not applicable for serial link
+  reference[8] = 200;  // Server port.
+  #endif
+  #ifndef SCREENROTATE
+  reference[6] = 200;  // Rotate screen
+  #endif
   while (result != 0) {
-    result = displayMenu (configMenu, 11, (result-1));
+    result = displayMenu (configMenu, reference, 11, (result-1));
     switch (result) {
       case 1:
         if (displayYesNo ("Bidirectional mode?")) bidirectionalMode = true;
@@ -512,11 +521,14 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
   uint8_t option = 0;
   uint8_t retval = 0;
   uint8_t limit = locomotiveCount + MAXCONSISTSIZE;
+  uint8_t reference[] = { 1,2,3,4,5 };
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkCabMenu()\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
+  if (turnoutCount == 0) reference[2] = 200;
+  if (routeCount == 0)   reference[3] = 200;
   result = displayMenu((const char**)CABOptions , 5, 2);
   if (result == 1) {     // Add loco, should only show locos we don't yet own
     char *addOpts [locomotiveCount+1];
@@ -662,6 +674,17 @@ void displayInfo()
   sprintf (outData, "Name: %s", tname);
   displayScreenLine (outData, lineNr++, false);
   if (lineNr >= linesPerScreen) return;
+  if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    uint32_t tint = fc_time;
+    xSemaphoreGive(fastClockSem);
+    if (fc_time != 36) {
+      char tString[10];
+      timeFormat (tString, tint);
+      sprintf (outData, "Time: %s", tString);
+      displayScreenLine (outData, lineNr++, false);
+      if (lineNr >= linesPerScreen) return;
+    }
+  }
   if (ssid[0]!='\0') {
     sprintf (outData, "SSID: %s", ssid);
     displayScreenLine (outData, lineNr++, false);
@@ -669,12 +692,22 @@ void displayInfo()
   if (lineNr >= linesPerScreen) return;
   sprintf (outData, "Proto: %s", protoList[cmdProtocol]);
   displayScreenLine (outData, lineNr++, false);
+  #ifdef RELAYPORT
   if (lineNr >= linesPerScreen) return;
+  sprintf (outData, "Relay: %s", relayTypeList[relayMode]);
+  displayScreenLine (outData, lineNr++, false);
+  #endif
+  if (lineNr >= linesPerScreen) return;
+  #ifdef SERIALCTRL
+  displayScreenLine ("Svr: Serial Connect", lineNr++, false);
+  if (lineNr >= linesPerScreen) return;
+  #else
   if (strlen (remServerNode) > 0) {
     sprintf (outData, "Svr: %s", remServerNode);
     displayScreenLine (outData, lineNr++, false);
     if (lineNr >= linesPerScreen) return;
   }
+  #endif
   if (strlen (remServerDesc) > 0) {
     sprintf (outData, "Desc: %s", remServerDesc);
     displayScreenLine (outData, lineNr++, false);
@@ -693,16 +726,30 @@ void displayInfo()
 
 
 //
+// display menu after weeding out code-200 items not for display
+//
 uint8_t displayMenu (const char **menuItems, uint8_t *menuIndex, uint8_t itemCount, uint8_t selectedItem)
 {
   uint8_t retVal = -1;
+  uint8_t cnt = 0;
+  uint8_t newIndex[itemCount];
+  uint8_t newSelection = 0;
+  char *newItems[itemCount];
 
-  retVal = displayMenu (menuItems, itemCount, selectedItem);
-  if (retVal > 0) retVal = menuIndex[retVal-1];
+  for (uint8_t n = 0; n<itemCount; n++) if (menuIndex[n]!=200) {
+    newIndex[cnt]= menuIndex[n];
+    newItems[cnt]= (char*) menuItems[n];
+    if (n == selectedItem) newSelection = cnt;
+    cnt++;
+  }
+  retVal = displayMenu ((const char **)newItems, cnt, newSelection);
+  if (retVal > 0) retVal = newIndex[retVal-1];
   return (retVal);
 }
 
 
+//
+// display all menu items and return result
 //
 uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selectedItem)
 {

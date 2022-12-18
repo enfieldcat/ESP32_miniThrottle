@@ -1451,6 +1451,7 @@ void mkWebFunctionMap (WiFiClient *myClient, char *postData, uint16_t dataSize, 
 void mkWebDeviceDescript (WiFiClient *myClient)
 {
   esp_chip_info_t chip_info;
+  uint32_t throt_time = 36;
   uint16_t mins  = esp_timer_get_time() / (uS_TO_S_FACTOR * 60.0);
   uint16_t hours = mins / 60;
   uint16_t days  = hours / 24;
@@ -1465,6 +1466,14 @@ void mkWebDeviceDescript (WiFiClient *myClient)
   
   hours = hours - (days * 24);
   esp_chip_info(&chip_info);
+
+  if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (fc_time != throt_time) {
+      throt_time = fc_time;
+    }
+    xSemaphoreGive(fastClockSem);
+  }
+  else semFailed ("fastClockSem", __FILE__, __LINE__);
 
   myClient->printf ((const char*)"<h2>Device Description</h2><table>");
   myClient->printf ((const char*)"<tr><td align=\"right\">Device Name:</td><td>%s</td></tr>", tname);
@@ -1507,6 +1516,19 @@ void mkWebDeviceDescript (WiFiClient *myClient)
   #ifdef RELAYPORT
   myClient->printf ((const char*)"<tr><td align=\"right\">Max Relay Clients:</td><td>%d used of %d provisioned</td></tr>", maxRelayCount, maxRelay);
   #endif
+  if (throt_time != 36) {
+    char tString[10];
+    timeFormat (tString, throt_time);
+    myClient->printf ((const char*)"<tr><td align=\"right\">Fast Clock:</td><td>%s", tString);
+    #ifdef RELAYPORT
+    if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      myClient->printf ((const char*)" Speed-up %sx", util_ftos (fc_multiplier ,1));
+      xSemaphoreGive(fastClockSem);
+    }
+    else semFailed ("fastClockSem", __FILE__, __LINE__);
+    #endif
+    myClient->printf ((const char*)"</td></tr>");
+  }
   myClient->printf ((const char*)"</table>");
 }
 

@@ -42,6 +42,7 @@ static SemaphoreHandle_t routeSem     = xSemaphoreCreateMutex();
 // Normal TCP/IP operations work OK in single threaded environment, but benefits from semaphore protection in multi-threaded envs
 // This does lead to kludges to keep operations such as available() outside if or while logic to maintain runtime stability.
 static SemaphoreHandle_t tcpipSem     = xSemaphoreCreateMutex();
+static SemaphoreHandle_t fastClockSem = xSemaphoreCreateMutex();  // for sending/receiving/displaying fc messages
 #ifdef WEBLIFETIME
 static SemaphoreHandle_t webServerSem = xSemaphoreCreateMutex();
 #endif
@@ -50,7 +51,6 @@ static SemaphoreHandle_t screenSvrSem = xSemaphoreCreateMutex();
 #endif
 #ifdef RELAYPORT
 static SemaphoreHandle_t relaySvrSem  = xSemaphoreCreateMutex();
-static SemaphoreHandle_t fastClockSem = xSemaphoreCreateMutex();
 #endif
 static QueueHandle_t cvQueue          = xQueueCreate (2,  sizeof(int16_t));  // Queue for querying CV Values
 static QueueHandle_t keyboardQueue    = xQueueCreate (3,  sizeof(char));     // Queue for keyboard type of events
@@ -77,6 +77,7 @@ static int keepAliveTime    = 10;
 #ifdef BRAKEPRESPIN
 static int brakePres        = 0;
 #endif
+static uint32_t fc_time = 36;  // in jmri mode we can receive fast clock, in relay mode we can send it, 36s past midnight => not updated
 static uint32_t defaultLatchVal     = 0;
 static uint32_t defaultLeadVal      = 0;
 const  uint16_t routeDelay[]        = {0, 500, 1000, 2000, 3000, 4000};
@@ -112,7 +113,6 @@ static uint8_t relayCount       = 0;
 static uint8_t relayClientCount = 0;
 static uint8_t maxRelayCount    = 0;
 // When relaying we can also supply fast clock time
-uint32_t fc_time = ((FC_HOUR * 60) + FC_MIN) * 60;
 float fc_multiplier = 0.00;
 bool fc_restart = false;
 #endif
@@ -245,11 +245,15 @@ const char *sampleConfig = {"# Sample file for adding definitions to miniThrottl
 "cpuspeed 240\n" \
 "name trainCtrl\n" \
 "wifi 3 BrocolliSoup PepperCorns123\n" \
+"restart\n" \
 };
 #endif  //  FILESUPPORT
 
 const char prevMenuOption[] = { "Prev. Menu"};
 const char *protoList[]     = { "Undefined", "JMRI", "DCC-Ex" };
+#ifdef RELAYPORT
+const char *relayTypeList[]  = { "None", "JMRI", "DCC-Ex"};
+#endif
 
 // selected font sizes being:
 static uint8_t selFontWidth  = 8;
@@ -478,6 +482,7 @@ void loop()
   uint8_t menuId = 0;
   uint8_t change = 0;
   uint8_t answer;
+  uint8_t menuResponse[] = {1,2,3,4,5,6};
   char commandKey;
   char commandStr[2];
   const char *baseMenu[]  = { "Locomotives", "Turnouts", "Routes", "Track Power", "CV Programming", "Configuration" };
@@ -575,7 +580,26 @@ void loop()
     if (true) {
       while (true) {
         #endif
-        answer = displayMenu ((const char**)baseMenu, 6, lastMainMenuOption);
+        if (trackPower) {
+          menuResponse[0] = 1;
+          if (turnoutCount == 0) menuResponse[1] = 200;
+          else menuResponse[1] = 2;
+          if (routeCount == 0)   menuResponse[2] = 200;
+          else menuResponse[2] = 3;
+          if (cmdProtocol == JMRI) {
+            menuResponse[4] = 200;
+            if (lastMainMenuOption == 4) lastMainMenuOption = 0;
+          }
+          else menuResponse[4] = 5;
+        }
+        else {
+          menuResponse[0] = 200;
+          menuResponse[1] = 200;
+          menuResponse[2] = 200;
+          menuResponse[4] = 200;
+          if (lastMainMenuOption != 3 && lastMainMenuOption != 5) lastMainMenuOption = 3;
+        }
+        answer = displayMenu ((const char**)baseMenu, menuResponse, 6, lastMainMenuOption);
         if (answer > 0) lastMainMenuOption = answer - 1;
         switch (answer) {
           case 1:

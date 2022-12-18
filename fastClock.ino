@@ -7,7 +7,7 @@ static QueueHandle_t fastClockQueue = NULL;
 // Do not use interrupt type routines to generate I/O directly
 static void fastClockTimerHandler (TimerHandle_t xTimer)
 {
-static uint8_t tint = 0; //nominal payload to pplace into queue
+static uint8_t tint = 0; //nominal payload to place into queue
 
 xQueueSend (fastClockQueue, &tint, 0);
 }
@@ -24,8 +24,11 @@ void fastClock (void *pvParameters)
     Serial.printf ("%s fastClock(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
     xSemaphoreGive(displaySem);
   }
-  fc_multiplier = nvs_get_int ("fc_rate", FC_RATE) / 100.00;
-  fc_time = ((start_hour * 60) + start_min) * 60;
+  if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    fc_multiplier = nvs_get_int ("fc_rate", FC_RATE) / 100.00;
+    fc_time = ((start_hour * 60) + start_min) * 60;
+    xSemaphoreGive(fastClockSem);
+  }
 
   delay (TIMEOUT*2);  // add a slight startup delay
   period = int (1000/fc_multiplier);

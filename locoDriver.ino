@@ -6,6 +6,7 @@ void locomotiveDriver()
 {
   const char *dirString[] = {">>", "||", "<<", "??"};
   const char *trainModeString[] = {"Std", "<->"};
+  uint32_t throt_time = 36;
   uint8_t locoCount = 1;
   uint8_t lineNr = 0;
   uint8_t speedLine = 0;
@@ -22,7 +23,7 @@ void locomotiveDriver()
   char commandChar = 'Z';
   char releaseChar = 'Z';
   char displayLine[65];
-  char potVal[4];
+  char potVal[10];
   char funVal[4];
   bool inFunct = false;
   bool dirChange = false;
@@ -108,6 +109,13 @@ void locomotiveDriver()
       funcChange = true;
     }
     if ((m==0 && bidirectionalMode) || (m==1 && !bidirectionalMode)) speedChange = true;
+    if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (fc_time != throt_time) {
+        throt_time = fc_time;
+        speedChange = true;
+      }
+      xSemaphoreGive(fastClockSem);
+    }
     if (speedChange && speedLine<linesPerScreen) {
       speedChange = false;
       // Show speed
@@ -115,6 +123,14 @@ void locomotiveDriver()
       else m = 0;
       #ifdef POTTHROTPIN
       if (enablePot) strcpy (potVal, "Pot");
+      else if (throt_time != 36) {
+        timeFormat (potVal, throt_time);
+      }
+      else potVal[0] = '\0';
+      #else
+      if (throt_time != 36) {
+        timeFormat (potVal, throt_time);
+      }
       else potVal[0] = '\0';
       #endif
       if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -136,15 +152,16 @@ void locomotiveDriver()
       }
       else semFailed ("velociSem", __FILE__, __LINE__);
       if (speedLine > linesPerScreen-4 || speedLine == (graphLine-1)) {
+        if (strlen (potVal)>5) potVal[5]='\0';
         if (brakeFlag) {
-          sprintf (displayLine, "%s BRAKE %3s %3s",   dirString[calcDirection], potVal, trainModeString[m]);
+          sprintf (displayLine, "%sSTOP %-5s %3s",   dirString[calcDirection], potVal, trainModeString[m]);
         }
         else {
           if (locoRoster[initialLoco].steps > 0) {
-            sprintf (displayLine, "%s %3d%% %3s %4s", dirString[calcDirection], calcSpeed, potVal, trainModeString[m]);
+            sprintf (displayLine, "%s%3d%% %-5s %3s", dirString[calcDirection], calcSpeed, potVal, trainModeString[m]);
           }
           else {
-            sprintf (displayLine, "%s %3d %3s %5s",   dirString[calcDirection], calcSpeed, potVal, trainModeString[m]);
+            sprintf (displayLine, "%s %3d %-5s %3s",   dirString[calcDirection], calcSpeed, potVal, trainModeString[m]);
           }
         }
         #ifdef WARNCOLOR
@@ -163,8 +180,8 @@ void locomotiveDriver()
         }
         else funVal[0] = '\0';
         if (charsPerLine > 5) {
-          if (charsPerLine < 10) {
-            sprintf (dispTemplate, "%%3s %%%ds", charsPerLine-4);
+          if (charsPerLine < 12) {
+            sprintf (dispTemplate, "%%-5s%%%ds", charsPerLine-5);
             sprintf (displayLine, dispTemplate, potVal, trainModeString[m]);
           }
           else {

@@ -82,6 +82,30 @@ char* getTimeStamp()
 }
 
 /*
+ * return Fastclock time as a string
+ */
+void timeFormat (char *tString, uint32_t tint)
+{
+  const char *indicator[2] = {"am", "pm"};
+  uint8_t formatType = nvs_get_int("ClockFormat", 0);
+  uint8_t indexer = 0;
+  uint32_t time = (tint / 60) % 1440;  // seconds => minutes conversion
+  if (time > 720 && formatType == 2) { // am/pm
+    time = time - 720;
+    indexer = 1;
+  }
+  switch (formatType) {
+    case 0 : sprintf (tString, "%02d:%02d", time/60, time%60);
+             break;
+    case 1 : sprintf (tString, "%02dh%02d", time/60, time%60);
+             break;
+    default : if (time<60) time+=720; 
+             sprintf (tString, "%d:%02d %s", time/60, time%60, indicator[indexer]);
+             break;
+  }
+}
+
+/*
  * Print semaphore failure
  */
 void semFailed (const char *semName, const char *fileName, const int line)

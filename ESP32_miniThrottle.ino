@@ -81,6 +81,7 @@ static uint32_t fc_time = 36;  // in jmri mode we can receive fast clock, in rel
 static uint32_t defaultLatchVal     = 0;
 static uint32_t defaultLeadVal      = 0;
 const  uint16_t routeDelay[]        = {0, 500, 1000, 2000, 3000, 4000};
+static uint16_t numberOfNetworks    = 0;
 static uint16_t initialLoco         = 3;
 static uint8_t locomotiveCount      = 0;
 static uint8_t turnoutCount         = 0;
@@ -99,7 +100,7 @@ static uint8_t cmdProtocol  = UNDEFINED;
 static uint8_t nextThrottle = 'A';
 static uint8_t screenRotate = 0;
 static uint8_t dccPowerFunc = DCCPOWER;
-static uint8_t coreCount = 2;
+static uint8_t coreCount    = 2;
 #ifdef RELAYPORT
 static WiFiServer *relayServer;
 struct relayConnection_s *remoteSys = NULL;
@@ -108,13 +109,14 @@ static uint32_t localinPkts     = 0;
 static uint32_t localoutPkts    = 0;
 static uint16_t relayPort       = RELAYPORT;
 static uint8_t maxRelay         = MAXRELAY;
-static uint8_t relayMode        = JMRIRELAY;
+static uint8_t relayMode        = WITHROTRELAY;
 static uint8_t relayCount       = 0;
 static uint8_t relayClientCount = 0;
 static uint8_t maxRelayCount    = 0;
 // When relaying we can also supply fast clock time
-float fc_multiplier = 0.00;
-bool fc_restart = false;
+static float fc_multiplier      = 0.00;
+static bool fc_restart          = false;
+static bool startRelay          = true;
 #endif
 #ifdef WEBLIFETIME
 static WiFiServer *webServer;
@@ -123,7 +125,8 @@ static int8_t webServerCount    = 0;
 static int8_t webClientCount    = 0;
 static int8_t maxWebClientCount = 0;
 static char webCredential[64] = { "" };
-static bool webIsRunning     = true;
+static bool webIsRunning      = true;
+static bool startWeb          = true;
 #endif
 static char ssid[SSIDLENGTH];
 static char tname[SSIDLENGTH];
@@ -131,30 +134,34 @@ static char remServerType[10] = { "" };  // eg: JMRI
 static char remServerDesc[64] = { "" };  // eg: JMRI My whizzbang server v 1.0.4
 static char remServerNode[32] = { "" };  // eg: 192.168.6.1
 static char lastMessage[40]   = { "" };  // eg: JMRI: address 'L23' not allowed as Long
-static bool configHasChanged = false;
-static bool showPackets      = false;
-static bool showKeepAlive    = false;
-static bool showKeypad       = false;
-static bool showWebHeaders   = false;
-static bool trackPower       = false;
-static bool refreshDisplay   = true;
-static bool drivingLoco      = false;
-static bool initialDataSent  = false;
-static bool bidirectionalMode= false;
-static bool menuMode         = false;
-static bool funcChange       = true;
-static bool speedChange      = false;
-static bool netReceiveOK     = false;
+static char dccLCD[4][21];               // DCC-Ex LCD messages
+static bool configHasChanged  = false;
+static bool showPackets       = false;
+static bool showKeepAlive     = false;
+static bool showKeypad        = false;
+static bool showWebHeaders    = false;
+static bool trackPower        = false;
+static bool refreshDisplay    = true;
+static bool drivingLoco       = false;
+static bool initialDataSent   = false;
+static bool bidirectionalMode = false;
+static bool menuMode          = false;
+static bool funcChange        = true;
+static bool speedChange       = false;
+static bool netReceiveOK      = false;
+static bool APrunning         = false;
+#ifdef RELAYPORT
+#endif
 #ifdef POTTHROTPIN
-static bool enablePot        = true;
+static bool enablePot         = true;
 #endif
 #ifdef SCREENSAVER
-static bool inScreenSaver    = false;
+static bool inScreenSaver     = false;
 #endif
 #ifdef FILESUPPORT
 static fs::File writeFile;
-static bool writingFile      = false;
-const  char* rootCACertificate  = NULL;
+static bool writingFile       = false;
+const  char* rootCACertificate= NULL;
 #ifdef CERTFILE
 const  char* defaultCertificate = \
 "-----BEGIN CERTIFICATE-----\n" \
@@ -250,9 +257,9 @@ const char *sampleConfig = {"# Sample file for adding definitions to miniThrottl
 #endif  //  FILESUPPORT
 
 const char prevMenuOption[] = { "Prev. Menu"};
-const char *protoList[]     = { "Undefined", "JMRI", "DCC-Ex" };
+const char *protoList[]     = { "Undefined", "WiThrottle", "DCC-Ex" };
 #ifdef RELAYPORT
-const char *relayTypeList[]  = { "None", "JMRI", "DCC-Ex"};
+const char *relayTypeList[]  = { "None", "WiThrottle", "DCC-Ex"};
 #endif
 
 // selected font sizes being:
@@ -321,15 +328,16 @@ void setup()  {
   dccPowerFunc    = nvs_get_int ("dccPower",      DCCPOWER);
   defaultLatchVal = nvs_get_int ("FLatchDefault", FUNCTLATCH);
   defaultLeadVal  = nvs_get_int ("FLeadDefault",  FUNCTLEADONLY);
+  for (uint8_t n=0;n<4;n++) dccLCD[n][0] = '\0'; // store empty string in dccLCD array
   #ifdef RELAYPORT
   relayPort = nvs_get_int ("relayPort", RELAYPORT);
   relayServer = new WiFiServer(relayPort);
   maxRelay = nvs_get_int ("maxRelay", MAXRELAY);
   if (maxRelay>MAXRELAY)  maxRelay = MAXRELAY;  // MAXRELAY is the absolute max number of connections we want to support
-  relayMode = nvs_get_int ("relayMode", JMRIRELAY);
+  relayMode = nvs_get_int ("relayMode", WITHROTRELAY);
   maxRelayTimeOut =  ((nvs_get_int ("relayKeepAlive", KEEPALIVETIMEOUT) * 2) + 1) * uS_TO_S_FACTOR;
   if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    const char *relType[] = { "None", "JMRI", "DCC-Ex" };
+    const char *relType[] = { "None", "WiThrottle", "DCC-Ex" };
     Serial.printf ("%s Relay type is: %s, port %d, max clients %d\r\n", getTimeStamp(), relType[relayMode], relayPort, maxRelay);
     xSemaphoreGive(displaySem);
   }
@@ -478,7 +486,6 @@ void setup()  {
 void loop()
 {
   #ifndef NODISPLAY
-  uint8_t connectState = 99;
   uint8_t menuId = 0;
   uint8_t change = 0;
   uint8_t answer;
@@ -524,69 +531,91 @@ void loop()
   setupFonts();
 
   while (xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {} // clear keyboard buffer
+  // No keypad or encoder => not locally controllable, so no menu just show info
+  #ifndef ENCODE_UP
+  #ifdef keynone
+  while (true) {
+    displayInfo();
+    delay (20000);     // 20 second timeout
+  }
+  #endif
+  #endif
+  // Normal control
   while (true) {
     #ifndef SERIALCTRL
     if (!client.connected()) {
-      uint8_t tState;
       uint8_t answer;
+      bool    stateChange   = true;
+      bool    wifiConnected = false;
+      bool    APConnected   = false;
 
       if (tState < 3 && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
         mkConfigMenu();
-        connectState = 99;
+        stateChange = true;
       }
-      if (WiFi.status() == WL_CONNECTED) tState = 2;
-      else tState = 1;
-      if (tState != connectState) {
-        uint8_t lineNr = 0;
-        char outData[SSIDLENGTH + 10];
-        connectState = tState;
-        display.clear();
-        displayScreenLine ("No Connection", lineNr++, true);
-        sprintf (outData, "Name: %s", tname);
-        displayScreenLine (outData, lineNr++, false);
-        if (WiFi.status() == WL_CONNECTED) {
-          if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
-            uint8_t waitLoop = 0;
-            while (strlen (ssid) == 0 && waitLoop++ < 100) {
-              xSemaphoreGive(tcpipSem);
-              delay (100);
-              xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10));
-            }
-            xSemaphoreGive(tcpipSem);
-          }
-          else semFailed ("tcpipSem", __FILE__, __LINE__);
-          sprintf (outData, "WiFi: %s", ssid);
-          displayScreenLine (outData, lineNr++, false);
-          displayScreenLine ("Svr:  Connecting", lineNr++, false);
+      if (((!APrunning) && WiFi.status() != WL_CONNECTED) || (!client.connected())) {
+        if (wifiConnected && WiFi.status() != WL_CONNECTED) {
+          wifiConnected = false;
+          stateChange   = true;
         }
-        else {
-          displayScreenLine ("Wifi: Connecting", lineNr++, false);
+        else if ((!wifiConnected) && WiFi.status() == WL_CONNECTED) {
+          wifiConnected = true;
+          stateChange   = true;
+        }
+        if (APrunning && !APConnected) { //Access-point just started?
+          APconnected = true;
+          stateChange = true;
+        }
+        if (stateChange) {  // Update display if there is something to update
+          uint8_t lineNr = 0;
+          char outData[SSIDLENGTH + 10];
+          display.clear();
+          displayScreenLine ("No Connection", lineNr++, true);
+          sprintf (outData, "Name: %s", tname);
+          displayScreenLine (outData, lineNr++, false);
+          if ((!APrunning) && WiFi.status() == WL_CONNECTED) {
+            if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
+              uint8_t waitLoop = 0;
+              while (strlen (ssid) == 0 && waitLoop++ < 100) {
+                xSemaphoreGive(tcpipSem);
+                delay (100);
+                xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10));
+              }
+              xSemaphoreGive(tcpipSem);
+            }
+            else semFailed ("tcpipSem", __FILE__, __LINE__);
+          }
+          if (APrunning || WiFi.status() == WL_CONNECTED) {
+            if (APrunning) {
+              displayScreenLine ("WiFi: AP Mode", lineNr++, flase);
+            }
+            else if (WiFi.status() == WL_CONNECTED && strlen(ssid)>0) {
+              sprintf (outData, "WiFi: %s", ssid);
+              displayScreenLine (outData, lineNr++, false);
+            }
+            displayScreenLine ("Svr:  Connecting", lineNr++, false);
+          }
+          else {
+            displayScreenLine ("Wifi: Connecting", lineNr++, false);
+          }
         }
       }
     }
     else {
-      if (connectState < 3) {
-        displayTempMessage ("Connected", "Waiting for response.", false);
-        connectState = 3;
-        menuId = 0;
-        for (uint8_t n=0; n<INITWAIT && cmdProtocol==UNDEFINED; n++) {
-          delay (1000); // Pause on initialisation
-        }
-        while (xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {} // clear keyboard buffer
-      }
+      stateChange = true;
       while (client.connected()) {
-        #else
-        // handling for Serial connection
+    #else
+    // handling for Serial connection
     if (true) {
-      while (true) {
-        #endif
+      while (true) { // Assume serial => always connected
+    #endif
         if (trackPower) {
           menuResponse[0] = 1;
           if (turnoutCount == 0) menuResponse[1] = 200;
           else menuResponse[1] = 2;
           if (routeCount == 0)   menuResponse[2] = 200;
           else menuResponse[2] = 3;
-          if (cmdProtocol == JMRI) {
+          if (cmdProtocol == WITHROT) {
             menuResponse[4] = 200;
             if (lastMainMenuOption == 4) lastMainMenuOption = 0;
           }

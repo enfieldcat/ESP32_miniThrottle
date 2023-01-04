@@ -42,7 +42,7 @@ void keepAlive(void *pvParameters)
     lastTime = keepAliveTime;
     if (lastTime > 0) xTimerStart (keepAliveTimer, pdMS_TO_TICKS(lastTime * 1000));
     while (lastTime > 0) {
-      while (lastTime > 0 && WiFi.status() == WL_CONNECTED) {
+      while (lastTime > 0 && (APrunning || WiFi.status() == WL_CONNECTED)) {
         while (lastTime > 0 && client.connected()) {
           if (xQueueReceive(keepAliveQueue, &queueData, pdMS_TO_TICKS((lastTime*1000)+1000)) != pdPASS) {
             if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

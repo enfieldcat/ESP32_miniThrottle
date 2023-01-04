@@ -60,7 +60,7 @@ void relayListener(void *pvParameters)
     mdns_txt_item_t txtrecord[] = {{(char*)"server" ,(char*)PRODUCTNAME},{(char*)"version", (char*)VERSION}};
     mdns_service_add(NULL, "_withrottle", "_tcp", relayPort, txtrecord, 2);
     while (relayIsRunning) {
-      if (WiFi.status() == WL_CONNECTED) {
+      if (APrunning || WiFi.status() == WL_CONNECTED) {
         if (relayServer->hasClient()) {
           notAssigned = true;
           for(i = 0; notAssigned && i < maxRelay; i++){
@@ -114,17 +114,18 @@ void relayListener(void *pvParameters)
   relayServer->end();
   if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     while (relayCount>0) relayCount--;
+    startRelay = true;
     xSemaphoreGive(relaySvrSem);
   }
   vTaskDelete( NULL );
 }
 
 
-// Rutine to find LocoId in a JMRI command string
-uint16_t getJmriLocoID (char *inBuffer)
+// Rutine to find LocoId in a WiThrottle command string
+uint16_t getWiThrotLocoID (char *inBuffer)
 {
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s getJmriLocoID(%s)\r\n", getTimeStamp(), inBuffer);
+    Serial.printf ("%s getWiThrotLocoID(%s)\r\n", getTimeStamp(), inBuffer);
     xSemaphoreGive(displaySem);
   }
 
@@ -178,9 +179,9 @@ void relayHandler(void *pvParameters)
     xSemaphoreGive(relaySvrSem);
   }
   else semFailed ("relaySvrSem", __FILE__, __LINE__);
-  // For JMRI connections, send inventory information as par of the initial headers
-  if (relayMode == JMRIRELAY) {
-    sendJMRIheader(thisRelay, &inBuffer[0]);
+  // For WiThrottle connections, send inventory information as par of the initial headers
+  if (relayMode == WITHROTRELAY) {
+    sendWiThrotHeader(thisRelay, &inBuffer[0]);
   }
   while (keepAlive && relayConnState(thisRelay, 1)) {
     inchar = '\0';
@@ -211,14 +212,14 @@ void relayHandler(void *pvParameters)
           }
           // Use the appropriate relay function
           // - but treat JMRI keep alives as a lower level feature dealt with here
-          if (relayMode == JMRIRELAY) {
+          if (relayMode == WITHROTRELAY) {
             // keep alive handling
             if (inBuffer[0] == '*' && strlen(inBuffer) < 3) {
               if (inBuffer[1] == '+') { trackKeepAlive= true; Serial.println ("keepalive on"); }
               else if (inBuffer[1] == '-') { trackKeepAlive= false; Serial.println ("keepalive off"); }
               reply2relayNode (thisRelay, "HTJMRI\r\n");  // Ack by sending Node type
             }
-            else jmri_relay (thisRelay, inBuffer, indicator);
+            else wiThrotRelayPkt (thisRelay, inBuffer, indicator);
           }
           else dcc_relay (inBuffer, indicator);
         }
@@ -288,9 +289,9 @@ bool relayConnState (struct relayConnection_s *thisRelay, uint8_t chkmode)
 
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     switch (chkmode) {
-    case 1: retval = WiFi.status() == WL_CONNECTED && thisRelay->client->connected();
+    case 1: retval = (APrunning || WiFi.status() == WL_CONNECTED) && thisRelay->client->connected();
             break;
-    case 2: retval = WiFi.status() == WL_CONNECTED && thisRelay->client->connected() && thisRelay->client->available()>0;
+    case 2: retval = (APrunning || WiFi.status() == WL_CONNECTED) && thisRelay->client->connected() && thisRelay->client->available()>0;
             break;
     }
     xSemaphoreGive(tcpipSem);
@@ -328,33 +329,36 @@ void forward2serial (char *packet)
 void reply2relayNode (struct relayConnection_s *thisRelay, const char *outPacket)
 { 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s reply2relayNode(%x, %s", getTimeStamp(), thisRelay, outPacket);
+    if (outPacket==NULL) Serial.printf ("%s reply2relayNode(%x, NULL)\r\n", getTimeStamp(), thisRelay);
+    else Serial.printf ("%s reply2relayNode(%x, %s", getTimeStamp(), thisRelay, outPacket);
     xSemaphoreGive(displaySem);
   }
-  if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    thisRelay->client->write (outPacket, strlen(outPacket));
-    xSemaphoreGive(tcpipSem);
-    if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      thisRelay->outPackets++;
-      xSemaphoreGive(relaySvrSem);
+  if (thisRelay != NULL && thisRelay->client!=NULL && thisRelay->client->connected()) {
+    if (outPacket != NULL && strlen(outPacket)>0 && xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      thisRelay->client->write (outPacket, strlen(outPacket));
+      xSemaphoreGive(tcpipSem);
+      if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        thisRelay->outPackets++;
+        xSemaphoreGive(relaySvrSem);
+      }
+      else semFailed ("relaySvrSem", __FILE__, __LINE__);
+      if (showPackets && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("R-> %s", outPacket);
+        xSemaphoreGive(displaySem);
+      }
     }
-    else semFailed ("relaySvrSem", __FILE__, __LINE__);
-    if (showPackets && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.printf ("R-> %s", outPacket);
-      xSemaphoreGive(displaySem);
-    }
+    else semFailed ("tcpipSem", __FILE__, __LINE__);
   }
-  else semFailed ("tcpipSem", __FILE__, __LINE__);
 }
 
 
-void jmri_relay (struct relayConnection_s *thisRelay, char *inPacket, char indicator)
+void wiThrotRelayPkt (struct relayConnection_s *thisRelay, char *inPacket, char indicator)
 {
   uint16_t buffLen = strlen(inPacket);
   char outBuffer[420];   // need to cater for long function descriptor packets
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s jmri_relay(%x, %s, %c)\r\n", getTimeStamp(), thisRelay, inPacket, indicator);
+    Serial.printf ("%s wiThrotRelayPkt(%x, %s, %c)\r\n", getTimeStamp(), thisRelay, inPacket, indicator);
     xSemaphoreGive(displaySem);
   }
   outBuffer[0] = '\0';
@@ -408,7 +412,7 @@ void jmri_relay (struct relayConnection_s *thisRelay, char *inPacket, char indic
     uint8_t t_direction;
     uint8_t t_throttleNr;
 
-    if (inPacket[3] != '*') locoID = getJmriLocoID (&inPacket[4]);
+    if (inPacket[3] != '*') locoID = getWiThrotLocoID (&inPacket[4]);
     for (n=4; n<buffLen && inPacket[n]!='>'; n++);
     if (inPacket[n] == '>') {
       command = inPacket[n+1]; 
@@ -418,7 +422,7 @@ void jmri_relay (struct relayConnection_s *thisRelay, char *inPacket, char indic
     // Query
     if (action == 'A' && command == 'q') {
       uint8_t j=0, limit=locomotiveCount+MAXCONSISTSIZE;
-      if (inPacket[3] != '*') locoID = getJmriLocoID (&inPacket[4]);
+      if (inPacket[3] != '*') locoID = getWiThrotLocoID (&inPacket[4]);
       if (inPacket[3] == '*' || locoID != 0) {
         for (j=0; j<limit; j++) {
           // Gather data that may be temporal by gaining semphore access
@@ -590,8 +594,16 @@ void jmri_relay (struct relayConnection_s *thisRelay, char *inPacket, char indic
             if ((j<locomotiveCount && t_id == locoID && t_type == inPacket[3]) || (j>=locomotiveCount && (t_relayIdx == 255 || (t_relayIdx != 255 && t_id == locoID && t_type == inPacket[3])))) {
               if (t_relayIdx == 255 || inPacket[2] == 'S') {
                 if (inPacket[2] == 'S') {                                 //  inform our "donor" they've lost the loco.
-                  sprintf (outBuffer, "M%c-%c%d<;>r\r\n", t_throttleNr, t_type, t_id);
-                  reply2relayNode (&(remoteSys[t_relayIdx]), outBuffer);  //  Send theft notification
+                  if (locoRoster[j].owned) {
+                    if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                      locoRoster[j].owned = false;
+                      xSemaphoreGive(velociSem);
+                    }
+                  }
+                  else {
+                    sprintf (outBuffer, "M%c-%c%d<;>r\r\n", t_throttleNr, t_type, t_id);
+                    reply2relayNode (&(remoteSys[t_relayIdx]), outBuffer);  //  Send theft notification
+                  }
                 }
                 // update remote throttle identifiers for this loco
                 if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -718,10 +730,10 @@ void dcc_relay (char *packet, char indicator)
 
 
 // Send dcc info back to all relay nodes
-void relay2jmri (char *outBuffer)
+void relay2WiThrot (char *outBuffer)
 {
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s relay2jmri(%s", getTimeStamp(), outBuffer);
+    Serial.printf ("%s relay2WiThrot(%s", getTimeStamp(), outBuffer);
     xSemaphoreGive(displaySem);
   }
   if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -740,13 +752,13 @@ void relay2jmri (char *outBuffer)
 
 
 // Send JMRI Header data
-void sendJMRIheader(struct relayConnection_s *thisRelay, char *inBuffer)
+void sendWiThrotHeader(struct relayConnection_s *thisRelay, char *inBuffer)
 {
   uint32_t tint = 0;
   char tBuffer[80];
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s sendJMRIheader(%x, %x)\r\n", getTimeStamp(), thisRelay, inBuffer);
+    Serial.printf ("%s sendWiThrotHeader(%x, %x)\r\n", getTimeStamp(), thisRelay, inBuffer);
     xSemaphoreGive(displaySem);
   }
   if (trackPower) tint = 1;

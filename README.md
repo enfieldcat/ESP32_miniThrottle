@@ -1,7 +1,7 @@
-ESP32 based JMRI miniThrottle
-=============================
+ESP32 based WiThrottle (miniThrottle)
+=====================================
 Development for model train throttle controller.
-It uses either JMRI or DCC-Ex protocols to connect to a control station over WiFi.
+It uses either WiThrttle or DCC-Ex protocols to connect to a control station over WiFi.
 The default is configurable.
 If using DCC-Ex a direct serial connection (WiFi-Free) connection is possible. This may provide sufficient control for small layouts with a panel mounted throttle.
 
@@ -13,7 +13,7 @@ More documentation at https://conferre.cf/miniThrottle/miniIntro.php
 
 Description:
 ------------
-Uses a esp32 module as the core for a JMRI (Java Model Railroad Interface), or DCC-Ex throttle using the WiThrotttle protocol.
+Uses a esp32 module as the core for a WiThrottle (JMRI / Java Model Railroad Interface), or DCC-Ex throttle using the WiThrotttle protocol.
 It has some limited DCC-Ex support, to communicate directly to DCC-Ex without the need of a control station.
 It can use one of several display types.
 The supported display should be any supported by the lcdgfx library, although a minimum display width of 128 pixels is recommended.
@@ -43,7 +43,7 @@ Configurable settings are stored in Non Volatile memory.
 
 Tested interfaces:
 ------------------
-* JMRI: ESP_DCC https://www.instructables.com/DCC-Controller-2-Boards-1-PSU-No-Soldering/
+* WiThrottle: ESP_DCC https://www.instructables.com/DCC-Controller-2-Boards-1-PSU-No-Soldering/
 * DCC-Ex : https://github.com/DccPlusPlus/BaseStation/wiki
 
 It is expected to work but NOT TESTED using JMRI https://www.jmri.org/ and Digitrax LNWI (LocoNet WiFi Interface)/

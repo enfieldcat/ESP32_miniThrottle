@@ -27,7 +27,7 @@
 #undef VERSION
 #endif
 #define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.5c"         // Version string
+#define VERSION     "0.5d"         // Version string
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.
@@ -101,15 +101,18 @@ extern "C" {
 #define SORTDATA        1   // 0 = unsorted, 1 = sorted lists of data
 
 // Define Network and buffer sizes
-#define WIFINETS        4   // Count of number network credentials to store
+#define WIFINETS        6   // Count of number network credentials to store
 #define BUFFSIZE      250   // Keyboard buffer size
 #define NETWBUFFSIZE 1400   // Network packet size
-#define JMRIMAXFIELDS  64   // Max fields per JMRI received packet
-#define MAXSUBTOKEN     4   // Max sub tokens per JMRI field
+#define WITHROTMAXFIELDS  64   // Max fields per WiThrottle received packet
+#define MAXSUBTOKEN     4   // Max sub tokens per WiThrottle field
 #define DEBOUNCEMS     33   // millis to wait for switch / keypad debounce
 #define INITWAIT        5   // seconds to wait for first packet from server to ID protocol
 #define BUMPCOUNT     100   // re-evalute loco count every N times through loco control routine
 #define TIMEOUT      2000   // Network timeout in milliseconds
+#define APCHANNEL       6   // Default WiFi Channel for AP mode
+#define MAXAPCLIENTS    8   // Max number of clients
+#define DEFAPCLIENTS    4   // Default number of clients allowed
 
 // Divisor for converting uSeconds to Seconds
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
@@ -128,11 +131,12 @@ extern "C" {
  */
 // enumerations
 enum directionInd { FORWARD = 0,   STOP = 1,     REVERSE = 2, UNCHANGED = 3 };
-enum ctrlProtocol { UNDEFINED = 0, JMRI = 1,     DCCPLUS = 2 };
+enum ctrlProtocol { UNDEFINED = 0, WITHROT = 1,  DCCEX = 2 };
 enum varTypes     { STRING = 0,    PASSWORD = 1, INTEGER = 2 };
 enum dccPower     { BOTH = 0,      MAINONLY = 1, PROGONLY = 2, JOIN = 3 };
+enum wifiModes    { WIFISTA = 1,   WIFIAP = 2,   WIFIBOTH = 3 };
 #ifdef RELAYPORT
-enum relayTypes   { NORELAY = 0,  JMRIRELAY = 1, DCCRELAY = 2 };
+enum relayTypes   { NORELAY = 0,  WITHROTRELAY = 1, DCCRELAY = 2 };
 #endif
 
 /*
@@ -185,6 +189,18 @@ struct relayConnection_s {
   uint32_t outPackets;            // count of packets out - sent to remote side
   uint8_t  id;                    // serial number of this entry, used for reverse lookup
   char nodeName[NAMELENGTH];      // remote name
+};
+#endif
+
+#ifdef WEBLIFETIME
+struct webVar_s {
+  char *varName;
+  uint8_t varType;
+  int16_t varMin; 
+  uint16_t varMax;
+  int16_t numDefault;
+  char *strDefault;
+  char *varDesc;
 };
 #endif
 

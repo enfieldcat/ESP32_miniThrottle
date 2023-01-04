@@ -10,7 +10,7 @@ void setInitialData()
 
   if (!initialDataSent) {
     initialDataSent = true;  // Only send once per connection
-    if (cmdProtocol == JMRI) {
+    if (cmdProtocol == WITHROT) {
       uint64_t chipid = ESP.getEfuseMac();
       char myID[15];
 
@@ -19,7 +19,7 @@ void setInitialData()
       txPacket (myID);
       txPacket ("N", tname);
     }
-    else if (cmdProtocol == DCCPLUS) {
+    else if (cmdProtocol == DCCEX) {
       uint8_t reqState;
 
       while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
@@ -50,8 +50,8 @@ void setTrackPower (uint8_t desiredState)
 
   switch (desiredState) {
     case 1:
-      if (cmdProtocol == JMRI) txPacket ("PPA1");
-      else if (cmdProtocol == DCCPLUS) {
+      if (cmdProtocol == WITHROT) txPacket ("PPA1");
+      else if (cmdProtocol == DCCEX) {
         uint8_t reqState;
         
         while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
@@ -70,8 +70,8 @@ void setTrackPower (uint8_t desiredState)
       }
       break;
     case 2:
-      if (cmdProtocol == JMRI) txPacket ("PPA0");
-      else if (cmdProtocol == DCCPLUS) {
+      if (cmdProtocol == WITHROT) txPacket ("PPA0");
+      else if (cmdProtocol == DCCEX) {
         uint8_t reqState;
         
         while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
@@ -110,7 +110,7 @@ void setTurnout (uint8_t turnoutNr, const char desiredState)
     return;
   }
   if (desiredState<turnoutStateCount) reqState = turnoutState[desiredState].state;
-  if (cmdProtocol == JMRI) {
+  if (cmdProtocol == WITHROT) {
     strcpy (outPacket, "PTA");
     if (reqState==2 || reqState=='C') outPacket[3] = 'C';
     else if (reqState==4 || reqState=='T') outPacket[3] = 'T';
@@ -123,7 +123,7 @@ void setTurnout (uint8_t turnoutNr, const char desiredState)
     }
     else semFailed ("turnoutSem", __FILE__, __LINE__);
   }
-  else if (cmdProtocol == DCCPLUS) {
+  else if (cmdProtocol == DCCEX) {
     while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS) {} // clear ack Queue
     if (xSemaphoreTake(turnoutSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       if (desiredState == 'T' || desiredState == 'C') {
@@ -165,11 +165,11 @@ void setRoute (uint8_t routeNr)
     }
     return;
   }
-  if (cmdProtocol == JMRI) {
+  if (cmdProtocol == WITHROT) {
     sprintf (outPacket, "PRA2%s", routeList[routeNr].sysName);
     txPacket (outPacket);
   }
-  else if (cmdProtocol == DCCPLUS) {
+  else if (cmdProtocol == DCCEX) {
     char route[BUFFSIZE];
     uint16_t pause = routeDelay[nvs_get_int("routeDelay", 2)];
     
@@ -231,7 +231,7 @@ void setLocoFunction (uint8_t locoIndex, uint8_t funcIndex, bool set)
   }
 
   if (invalidLocoIndex(locoIndex, "Set loco function")) return;
-  if (cmdProtocol == JMRI) {
+  if (cmdProtocol == WITHROT) {
     char setVal = '0';
     if (set) setVal = '1';
     if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -241,7 +241,7 @@ void setLocoFunction (uint8_t locoIndex, uint8_t funcIndex, bool set)
     }
     else semFailed ("velociSem", __FILE__, __LINE__);
   }
-  else if (cmdProtocol == DCCPLUS) {
+  else if (cmdProtocol == DCCEX) {
     uint32_t mask;
     uint32_t latchVal;
     uint32_t function;
@@ -262,7 +262,7 @@ void setLocoFunction (uint8_t locoIndex, uint8_t funcIndex, bool set)
         if (latchVal>0) {
           if ((function & mask) > 0) setVal = 0; //is latching and is already on
         }
-        sprintf (commandPacket, "<F %d %d %d>", loco, funcIndex, setVal);
+        sprintf (commandPacket, "<F %d %d %d>\r\n<t %d>", loco, funcIndex, setVal, loco);
         while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
         txPacket (commandPacket);
         if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
@@ -294,7 +294,7 @@ void setLocoOwnership(uint8_t locoIndex, bool owned)
   }
 
   if (invalidLocoIndex(locoIndex, "Set loco ownership")) return;
-  if (cmdProtocol == JMRI) {
+  if (cmdProtocol == WITHROT) {
     char setVal = '-';
 
     if (owned) setVal = '+';
@@ -316,7 +316,7 @@ void setStealLoco(uint8_t locoIndex)
   }
 
   if (invalidLocoIndex(locoIndex, "Steal loco")) return;
-  if (cmdProtocol == JMRI) {
+  if (cmdProtocol == WITHROT) {
     if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       sprintf (commandPacket, "M%cS%c%d<;>%s", locoRoster[locoIndex].throttleNr, locoRoster[locoIndex].type, locoRoster[locoIndex].id, locoRoster[locoIndex].name);
       xSemaphoreGive(velociSem);
@@ -338,7 +338,7 @@ void setLocoSpeed (uint8_t locoIndex, int16_t speed, int8_t direction)
   }
 
   if (invalidLocoIndex(locoIndex, "Set loco speed")) return;
-  if (cmdProtocol == JMRI) {
+  if (cmdProtocol == WITHROT) {
     if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       sprintf (commandPacket, "M%cA%c%d<;>V%d", locoRoster[locoIndex].throttleNr, locoRoster[locoIndex].type, locoRoster[locoIndex].id, speed);
       xSemaphoreGive(velociSem);
@@ -346,7 +346,7 @@ void setLocoSpeed (uint8_t locoIndex, int16_t speed, int8_t direction)
     }
     else semFailed ("velociSem", __FILE__, __LINE__);
   }
-  else if (cmdProtocol == DCCPLUS) {
+  else if (cmdProtocol == DCCEX) {
     uint8_t tdir = 0;
     if (direction == FORWARD) tdir = 1;
     if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -379,7 +379,7 @@ void setLocoDirection (uint8_t locoIndex, uint8_t direction)
   }
 
   if (invalidLocoIndex(locoIndex, "Set loco direction")) return;
-  if (cmdProtocol == JMRI) {
+  if (cmdProtocol == WITHROT) {
     if (direction != STOP) {
       int dirFlag = 1;
 
@@ -402,7 +402,7 @@ void setDisconnected()
     xSemaphoreGive(displaySem);
   }
 
-  if (cmdProtocol == JMRI) {
+  if (cmdProtocol == WITHROT) {
     txPacket ("Q"); // quit
   }
 }
@@ -415,7 +415,7 @@ void getAddress()
     xSemaphoreGive(displaySem);
   }
 
-  if (cmdProtocol == DCCPLUS) {
+  if (cmdProtocol == DCCEX) {
     txPacket ("<R>");
   }
 }
@@ -427,7 +427,7 @@ void getCV(int16_t cv)
     xSemaphoreGive(displaySem);
   }
 
-  if (cmdProtocol == DCCPLUS) {
+  if (cmdProtocol == DCCEX) {
     char packette[32];
     sprintf (packette, "<R %d %d %d>", cv, CALLBACKNUM, CALLBACKSUB);
     txPacket (packette);

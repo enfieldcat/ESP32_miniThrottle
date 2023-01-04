@@ -1,0 +1,375 @@
+/*
+ * Use this file to centralise any defines and includes
+ * This file should contain only customisable data as far as possible
+ */
+
+/* ***********************************************************************\
+ * DEBUG LEVEL
+\*********************************************************************** */
+// Can be changed from runtime console - less than 2 unless diagnosing issues.
+// 0 - Normal
+// 1 - Additional info re process start time
+// 2 - Additional info re semaphores
+// 3 - most verbose
+#define DEBUGLEVEL 1
+
+/* ***********************************************************************\
+ * FILE SUPPORT
+\*********************************************************************** */
+// Optionally include file support, it will be enabled if OTAUPDATE is defined
+// Can be used to store certificates, command sequences, web files etc.
+#define FILESUPPORT
+
+/* ***********************************************************************\
+ * WiFi CONNECTIVITY
+\*********************************************************************** */
+// Typically a WiFi connection is required to either or both
+// 1. access to DCC control station using WiThrottle or DCC-EX
+// 2. to provide for web based configuration
+#define USEWIFI
+#ifdef USEWIFI
+// default location for over the air update, comment out if not required
+// only works if WiFi enabled
+//#define OTAUPDATE   "https://conferre.cf/projects/miniThrottle/"
+#endif
+
+/* ***********************************************************************\
+ * DIRECT SERIAL CONNECTION
+\*********************************************************************** */
+// Instead of control over WiFi to a control station, a direct serial connection
+// can be made to DCC-EX, typically this may be useful for a panel mounted thottle.
+// A further use of the serial DCC-Ex connection is for acting as a WiFi relay.
+// If using serial connection, then the WiFi connectivity is not required, but may
+// be useful for configuration or network relay purposes.
+#define SERIALCTRL 1
+#ifdef SERIALCTRL
+// These are used for the serial connected throttle, ie not using WiFi
+// I/O pins to use
+#define DCCRX 39
+#define DCCTX 16
+// Serial speed of serially connected DCC-EX unit
+#define DCCSPEED 115200
+#ifdef USEWIFI
+// Port number to relay to serial port, comment out to disable network relay to serial interface
+#define RELAYPORT 12090
+// Max simultaneous relay connections. The max number of connections is 8 if using std Arduino IDE
+// IDEs other than Arduino may allow you to tweak this for more connections,
+// see here to recompile libraries: https://docs.espressif.com/projects/arduino-esp32/en/latest/faq.html
+// And change CONFIG_LWIP_MAX_SOCKETS to accomodate this value AND some extra eg web connections
+// eg #define CONFIG_LWIP_MAX_SOCKETS 16
+#define MAXRELAY 8
+// WiThrottle keepalive period when relaying withrottle, connection "dead" once 2nd keep alive packet is missed
+#define KEEPALIVETIMEOUT 10
+// Define Fast-Clock parameters (serial-relay and WiFi required)
+// Leave FC_RATE 0 to disable, 100 = normal rate (100%), 200 = twice speed up (200%)
+#define FC_HOUR 12
+#define FC_MIN 0
+#define FC_RATE 100
+#endif
+#endif
+
+/* ***********************************************************************\
+ * WEB CONFIGURATION
+\*********************************************************************** */
+// Should a web interface start and how long should it be active for?
+// Comment out => no web server, 0 => always running or lifetime in minutes
+#define WEBLIFETIME   0
+#ifdef WEBLIFETIME
+// Default port to listen on
+#define WEBPORT 80
+// Default cache time in minutes for static content
+#define WEBCACHE 90
+// Default refresh time in seconds of the status screen
+#define WEBREFRESH 60
+// Max number of concurrent web connections
+#define MAXWEBCONNECT 5
+// Default credentials - adjust defaults here, NVS preference can be adjusted later
+#define WEBUSER "admin"
+#define WEBPASS "mysecret"
+#endif
+
+/* ***********************************************************************\
+ * FUNCTION CONTROL
+\*********************************************************************** */
+// default template to show function key selection
+#define FUNCOVERLAY "*1234567890123456789012345678"
+// Define what power on means when in DCC-EX mode, see: dccPower enum from static_defs.h
+#define DCCPOWER BOTH
+
+/* ***********************************************************************\
+ * DEBUG OPTIONS
+\*********************************************************************** */
+// Uncomment these to enable debug options on startup
+// DELAYONSTART can also be used with serially connected DCC-EX to allow it to initialise prior to the throttle starting
+// DELAYONSTART = seconds before initialising comms with command station
+#define DELAYONSTART 5
+//#define SHOWPACKETSONSTART 1
+
+/* ***********************************************************************\
+ * DISPLAY SELECTION - select only one display type
+\*********************************************************************** */
+// Select ONE display board type
+// NODISPLAY is intended for "headless" relay configuration. It will spare some memory and CPU cycles for relay work.
+// Other displays can be supported, but initialisation in ESP32_miniThrottle.ino and some defs below will need adjusting
+//#define NODISPLAY    // No display
+#define SSD1306      // SSD1306 128x64     I2C
+//#define SSD1327      // SSD1327 128x128    I2C
+//#define ST7735       // ST7735  128x160x16 SPI
+//#define ST7789       // ST7789  135x240x16 SPI
+//#define ILI9341      // ILI9341 240x320x16 SPI
+
+// Display board may have a built in backlight, eg in Lilygo, in which case you probably want this
+// if no backlight, eg monochrome displays this is not needed
+// BACKLIGHTPIN - any PWM capable output
+// BACKLIGHTREF - Optional: Pins 32 - 39 only, optional 0-3V reference voltage for backlight, otherwise can be set at prompt
+// SCREENSAVER  - define idle time in minutes to screen blanking (screen saver), 0 = never blank
+//#define BACKLIGHTPIN 22
+#ifdef BACKLIGHTPIN
+//#define BACKLIGHTREF 35
+#define SCREENSAVER 60
+#endif
+
+/* ***********************************************************************\
+ * KEYPAD SELECTION - select only one keyboard type
+\*********************************************************************** */
+// Define keypad things, Define one type of keypad
+#define keynone
+//#define key1x5
+//#define key3x4
+//#define key4x4
+//#define key4x5
+
+/* ***********************************************************************\
+ * NETWORK DEFAULTS
+\*********************************************************************** */
+// Default settings
+#define MYSSID  "DCC_ESP"
+#define HOST    "192.168.4.1"
+#define PORT    12090
+#define NAME    "mThrottle"
+#define DCCACKTIMEOUT 500
+
+// Define Pin Assignments
+// Manually check before compiling that pins are not duplicated
+/*
+ * **********  PIN ASSIGNMENTS  ******************************************************************
+ *
+ * NB: pins 34 and above are read only, do not use them for outputs, assign to switches and rotary encoders
+ *     pins 34 and above do not have internal pull up resistors, if using for switches add your own 20K pull up
+ *     
+ * NB: pins 06 to 11 are connected to the internal flash memory, do not use these even if available on your board
+ * 
+ * ADC is used for Potentiometer throttle (Pot-Throt / POTTHROTPIN)
+ *     ADC1_CH0 - GPIO 36  (SVP / Sense V Pos)
+ *     ADC1_CH1 - GPIO 37
+ *     ADC1_CH2 - GPIO 38
+ *     ADC1_CH3 - GPIO 39  (SVN / Sense V Neg)
+ *     ADC1_CH4 - GPIO 32
+ *     ADC1_CH5 - GPIO 33
+ *     ADC1_CH6 - GPIO 34
+ *     ADC1_CH7 - GPIO 35
+ * ADC2 not usable with WIFI enabled.
+ * 
+ * DAC is used to drive 3v voltmeter speedo
+ * DAC pins are limited to 25 and 26
+ * 
+ * SPI bus can be mapped to other pins, but the "native" pins are
+ * SPI  |    MOSI |    MISO |     CLK |      CS
+ * VSPI | GPIO 23 | GPIO 19 | GPIO 18 | GPIO 05
+ * HSPI | GPIO 13 | GPIO 12 | GPIO 14 | GPIO 15
+ * 
+ * I2C bus can be mapped to other pins, but the "native" pins are
+ *    SDA - GPIO 21
+ *    SCL - GPIO 22
+ * 
+ * The following are "strapping pins" which should in the state shown on reboot
+ *    GPIO 05 (must be HIGH during boot)
+ *    GPIO 12 (must be LOW during boot)
+ *    GPIO 15 (must be HIGH during boot)
+ *
+ * Bringing the EN pin to GND temporarily will hard reset the ESP32 module
+ *
+ */
+
+
+/* ***********************************************************************\
+ * INDICATOR LEDS
+\*********************************************************************** */
+// define either of TRACKPWR or TRACKPWRINV or neither. do not set both
+//#define TRACKPWR       16   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
+//#define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
+// To enable bidirectional mode indicator
+//#define TRAINSETLED    16
+// To enable function key indicators
+//#define F1LED          14
+//#define F2LED          12
+
+/* ***********************************************************************\
+ * ENCODERS AND SWITCHES
+\*********************************************************************** */
+//#define ENCODE_UP      39   // encoder up bounce
+//#define ENCODE_DN      16   // encoder down bounce
+//#define ENCODE_SW      36   // encoder switch
+//#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
+//#define DIRREVPIN      33   // Direction sw spdt center off LOW active
+//#define POTTHROTPIN    39   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
+
+/* ***********************************************************************\
+ * ANALOGUE VOLT METER OUTPUT
+\*********************************************************************** */
+// To configure a speedometer, use one of the 2 DAC pins (25, 26) to drive a 3v voltmeter
+//#define SPEEDOPIN      25
+// To define a brake pressure gauge using a 3V voltmeter, use BRAKEPRESPIN on one of 2 DAC pins
+//#define BRAKEPRESPIN   26
+
+
+/* ***********************************************************************\
+ * DISPLAY PIN MAPPING AND COLOR ASSIGNMENT
+\*********************************************************************** */
+// Define display things
+// Need to know how to address each display type
+//     I2C = SDA, SCK. Addr
+//     SPI = RESET, CS, DC, SCL, SCA
+// Other data
+//     DISPLAYNAME      - Useful to have a human readible form of display name
+//     COLORDISPLAY - Define if we support colours, otherwise monochrome
+//     SCALEFONT    - Define if speed should be shown in larger font
+//     SCREENROTATE - Number of rotatable directions if screen is rotatable
+//
+#ifdef SSD1306
+#define DISPLAYADDR  0x3c    // i2c display addr
+#define SDA_PIN        05    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
+#define SCK_PIN        04    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
+#define SCREENROTATE    2    // Screen can be rotated to 1 of 2 positions
+#define DISPLAYNAME "sdd1306"
+#endif
+//
+#ifdef SSD1327
+#define DISPLAYADDR  0x3c    // i2c display addr
+#define SDA_PIN        22    // i2c SDA pin, normally 21
+#define SCK_PIN        23    // i2c SCK pin, normally 22
+#define DISPLAYNAME "sdd1327"
+#endif
+//
+#ifdef ST7735
+#define SPI_RESET      27
+#define SPI_CS         15
+#define SPI_DC         12
+#define SPI_SCL        14
+#define SPI_SDA        13
+#define DISPLAYNAME "st7735"
+#define COLORDISPLAY
+#define SCALEFONT
+#define SCREENROTATE    4    // 4 different rotation positions
+#endif
+//
+#ifdef ST7789
+#define SPI_RESET      27
+#define SPI_CS         26
+#define SPI_DC         12
+#define SPI_SCL        14
+#define SPI_SDA        13
+#define DISPLAYNAME "st7789"
+#define COLORDISPLAY
+#define SCALEFONT
+#define SCREENROTATE    4    // 4 different rotation positions
+#endif
+//
+#ifdef ILI9341
+#define SPI_RESET      27
+#define SPI_CS         -1
+#define SPI_DC         12
+#define SPI_SCL        14
+#define SPI_SDA        13
+#define DISPLAYNAME "ili9341"
+#define COLORDISPLAY
+#define SCALEFONT
+#define SCREENROTATE    4    // 4 different rotation positions
+#endif
+
+//
+// for colour displays, set your preferences here
+//
+#ifdef COLORDISPLAY
+#define BACKCOLOR   RGB_COLOR16(0,0,0)         // Background RGB color
+#define STDCOLOR    RGB_COLOR16(255,255,255)   // Std foreground
+#define SPEEDBAR    RGB_COLOR16(100,255,100)   // Speedometer bar
+#define SPEEDBORDER RGB_COLOR16(127,127,255)   // Speedometer border
+#define INVERTCOLOR RGB_COLOR16(255,255,0)     // Invert color - used for menus and loco lists when driving
+#define FUNCCOLOR   RGB_COLOR16(100,255,255)   // function key colors
+#define INPUTCOLOR  RGB_COLOR16(50,255,50)     // input color
+#define WARNCOLOR   RGB_COLOR16(255,150,150)   // Warning color
+#endif
+
+
+/* ***********************************************************************\
+ * KEYPAD MAPPING
+ * Define both the pin mapping and the key character assignment
+\*********************************************************************** */
+
+//
+//
+#ifdef key4x5
+#define COLCOUNT        4
+#define ROWCOUNT        5
+#define MEMBR_COLS     16,25,26,00
+#define MEMBR_ROWS     02,14,12,13,15
+// F1, F2 = X and Y
+// Arrow keys are "U"p, "D"own, "L"eft and "R"ight
+// ESC = "E" and ENT = "S"ubmit
+// 'P' toggle pot throttle
+// '*' toggle bidirectional mode
+char keymap[ROWCOUNT][COLCOUNT] = {
+  { 'L', '0', 'R', 'S' },
+  { '7', '8', '9', 'E' },
+  { '4', '5', '6', 'D' },
+  { '1', '2', '3', 'U' },
+#ifdef POTTHROTPIN
+  { 'X', 'Y', '#', 'P' }
+#else
+  { 'X', 'Y', '#', '*' }
+#endif
+};
+#endif
+#ifdef key4x4
+#define COLCOUNT        4
+#define ROWCOUNT        4
+#define MEMBR_COLS     02,00,26,25
+#define MEMBR_ROWS     14,12,13,15
+char keymap[ROWCOUNT][COLCOUNT] = {
+// Alternative suggestion: R, L, D, U could be X, Y, E, S
+#ifdef POTTHROTPIN
+  { 'P', '0', '#', 'R' },
+#else
+  { '*', '0', '#', 'R' },
+#endif
+  { '7', '8', '9', 'L' },
+  { '4', '5', '6', 'D' },
+  { '1', '2', '3', 'U' }
+};
+#endif
+#ifdef key3x4
+#define COLCOUNT        3
+#define ROWCOUNT        4
+#define MEMBR_COLS     17,16,04
+#define MEMBR_ROWS     05,18,19,21
+char keymap[ROWCOUNT][COLCOUNT] = {
+#ifdef POTTHROTPIN
+  { 'P', '0', '#' },
+#else
+  { 'X', '0', '#' },
+#endif
+  { '7', '8', '9' },
+  { '4', '5', '6' },
+  { '1', '2', '3' }
+};
+#endif
+#ifdef key1x5
+#define COLCOUNT        5
+#define ROWCOUNT        1
+#define MEMBR_COLS     15,26,23,17,05
+#define MEMBR_ROWS     17
+char keymap[ROWCOUNT][COLCOUNT] = {
+  { '*', '#', 'S', 'E', 'X' }
+};
+#endif

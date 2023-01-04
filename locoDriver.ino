@@ -16,10 +16,12 @@ void locomotiveDriver()
   uint8_t m;
   uint8_t speedStep = 4;
   uint8_t bumpCount = 0;
-  int16_t targetSpeed = 0;
   int16_t warnSpeed = nvs_get_int ("warnSpeed", 90);
   int16_t calcSpeed = 0;
   uint8_t calcDirection = STOP;
+  uint8_t t_direction = STOP;
+  int16_t t_speed = 0;
+  int16_t t_steps = 128;
   char commandChar = 'Z';
   char releaseChar = 'Z';
   char displayLine[65];
@@ -40,11 +42,10 @@ void locomotiveDriver()
   while (xQueueReceive(keyReleaseQueue, &releaseChar, pdMS_TO_TICKS(debounceTime)) == pdPASS); // clear release queue
   drivingLoco = true;
   nextThrottle = 'A';
-  targetSpeed = 0;
   locoRoster[initialLoco].steal = '?';
   locoRoster[initialLoco].throttleNr = nextThrottle++;
   setLocoOwnership (initialLoco, true);
-  if (cmdProtocol == JMRI) {
+  if (cmdProtocol == WITHROT) {
     while (locoRoster[initialLoco].steal == '?') delay (100);
     if (locoRoster[initialLoco].steal == 'Y') {
       sprintf (displayLine, "Steal loco %s?", locoRoster[initialLoco].name);
@@ -278,127 +279,124 @@ void locomotiveDriver()
         case 'U':  // Increase forwardness.
           if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             dirChange = false;
-            if (bidirectionalMode && locoRoster[initialLoco].direction != FORWARD) {
-              if (locoRoster[initialLoco].speed > 0) {
-                locoRoster[initialLoco].speed = locoRoster[initialLoco].speed - speedStep;
-                if (locoRoster[initialLoco].speed < 0) locoRoster[initialLoco].speed = 0;
-                setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+            t_speed = locoRoster[initialLoco].speed;
+            t_direction = locoRoster[initialLoco].direction;
+            t_steps = locoRoster[initialLoco].steps;
+            xSemaphoreGive(velociSem);
+            if (bidirectionalMode && t_direction != FORWARD) {
+              if (t_speed > 0) {
+                t_speed = t_speed - speedStep;
+                if (t_speed < 0) t_speed = 0;
+                setLocoSpeed (initialLoco, t_speed, t_direction);
                 #ifdef BRAKEPRESPIN
                 brakedown(1);
                 #endif
               }
-              else if (locoRoster[initialLoco].direction == REVERSE) {
-                locoRoster[initialLoco].direction = STOP;     // move from REVERSE to STOP
+              else if (t_direction == REVERSE) {
+                t_direction = STOP;     // move from REVERSE to STOP
               }
               else {
-                locoRoster[initialLoco].direction = FORWARD;  // move from STOP to FORWARD
+                t_direction = FORWARD;  // move from STOP to FORWARD
                 setLocoSpeed (initialLoco, 0, FORWARD);
                 setLocoDirection (initialLoco, FORWARD);
                 dirChange = true;
               }
               speedChange = true;
             }
-            else if (locoRoster[initialLoco].speed < (locoRoster[initialLoco].steps - 2)) {
+            else if (t_speed < (t_steps - 2)) {
               speedChange = true;
-              locoRoster[initialLoco].speed = locoRoster[initialLoco].speed + speedStep;
-              if (locoRoster[initialLoco].speed > (locoRoster[initialLoco].steps - 2)) {
-                locoRoster[initialLoco].speed = locoRoster[initialLoco].steps - 2;
+              t_speed = t_speed + speedStep;
+              if (t_speed > (t_steps - 2)) {
+                t_speed = t_steps - 2;
               }
-              setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+              setLocoSpeed (initialLoco, t_speed, t_direction);
             }
             // now set increased speed for other controlled locos, based on initial loco speed
-            targetSpeed = locoRoster[initialLoco].speed;
             for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && n != initialLoco) {
-              setLocoSpeed (n, targetSpeed, locoRoster[initialLoco].direction);
+              setLocoSpeed (n, t_speed, t_direction);
               if (dirChange) {
-                setLocoDirection (n, locoRoster[initialLoco].direction);
+                setLocoDirection (n, t_direction);
               }
             }
-            xSemaphoreGive(velociSem);
           }
           else semFailed ("velociSem", __FILE__, __LINE__);
           break;
         case 'D':  // Increase reversedness
           if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             dirChange = false;
+            t_speed = locoRoster[initialLoco].speed;
+            t_direction = locoRoster[initialLoco].direction;
+            t_steps = locoRoster[initialLoco].steps;
+            xSemaphoreGive(velociSem);
             // In bidirectional mode down is an increase of speed if in reverse
-            if (bidirectionalMode && locoRoster[initialLoco].direction != FORWARD) {
+            if (bidirectionalMode && t_direction != FORWARD) {
               // if in bidirectional and direction is not FORWARD, then special handling is required
-              if (locoRoster[initialLoco].direction == STOP) {
-                locoRoster[initialLoco].direction = REVERSE;
+              if (t_direction == STOP) {
+                t_direction = REVERSE;
                 speedChange = true;
                 setLocoSpeed (initialLoco, 0, REVERSE);
                 setLocoDirection (initialLoco, REVERSE);
                 dirChange = true;
               }
-              else if (locoRoster[initialLoco].speed < (locoRoster[initialLoco].steps - 2)) {
+              else if (t_speed < (t_steps - 2)) {
                 speedChange = true;
-                locoRoster[initialLoco].speed = locoRoster[initialLoco].speed + speedStep;
-                if (locoRoster[initialLoco].speed > (locoRoster[initialLoco].steps - 2)) {
-                  locoRoster[initialLoco].speed = locoRoster[initialLoco].steps - 2;
+                t_speed = t_speed + speedStep;
+                if (t_speed > (t_steps - 2)) {
+                  t_speed = t_steps - 2;
                 }
-                setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+                setLocoSpeed (initialLoco, t_speed, t_direction);
               }
             }
-            else if (locoRoster[initialLoco].speed > 0) { // FORWARD and speed > 0
+            else if (t_speed > 0) { // FORWARD and speed > 0
               speedChange = true;
-              locoRoster[initialLoco].speed = locoRoster[initialLoco].speed - speedStep;
-              if (locoRoster[initialLoco].speed < 0) locoRoster[initialLoco].speed = 0;
-              setLocoSpeed (initialLoco, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+              t_speed = t_speed - speedStep;
+              if (t_speed < 0) t_speed = 0;
+              setLocoSpeed (initialLoco, t_speed, t_direction);
               #ifdef BRAKEPRESPIN
               brakedown(1);
               #endif
             }
             else if (bidirectionalMode) {            // FORWARD and speed <= 0
-              locoRoster[initialLoco].direction = STOP;
-              setLocoSpeed (initialLoco, 0, locoRoster[initialLoco].direction);
+              t_direction = STOP;
+              setLocoSpeed (initialLoco, 0, t_direction);
               speedChange = true;
             }
             // now set reduced speed for other controlled locos, based on initial loco speed
-            targetSpeed = locoRoster[initialLoco].speed;
             for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && n != initialLoco) {
-              setLocoSpeed (n, locoRoster[initialLoco].speed, locoRoster[initialLoco].direction);
+              setLocoSpeed (n, t_speed, t_direction);
               if (dirChange) {
-                setLocoDirection (n, locoRoster[initialLoco].direction);
+                setLocoDirection (n, t_direction);
               }
             }
-            xSemaphoreGive(velociSem);
           }
           else semFailed ("velociSem", __FILE__, __LINE__);
           break;
         case 'B':
-          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
-              if (locoRoster[n].speed > 0) {
-                locoRoster[n].speed = 0;
-                speedChange = true;
-              }
-              setLocoSpeed (n, -1, locoRoster[n].direction);
-            }
-            xSemaphoreGive(velociSem);
+          speedChange = true;
+          for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
+            setLocoSpeed (n, -1, STOP);
           }
-          else semFailed ("velociSem", __FILE__, __LINE__);
+          #ifdef BRAKEPRESPIN
+          brakedown(128);
+          #endif
           break;
         case 'L':  // Left / Right = Reverse / Forward
         case 'R':
+          uint8_t intended_dir;
           if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            uint8_t intended_dir;
-            if (commandChar == 'L') intended_dir = REVERSE;
-            else intended_dir = FORWARD;
-            for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
-              if (locoRoster[n].direction != intended_dir) {
-                if (locoRoster[n].speed > 0) {
-                  locoRoster[n].speed = 0;
-                }
-                speedChange = true;
-                locoRoster[n].direction = intended_dir;
-                setLocoDirection (n, intended_dir);
-                setLocoSpeed (n, 0, locoRoster[n].direction);
-              }
-            }
+            t_direction = locoRoster[initialLoco].direction;
             xSemaphoreGive(velociSem);
           }
           else semFailed ("velociSem", __FILE__, __LINE__);
+          if (commandChar == 'L') intended_dir = REVERSE;
+          else intended_dir = FORWARD;
+          for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
+            if (t_direction != intended_dir) {
+              speedChange = true;
+              setLocoDirection (n, intended_dir);
+              setLocoSpeed (n, 0, intended_dir);
+            }
+          }
           break;
         case 'X':
           if (functPrefix == 10) functPrefix = 0;
@@ -435,12 +433,11 @@ void locomotiveDriver()
             if (commandChar == '#' || nvs_get_int ("buttonStop", 1) == 0) displayTempMessage ("Warning:", "Cannot enter Cab menu when speed > 0", true);
             else {
               speedChange = true;
-              targetSpeed = 0;
               #ifdef BRAKEPRESPIN
-              brakedown(locoRoster[initialLoco].speed);
+              brakedown(128);
               #endif
               for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
-                setLocoSpeed (n, targetSpeed, locoRoster[initialLoco].direction);
+                setLocoSpeed (n, 0, STOP);
               }
               if (showPackets && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 Serial.println ("Executed button-stop");
@@ -467,10 +464,10 @@ void locomotiveDriver()
           if (speedLine <= linesPerScreen-4) speedChange = true; // update function flag in display
         }
         else semFailed ("velociSem", __FILE__, __LINE__);
-        if (cmdProtocol!=JMRI) {
-          functPrefix = 0;
-          inFunct = false;
-        }
+        //if (cmdProtocol!=WITHROT {
+        //  functPrefix = 0;
+        //  inFunct = false;
+        //}
         #ifdef F1LED
         digitalWrite(F1LED, LOW);
         #endif
@@ -503,7 +500,7 @@ void locomotiveDriver()
   for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
     setLocoOwnership (n, false);
     if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      if (cmdProtocol==DCCPLUS) locoRoster[n].owned = false;
+      if (cmdProtocol==DCCEX) locoRoster[n].owned = false;
       #ifdef RELAYPORT
       if (locoRoster[n].relayIdx == 240) locoRoster[n].relayIdx = 255;
       #endif
@@ -558,6 +555,9 @@ void brakedown (int steps)
     }
     brakePres = brakePres - mods;
     if (brakePres < 0) brakePres = 0;
+    if (brakePres < 255) {
+      dacWrite (BRAKEPRESPIN, brakePres);
+    }
   }
 }
 #endif

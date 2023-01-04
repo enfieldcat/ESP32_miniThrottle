@@ -90,7 +90,7 @@ void mkLocoMenu()
   for (uint8_t n=0; n<locomotiveCount; n++) locoMenu[n] = locoRoster[n].name;
   locoMenu[locomotiveCount] = (char*) lastOpt;
   locoMenu[locomotiveCount+1] = (char*) prevMenuOption;   // give option to go to previous menu
-  while (result!=0
+  while (result!=0 && trackPower
     #ifndef SERIALCTRL
     && client.connected()
     #endif
@@ -316,7 +316,7 @@ void mkCVMenu()
     Serial.printf ("%s mkCVMenu()\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
-  if (cmdProtocol == DCCPLUS) {
+  if (cmdProtocol == DCCEX) {
     while (result!=0
       #ifndef SERIALCTRL
       && client.connected()
@@ -503,7 +503,7 @@ void mkProtoPref()
     Serial.printf ("%s mkProtoPref()\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
-  const char *protoMenu[] = {"JMRI", "DCC-Ex", "Prev. Menu"};
+  const char *protoMenu[] = {"WiThrottle", "DCC-Ex", "Prev. Menu"};
   int defProto = cmdProtocol - 1;
   if (defProto < 0) defProto = 0;
   uint8_t result = displayMenu (protoMenu, 3, defProto);
@@ -562,7 +562,7 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
               locoRoster[option].id = tLoco;
               if (locoRoster[option].id < 128) locoRoster[option].type = 'S';
               else locoRoster[option].type = 'L';
-              if (cmdProtocol==DCCPLUS) {
+              if (cmdProtocol==DCCEX) {
                 locoRoster[option].owned = true;
                 #ifdef RELAYPORT
                 locoRoster[option].relayIdx = 240;  // "Magic number" => owned by serial link when in relaying context
@@ -584,11 +584,11 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
         locoRoster[option].steal = '?';
         locoRoster[option].direction = locoRoster[initialLoco].direction;
         locoRoster[option].speed = -1;
-        if (cmdProtocol==JMRI) {
+        if (cmdProtocol==WITHROT) {
           locoRoster[option].throttleNr = nextThrottle++;
           if (nextThrottle > 'Z') nextThrottle = '0';
           setLocoOwnership (option, true);
-          while (cmdProtocol==JMRI && locoRoster[option].steal == '?') delay (100);
+          while (cmdProtocol==WITHROT && locoRoster[option].steal == '?') delay (100);
           if (locoRoster[option].steal == 'Y') {
             sprintf (displayLine, "Steal loco %s?", locoRoster[option].name);
             if (displayYesNo (displayLine)) {
@@ -596,7 +596,7 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
             }
           }
         }
-        else if (cmdProtocol==DCCPLUS) {
+        else if (cmdProtocol==DCCEX) {
           locoRoster[option].steal = 'N';
           locoRoster[option].owned = true;
         }
@@ -662,66 +662,114 @@ void displayInfo()
 {
   char outData[80];
   uint8_t lineNr = 0;
+  static uint8_t currentOpt = 0;
   
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s displayInfo()\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
   display.clear();
-  sprintf (outData, "%s %s", PRODUCTNAME, VERSION);
-  displayScreenLine (outData, lineNr++, false);
-  if (lineNr >= linesPerScreen) return;
-  sprintf (outData, "Name: %s", tname);
-  displayScreenLine (outData, lineNr++, false);
-  if (lineNr >= linesPerScreen) return;
-  if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    uint32_t tint = fc_time;
-    xSemaphoreGive(fastClockSem);
-    if (fc_time != 36) {
-      char tString[10];
-      timeFormat (tString, tint);
-      sprintf (outData, "Time: %s", tString);
+  if (currentOpt == 0) {
+    currentOpt++;
+    sprintf (outData, "%s %s", PRODUCTNAME, VERSION);
+    displayScreenLine (outData, lineNr++, false);
+    if (lineNr >= linesPerScreen) return;
+  }
+  if (currentOpt == 1) {
+    currentOpt++;
+    sprintf (outData, "Name: %s", tname);
+    displayScreenLine (outData, lineNr++, false);
+    if (lineNr >= linesPerScreen) return;
+  }
+  if (currentOpt == 2) {
+    currentOpt++;
+    if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      uint32_t tint = fc_time;
+      xSemaphoreGive(fastClockSem);
+      if (fc_time != 36) {
+        char tString[10];
+        timeFormat (tString, tint);
+        sprintf (outData, "Time: %s", tString);
+        displayScreenLine (outData, lineNr++, false);
+        if (lineNr >= linesPerScreen) return;
+      }
+    }
+  }
+  if (currentOpt == 3) {
+    currentOpt++;
+    if (ssid[0]!='\0') {
+      IPAddress ip = WiFi.localIP();
+      if (charsPerLine < 20)
+        sprintf (outData, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+      else
+        sprintf (outData, "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+      displayScreenLine (outData, lineNr++, false);
+      if (lineNr >= linesPerScreen) return;
+      sprintf (outData, "SSID: %s", ssid);
+      displayScreenLine (outData, lineNr++, false);
+    }
+    if (lineNr >= linesPerScreen) return;
+  }
+  if (currentOpt == 4) {
+    currentOpt++;
+    sprintf (outData, "Proto: %s", protoList[cmdProtocol]);
+    displayScreenLine (outData, lineNr++, false);
+    if (lineNr >= linesPerScreen) return;
+  }
+  if (currentOpt == 5) {
+    currentOpt++;
+    #ifdef RELAYPORT
+    sprintf (outData, "Relay: %s", relayTypeList[relayMode]);
+    displayScreenLine (outData, lineNr++, false);
+    if (lineNr >= linesPerScreen) return;
+    #endif
+  }
+  if (currentOpt == 6) {
+    currentOpt++;
+    #ifdef SERIALCTRL
+    displayScreenLine ("Svr: Serial Connect", lineNr++, false);
+    #else
+    if (strlen (remServerNode) > 0) {
+      sprintf (outData, "Svr: %s", remServerNode);
+      displayScreenLine (outData, lineNr++, false);
+    }
+    #endif
+    if (lineNr >= linesPerScreen) return;
+  }
+  if (currentOpt == 7) {
+    currentOpt++;
+    for (uint8_t n=0; n<4; n++) if (dccLCD[n][0] != '\0') {
+      sprintf (outData, "LCD%d: %s", n, dccLCD[n]);
       displayScreenLine (outData, lineNr++, false);
       if (lineNr >= linesPerScreen) return;
     }
   }
-  if (ssid[0]!='\0') {
-    sprintf (outData, "SSID: %s", ssid);
-    displayScreenLine (outData, lineNr++, false);
+  if (currentOpt == 8) {
+    currentOpt++;
+    if (strlen (remServerDesc) > 0) {
+      sprintf (outData, "Desc: %s", remServerDesc);
+      displayScreenLine (outData, lineNr++, false);
+      if (lineNr >= linesPerScreen) return;
+    }
   }
-  if (lineNr >= linesPerScreen) return;
-  sprintf (outData, "Proto: %s", protoList[cmdProtocol]);
-  displayScreenLine (outData, lineNr++, false);
-  #ifdef RELAYPORT
-  if (lineNr >= linesPerScreen) return;
-  sprintf (outData, "Relay: %s", relayTypeList[relayMode]);
-  displayScreenLine (outData, lineNr++, false);
-  #endif
-  if (lineNr >= linesPerScreen) return;
-  #ifdef SERIALCTRL
-  displayScreenLine ("Svr: Serial Connect", lineNr++, false);
-  if (lineNr >= linesPerScreen) return;
-  #else
-  if (strlen (remServerNode) > 0) {
-    sprintf (outData, "Svr: %s", remServerNode);
-    displayScreenLine (outData, lineNr++, false);
-    if (lineNr >= linesPerScreen) return;
+  if (currentOpt == 9) {
+    currentOpt++;
+    if (strlen (remServerType) > 0) {
+      sprintf (outData, "Type: %s", remServerType);
+      displayScreenLine (outData, lineNr++, false);
+      if (lineNr >= linesPerScreen) return;
+    }
   }
-  #endif
-  if (strlen (remServerDesc) > 0) {
-    sprintf (outData, "Desc: %s", remServerDesc);
-    displayScreenLine (outData, lineNr++, false);
-    if (lineNr >= linesPerScreen) return;
+  if (currentOpt == 10) {
+    currentOpt++;
+    if (strlen (lastMessage) > 0) {
+      sprintf (outData, "Msg: %s", lastMessage);
+      displayScreenLine (outData, lineNr++, false);
+      if (lineNr >= linesPerScreen) return;
+    }
   }
-  if (strlen (remServerType) > 0) {
-    sprintf (outData, "Type: %s", remServerType);
-    displayScreenLine (outData, lineNr++, false);
-    if (lineNr >= linesPerScreen) return;
-  }
-  if (strlen (lastMessage) > 0) {
-    sprintf (outData, "Msg: %s", lastMessage);
-    displayScreenLine (outData, lineNr++, false);
-  }
+  // Got thus far ... so back to opt zero;
+  currentOpt = 0;
 }
 
 

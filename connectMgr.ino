@@ -14,16 +14,15 @@ static WiFiMulti wifiMulti;
 
 void connectionManager(void *pvParameters)
 {
-  uint8_t index = 0;
-  uint8_t preferRef = 0;
   char paramName[SSIDLENGTH];
-  char password[SSIDLENGTH];
-  #ifdef WEBLIFETIME
-  bool startWeb = true;
-  #endif
-  #ifdef RELAYPORT
-  bool startRelay = true;
-  #endif
+  char apssid[SSIDLENGTH];
+  char appass[SSIDLENGTH];
+  char stassid[SSIDLENGTH];
+  char stapass[SSIDLENGTH];
+  uint8_t index     = 0;
+  uint8_t scanIndex = 0;
+  uint8_t staPref   = 0;
+  bool networkFound = false;
 
   uint8_t use_multiwifi = nvs_get_int ("use_multiwifi", 0);
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -31,102 +30,176 @@ void connectionManager(void *pvParameters)
     xSemaphoreGive(displaySem);
   }
 
-  // load array of possible networks
-  if (use_multiwifi == 1) {
-    for (index = 0; index < WIFINETS; index++) {
-      sprintf (paramName, "wifissid_%d", index);
-      // use a different default for ssid for wifi 0 to other wifi
-      if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
-        if (index == 0) nvs_get_string (paramName, ssid, MYSSID, sizeof(ssid));
-        else nvs_get_string (paramName, ssid, "none", sizeof(ssid));
-        xSemaphoreGive(tcpipSem);
-      }
-      else semFailed ("tcpipSem", __FILE__, __LINE__);
-      if (strcmp (ssid, "none") != 0) {
-        sprintf (paramName, "wifipass_%d", index);
-        nvs_get_string (paramName, password, "none", sizeof(password));
-        if (strcmp (password, "none") == 0) wifiMulti.addAP((const char*)ssid, NULL);
-        else wifiMulti.addAP((const char*) ssid, (const char*) password);
-      }
+  // If not in station mode scan networks at startup just for the record
+  if ((nvs_get_int("WiFiMode", WIFISTA) & 1) == 0) {
+    if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
+      wifi_scanNetworks();
+      xSemaphoreGive(tcpipSem);
     }
-    WiFi.setHostname(tname);
+    else semFailed ("tcpipSem", __FILE__, __LINE__);
   }
-  if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
-    ssid[0] = '\0';
-    xSemaphoreGive(tcpipSem);
+  // Start AP if required
+  if ((nvs_get_int("WiFiMode", WIFISTA) & 2) > 0) {
+    nvs_get_string ("APname", apssid, tname,  sizeof(apssid));
+    nvs_get_string ("APpass", appass, "none", sizeof(appass));
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s WiFi Access Point starting: %s\r\n", getTimeStamp(), apssid);
+      xSemaphoreGive (displaySem);
+    }
+    if (strlen(appass)<8) 
+      WiFi.softAP(apssid, NULL, nvs_get_int ("apChannel", APCHANNEL), 0, nvs_get_int("apClients", DEFAPCLIENTS));
+    else
+      WiFi.softAP(apssid, appass, nvs_get_int ("apChannel", APCHANNEL), 0, nvs_get_int("apClients", DEFAPCLIENTS));
+    APrunning  = true;
+    MDNS.begin(tname);
   }
-  else semFailed ("tcpipSem", __FILE__, __LINE__);
-  // Check that we are connected
   while (true) {
-    // if WiFi not connected
-    while (WiFi.status() != WL_CONNECTED) {
-      #ifdef WEBLIFETIME
-      startWeb = true;
-      #endif
-      #ifdef RELAYPORT
-      startRelay = true;
-      #endif
-      ssid[0] = '\0';
-      #ifndef SERIALCTRL
-      trackPower = false;
-      #ifdef TRACKPWR
-      digitalWrite(TRACKPWR, HIGH);
-      #endif
-      #ifdef TRACKPWRINV
-      digitalWrite(TRACKPWRINV, LOW);
-      #endif
-      delay (500);
-      #ifdef TRACKPWR
-      digitalWrite(TRACKPWR, LOW);
-      #endif
-      #ifdef TRACKPWRINV
-      digitalWrite(TRACKPWRINV, HIGH);
-      #endif
-      #endif
-      if (use_multiwifi == 1) {
-        if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
-          Serial.printf ("%s Will search for strongest WiFi signal\r\n", getTimeStamp());
-          xSemaphoreGive(tcpipSem);
-        }
-        else semFailed ("tcpipSem", __FILE__, __LINE__);
-        wifiMulti.run();
-      }
-      else {
-        if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
-          Serial.printf ("%s Polling for first available WiFi connection\r\n", getTimeStamp());
-          xSemaphoreGive(tcpipSem);
-        }
-        else semFailed ("tcpipSem", __FILE__, __LINE__);
-        net_single_connect();
-      }
+    // Check if WiFi station mode needs to be connected and is connected
+    if ((nvs_get_int("WiFiMode", WIFISTA) & 1) > 0) {
       if (WiFi.status() != WL_CONNECTED) {
-        delay (10000);
-      }
-      else {
-        // Place name of actually selected SSID in ssid variable
         if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
-          WiFi.SSID().toCharArray(ssid, sizeof(ssid));
+          wifi_scanNetworks();
           xSemaphoreGive(tcpipSem);
         }
         else semFailed ("tcpipSem", __FILE__, __LINE__);
-        MDNS.begin(tname);
-        if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
-          Serial.printf  ("%s WiFi Connected: ", getTimeStamp());
-          Serial.println (ssid);        
-          xSemaphoreGive(tcpipSem);
+        staPref = nvs_get_int ("staConnect", 0);
+        // Preference is to only access known access points in a strict order of preference
+        if (staPref == 0) {
+          networkFound = false;
+          for (index = 0; index < WIFINETS && !networkFound; index++) {
+            sprintf (paramName, "wifissid_%d", index);
+            if (index == 0) nvs_get_string (paramName, stassid, MYSSID, sizeof(stassid));
+            else nvs_get_string (paramName, stassid, "none", sizeof(stassid));
+            if (strcmp (stassid, "none") != 0) {
+              for (scanIndex = 0; scanIndex < numberOfNetworks && !networkFound; scanIndex++) {
+                if (strcmp (stassid, WiFi.SSID(scanIndex).c_str()) == 0) {
+                  sprintf (paramName, "wifipass_%d", index);
+                  nvs_get_string (paramName, stapass, "none", sizeof(stapass));
+                  networkFound = true;
+                }
+              }
+            }
+          }
         }
-        else semFailed ("tcpipSem", __FILE__, __LINE__);
-        // Find the index number of the actually used SSID, use that as prefered ref to server index
-        for (preferRef=255, index = 0; index < WIFINETS && preferRef == 255; index++) {
-          sprintf (paramName, "wifissid_%d", index); // NB do not replace live SSID while doing the comparison, use local password variable instead
-          if (index == 0) nvs_get_string (paramName, password, MYSSID, sizeof(password));  // ssid has a different default to all others
-          else nvs_get_string (paramName, password, "none", sizeof(ssid));
-          if (strcmp (ssid, password) == 0) preferRef = index;
+        // preference is to probe APs in sequence. only option if SSID is hidden
+        else if (staPref == 3) {
+          static uint8_t nextWifi = 0;
+
+          // previously found but dropped connection
+          if (nextWifi >= WIFINETS) {
+            nextWifi = 0;
+            // nothing found
+            if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              Serial.printf ("%s ConnectionManager: No networks defined\r\n", getTimeStamp(), xPortGetCoreID());
+              xSemaphoreGive(displaySem);
+            }
+          }
+          // find next candidate
+          networkFound = false;
+          for (index = nextWifi++; index < WIFINETS && !networkFound; index++) {
+            sprintf (paramName, "wifissid_%d", index);
+            if (index == 0) nvs_get_string (paramName, stassid, MYSSID, sizeof(stassid));
+            else nvs_get_string (paramName, stassid, "none", sizeof(stassid));
+            if (strcmp (stassid, "none") != 0) {
+              sprintf (paramName, "wifipass_%d", index);
+              nvs_get_string (paramName, stapass, "none", sizeof(stapass));
+              networkFound = true;
+            }
+          }
+        }
+        // Preference is to access access-points by order of signal strength preference
+        else {
+          int entryNum[numberOfNetworks];
+          int strength[numberOfNetworks];
+          int limit = numberOfNetworks - 1;
+          int exchanger;
+          bool swapped = true;
+
+          // Prime arrays with SSID details
+          for (int n=0;n < numberOfNetworks; n++) {
+            entryNum[n] = n;
+            strength[n] = WiFi.RSSI(n);
+          }
+          // simple bubble sort
+          while (swapped && limit>0) {
+            swapped = false;
+            for (int n=0; n<limit; n++) {
+              if (strength[n] < strength[n+1]) {
+                swapped       = true;
+                exchanger     = entryNum[n];
+                entryNum[n]   = entryNum[n+1];
+                entryNum[n+1] = exchanger;
+                exchanger     = strength[n];
+                strength[n]   = strength[n+1];
+                strength[n+1] = exchanger;
+              }
+            }
+          }
+          // Now check if they meet our selection criteria
+          for (scanIndex = 0; scanIndex < numberOfNetworks && !networkFound; scanIndex++) {
+            exchanger = entryNum[scanIndex];
+            // permit any open network?!! - Yikes low security bar.
+            if (staPref==2 && WiFi.encryptionType(exchanger) == WIFI_AUTH_OPEN) {
+              strcpy (stassid, WiFi.SSID(exchanger).c_str());
+              strcpy (stapass, "none");
+              networkFound = true;
+            }
+            // only access known access points
+            else {
+              for (index = 0; index < WIFINETS && !networkFound; index++) {
+                sprintf (paramName, "wifissid_%d", index);
+                if (index == 0) nvs_get_string (paramName, stassid, MYSSID, sizeof(stassid));
+                else nvs_get_string (paramName, stassid, "none", sizeof(stassid));
+                if (strcmp (stassid, "none") != 0) {
+                  if (strcmp (stassid, WiFi.SSID(exchanger).c_str()) == 0) {
+                    sprintf (paramName, "wifipass_%d", index);
+                    nvs_get_string (paramName, stapass, "none", sizeof(stapass));
+                    networkFound = true;
+                  }
+                }
+              }
+            }
+          }
+        }
+        // Connect to the network
+        if (networkFound) {
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("%s WiFi Station mode connecting to: %s\r\n", getTimeStamp(), stassid);
+            xSemaphoreGive (displaySem);
+          }
+          if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
+            strcpy (ssid, stassid);
+            if (strcmp (stapass, "none") == 0) WiFi.begin(stassid, NULL);
+            else WiFi.begin(stassid, stapass);
+            xSemaphoreGive(tcpipSem);
+          }
+          delay (TIMEOUT);
+          if ((!APrunning) && xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
+            MDNS.begin(tname);
+            xSemaphoreGive(tcpipSem);
+          }
+        }
+        // Warn if no candidates found
+        else {
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("%s WiFi Station mode: no access point found.\r\n", getTimeStamp());
+            xSemaphoreGive (displaySem);
+          }
+          if ((nvs_get_int("WiFiMode", WIFISTA) & 2) == 0) {
+            #ifdef WEBLIFETIME
+            startWeb = true;
+            #endif
+            #ifdef RELAYPORT
+            startRelay = true;
+            #endif
+          }
+          ssid[0] = '\0';
         }
       }
     }
+    // Does the web server need (re)starting?
     #ifdef WEBLIFETIME
-    if (startWeb && WiFi.status() == WL_CONNECTED) {
+    if (startWeb && (APrunning || WiFi.status() == WL_CONNECTED)) {
       static int8_t num = 0;
       static char label[16];
       startWeb = false;
@@ -134,8 +207,9 @@ void connectionManager(void *pvParameters)
       xTaskCreate(webListener, label, 6144, NULL, 4, NULL);
     }
     #endif
+    // Does the relay need to be restarted?
     #ifdef RELAYPORT
-    if (startRelay && WiFi.status() == WL_CONNECTED) {
+    if (startRelay && (APrunning || WiFi.status() == WL_CONNECTED)) {
       if (relayMode != NORELAY) {
         static int8_t num = 0;
         static char label[16];
@@ -151,9 +225,10 @@ void connectionManager(void *pvParameters)
       startRelay = false;
     }
     #endif
+    // Does the connection to the Control System need to be estabilished?
     #ifndef SERIALCTRL
     // if Wifi connected but server not connected
-    if (WiFi.status() == WL_CONNECTED && !client.connected()) {
+    if ((APrunning || WiFi.status() == WL_CONNECTED) && !client.connected()) {
       char server[65];
       int  port;
 
@@ -170,95 +245,77 @@ void connectionManager(void *pvParameters)
         port = mdnsLookup ("_withrottle", server);
         if (port != 0 && strlen(server) > 0) {
           if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            Serial.printf ("%s MDNS look up service: %s:%d\r\n", getTimeStamp(), server, port);
+            Serial.printf ("%s MDNS look up service found: %s:%d\r\n", getTimeStamp(), server, port);
             xSemaphoreGive (displaySem);
           }
           connect2server (server, port);
+          delay (TIMEOUT);
+        }
+        else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s MDNS look up: no services found.\r\n", getTimeStamp());
+          xSemaphoreGive (displaySem);
         }
       }
-      // first check our preferred connection index, ie the one with the same index ID as the connected network
-      if ((!client.connected()) && preferRef < WIFINETS) {  // should not be "not found", but just in case of a bug...
-        sprintf (paramName, "server_%d", preferRef);
-        nvs_get_string (paramName, server, HOST, sizeof(server));
-        sprintf (paramName, "port_%d", preferRef);
-        port = nvs_get_int (paramName, PORT);
-        connect2server (server, port);
-      }
       // now work through server list until we connect or just give up
-      for (index = 0; index <WIFINETS && !client.connected(); index++) if (index != preferRef) {
+      for (index = 0; index <WIFINETS && !client.connected(); index++) {
         sprintf (paramName, "server_%d", index);
         nvs_get_string (paramName, server, "none", sizeof(server));
-        sprintf (paramName, "port_%d", index);
-        port = nvs_get_int (paramName, PORT);
-        connect2server (server, port);
+        if (strcmp (server, "none") != 0) {
+          sprintf (paramName, "port_%d", index);
+          port = nvs_get_int (paramName, PORT);
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("%s Attempting connection to: %s:%d\r\n", getTimeStamp(), server, port);
+            xSemaphoreGive (displaySem);
+          }
+          connect2server (server, port);
+          delay(TIMEOUT);
+        }
       }
     }
     #endif // NOT SERIALCTRL
-    delay (1000);
+    delay (10000);
   }
   vTaskDelete( NULL );
 }
 
 
-bool net_single_connect()
+char* wifi_EncryptionType(wifi_auth_mode_t encryptionType)
 {
-  bool net_connected = false;
-  char msgBuffer[40];
-  char wifi_passwd[WIFINETS][SSIDLENGTH];
-  char wifi_ssid[WIFINETS][SSIDLENGTH];
-  
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s netSingleConnect()\r\n", getTimeStamp());
+  switch (encryptionType) {
+    case (WIFI_AUTH_OPEN):
+      return "Open";
+      break;
+    case (WIFI_AUTH_WEP):
+      return "WEP";
+      break;
+    case (WIFI_AUTH_WPA_PSK):
+      return "WPA_PSK";
+      break;
+    case (WIFI_AUTH_WPA2_PSK):
+      return "WPA2_PSK";
+      break;
+    case (WIFI_AUTH_WPA_WPA2_PSK):
+      return "WPA_WPA2_PSK";
+      break;
+    case (WIFI_AUTH_WPA2_ENTERPRISE):
+      return "WPA2_ENTERPRISE";
+      break;
+    }
+}
+
+void wifi_scanNetworks()
+{
+  numberOfNetworks = WiFi.scanNetworks();
+  if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf("Number of networks found: %d\r\n", numberOfNetworks);
+    Serial.printf("%-16s %8s %-17s Channel Type\r\n", "Name", "Strength", "Address");
+    for (int i = 0; i < numberOfNetworks; i++) {
+      Serial.printf ("%-16s %8d %-17s %7d %s\r\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.channel(i), wifi_EncryptionType(WiFi.encryptionType(i)));
+    }
     xSemaphoreGive(displaySem);
   }
-
-  if (WiFi.status() == WL_CONNECTED) return (true);
-  for (uint8_t n=0; n<WIFINETS; n++) {
-    sprintf (msgBuffer, "wifissid_%d", n);
-    // use a different default for ssid for wifi 0 to other wifi
-    if (n==0) nvs_get_string (msgBuffer, wifi_ssid[n], MYSSID, sizeof(wifi_ssid[0]));
-    else nvs_get_string (msgBuffer, wifi_ssid[n], "none", sizeof(wifi_ssid[0]));
-    if (strcmp (wifi_ssid[n], "none") != 0) {
-      sprintf (msgBuffer, "wifipass_%d", n);
-      nvs_get_string (msgBuffer, wifi_passwd[n], "none", sizeof(wifi_passwd[0]));
-    }
-  }
-  WiFi.setHostname(tname);
-  for (int loops = 1; loops>0 && !net_connected; loops--) {
-    for (uint8_t n=0; n<WIFINETS && !net_connected; n++) {
-      if (strcmp (wifi_ssid[n], "none") != 0) {
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          Serial.printf  ("%s Polling network: ", getTimeStamp());
-          Serial.println (wifi_ssid[n]);
-          xSemaphoreGive (displaySem);
-        }
-        if (strcmp (wifi_passwd[n], "none") == 0) WiFi.begin(wifi_ssid[n], NULL);
-        else WiFi.begin(wifi_ssid[n], wifi_passwd[n]);
-        delay (TIMEOUT);
-        for (uint8_t z=0; z<14 && WiFi.status() != WL_CONNECTED; z++) delay (TIMEOUT);
-        if (WiFi.status() == WL_CONNECTED) {
-          net_connected = true;
-          if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
-            strcpy (ssid, wifi_ssid[n]);
-            xSemaphoreGive(tcpipSem);
-          }
-          else semFailed ("tcpipSem", __FILE__, __LINE__);
-          // MDNS.begin(tname);
-        }
-        else {
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            Serial.printf  ("%s Not connecting to WiFi network: ", getTimeStamp());
-            Serial.println (wifi_ssid[n]);
-            xSemaphoreGive (displaySem);
-          }
-        }
-      }
-    }
-  }
-  if (WiFi.status() == WL_CONNECTED) net_connected = true;
-  else net_connected = false;
-  return (net_connected);
 }
+
 
 #ifndef SERIALCTRL
 void connect2server (char *server, int port)
@@ -271,7 +328,7 @@ void connect2server (char *server, int port)
   if (strcmp (server, "none") == 0) return;
   if (client.connect(server, port)) {
     initialDataSent = false;
-    cmdProtocol = nvs_get_int ("defaultProto", JMRI);  // Go straight to default protocol
+    cmdProtocol = nvs_get_int ("defaultProto", WITHROT);  // Go straight to default protocol
     if (strlen(server) < sizeof(remServerNode)-1) strcpy (remServerNode, server);
     else {
       strncpy (remServerNode, server, sizeof(remServerNode)-1);
@@ -284,7 +341,7 @@ void connect2server (char *server, int port)
       Serial.printf  ("\r\n%s Connected to server: %s:%d\r\n", getTimeStamp(), server, port);
       xSemaphoreGive(displaySem);
     }
-    if (cmdProtocol==DCCPLUS) {
+    if (cmdProtocol==DCCEX) {
       strcpy (remServerType, "DCC-Ex");
       dccPopulateLoco();
       dccPopulateTurnout();
@@ -443,7 +500,7 @@ void serialConnectionManager(void *pvParameters)
   // Connect to DCC-Ex over serial connection
   if (xSemaphoreTake(serialSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     serial_dev.begin (DCCSPEED, SERIAL_8N1, DCCRX, DCCTX);
-    cmdProtocol = DCCPLUS;
+    cmdProtocol = DCCEX;
     xSemaphoreGive(serialSem);
     delay (1000);
     // Once connected, we can listen for returning packets

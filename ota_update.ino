@@ -323,7 +323,7 @@ void OTAcheck4update()
   char ota_url[120];
   char web_certFile[42];
 
-  if (!WiFi.status() == WL_CONNECTED) return;
+  if ((!APrunning) && (!WiFi.status() == WL_CONNECTED)) return;
   nvs_get_string ("ota_url", ota_url, OTAUPDATE, sizeof(ota_url));
   nvs_get_string ("web_certFile", web_certFile, CERTFILE, sizeof(web_certFile));
   if (strncmp (ota_url, "https://", 8) == 0) {

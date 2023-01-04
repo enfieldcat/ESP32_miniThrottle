@@ -42,7 +42,7 @@ void webListener(void *pvParameters)
     vTaskDelete( NULL );
   }
   // Wait for WiFi connection
-  while (WiFi.status() != WL_CONNECTED) delay (1000);
+  while ((!APrunning) && WiFi.status() != WL_CONNECTED) delay (1000);
   delay (TIMEOUT);
 
   // Should we advertise as a service?
@@ -85,7 +85,7 @@ void webListener(void *pvParameters)
   }
   // Wait for incoming connections for as long as there is a connection
   while (webIsRunning) {
-    if (WiFi.status() == WL_CONNECTED) {
+    if (APrunning || WiFi.status() == WL_CONNECTED) {
       if (webServer->hasClient()) {
         notAssigned = true;
         for(i = 0; notAssigned && i < MAXWEBCONNECT; i++){
@@ -115,6 +115,9 @@ void webListener(void *pvParameters)
   webServer->close();
   webServer->stop();
   webServer->end();
+  if (exitTime == 0 || (esp_timer_get_time() - lastActTime) < exitTime) {
+    startWeb = true;
+  }
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Webserver stopped\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
@@ -443,11 +446,11 @@ bool webConnState (WiFiClient *myClient, uint8_t chkmode)
   bool retval = false;
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     switch (chkmode) {
-    case 1: retval = WiFi.status() == WL_CONNECTED && myClient->connected();
+    case 1: retval = (APrunning || WiFi.status() == WL_CONNECTED) && myClient->connected();
             break;
-    case 2: retval = WiFi.status() == WL_CONNECTED && myClient->connected() && myClient->available()>0;
+    case 2: retval = (APrunning || WiFi.status() == WL_CONNECTED) && myClient->connected() && myClient->available()>0;
             break;
-    case 3: retval = WiFi.status() == WL_CONNECTED && myClient->connected() && myClient->available()<1;
+    case 3: retval = (APrunning || WiFi.status() == WL_CONNECTED) && myClient->connected() && myClient->available()<1;
             break;
     }
     xSemaphoreGive(tcpipSem);
@@ -611,18 +614,55 @@ void mkWebWiFi(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     char passName[16];
     char myssid[33];
     char mypass[33];
+    uint8_t WiFiMode   = nvs_get_int ("WiFiMode", WIFISTA);
+    uint8_t apChannel  = nvs_get_int ("apChannel", APCHANNEL);
+    uint8_t staConnect = nvs_get_int ("staConnect", 0);
     
-    myClient->printf ((const char*)"<form action=\"/save\" method=\"post\"><h2>WiFi Networks</h2><table><tr><th>Index</th><th>&nbsp;</th><th>SSID</th><th>&nbsp;</th><th>Password</th></tr>");
+    myClient->printf ((const char*)"<form action=\"/save\" method=\"post\">");
+    myClient->printf ((const char*)"<h2>Access Point Mode</h2><table><tr><th>Setting</th><th>Value</th></tr>");
+    myClient->printf ((const char*)"<tr><td>Access Point Mode</td><td><input type=\"radio\" id=\"APEnableYes\" name=\"APEnable\" value=\"yes\"");
+    if ((WiFiMode & 2) > 0) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"APEnableYes\">Enable</label><br><input type=\"radio\" id=\"APEnableNo\" name=\"APEnable\" value=\"no\"");
+    if ((WiFiMode & 2) == 0) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"APEnableNo\">Disable</label></td></tr>");
+    nvs_get_string ("APname", myssid, tname,  sizeof(myssid));
+    nvs_get_string ("APpass", mypass, "none", sizeof(mypass));
+    myClient->printf ((const char*)"<tr><td>AP SSID Name</td><td><input type=\"text\" name=\"APname\" value=\"%s\" minlength=\"4\"></td></tr>", myssid);
+    myClient->printf ((const char*)"<tr><td>AP Password</td><td><input type=\"password\" name=\"APpass\" value=\"%s\" minlength=\"4\"></td></tr>", mypass);
+    myClient->printf ((const char*)"<tr><td>AP Channel (1-13)</td><td><input type=\"number\" name=\"apChannel\" value=\"%d\" min=\"1\" max=\"13\" size=\"5\"></td></tr>", apChannel);
+    myClient->printf ((const char*)"<tr><td>Max Clients (1-%d)</td><td><input type=\"number\" name=\"apClients\" value=\"%d\" min=\"1\" max=\"13\" size=\"5\"></td></tr>", MAXAPCLIENTS, nvs_get_int("apClients", DEFAPCLIENTS));
+    myClient->printf ((const char*)"</table><p><strong>Note:</strong></p><ul><li>A password of less than 8 characters will create an open access point</li><li>Access point mode is typically only used for relays, and not for stand-alone throttles</li></ul><h2>Station Mode</h2><table>");
+    myClient->printf ((const char*)"<tr><th>Setting</th><th>Value</th></tr><tr><td>Station Mode</td><td><input type=\"radio\" id=\"STAEnableYes\" name=\"STAEnable\" value=\"yes\"");
+    if ((WiFiMode & 1) > 0) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"STAEnableYes\">Enable</label><br><input type=\"radio\" id=\"STAEnableNo\" name=\"STAEnable\" value=\"no\"");
+    if ((WiFiMode & 1) == 0) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"STAEnableNo\">Disable</label></td></tr><tr><td>Connect to</td><td><input type=\"radio\" id=\"STAConnect0\" name=\"staConnect\" value=\"0\"");
+    if (staConnect == 0) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"STAConnect0\">First found in sequence below</label><br><input type=\"radio\" id=\"STAConnect1\" name=\"staConnect\" value=\"1\"");
+    if (staConnect == 1) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"STAConnect1\">Strongest signal in table below</label><br><input type=\"radio\" id=\"STAConnect2\" name=\"staConnect\" value=\"2\"");
+    if (staConnect == 2) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"STAConnect2\">Strongest signal including any unknown open access points</label><br><input type=\"radio\" id=\"STAConnect3\" name=\"staConnect\" value=\"3\"");
+    if (staConnect == 3) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"STAConnect3\">Sequential probe of list below (use for hidden SSIDs)</label></td></tr></table><p><strong>Note</strong></p><ul><li>First 3 options work for SSIDs which are not hidden</li></ul>");
+    myClient->printf ((const char*)"<table><tr><th>Index</th><th>SSID</th><th>Password</th></tr>");
     for (uint8_t n=0; n<WIFINETS; n++) {
       sprintf (ssidName, "wifissid_%d", n);
       sprintf (passName, "wifipass_%d", n);
       nvs_get_string (ssidName, myssid, "none", sizeof(myssid));
       nvs_get_string (passName, mypass, "none", sizeof(mypass));
-      myClient->printf ((const char*)"<tr><td align=\"right\">%d</td><td>&nbsp;</td><td><input type=\"text\" name=\"%s\" value=\"%s\" minlength=\"4\"></td><td>&nbsp;</td><td><input type=\"password\" name=\"%s\" value=\"%s\" minlength=\"4\"></input></tr>", n, ssidName, myssid, passName, mypass);
+      myClient->printf ((const char*)"<tr><td align=\"right\">%d</td><td><input type=\"text\" name=\"%s\" value=\"%s\" minlength=\"4\"></td><td><input type=\"password\" name=\"%s\" value=\"%s\" minlength=\"4\"></input></tr>", n, ssidName, myssid, passName, mypass);
     }
-    myClient->printf ((const char*)"</table><br><br><input type=\"submit\" value=\"Save\"></form>");
+    myClient->printf ((const char*)"</table><p><strong>Note:</strong></p><ul><li>Hidden SSIDs will be ignored</li><li>Use a password of &quot;none&quot; if SSID has no password (open accesspoint)</li></ul>");
+      if (numberOfNetworks > 0) {
+      myClient->printf ((const char*)"<h2>Discovered Networks</h2><table><tr><th>SSID</th><th>RSSI</th><th>Address</th><th>Channel</th><th>Encryption</th></tr>");
+      for (uint8_t i=0; i<numberOfNetworks; i++) {
+        myClient->printf ((const char*)"<tr><td>%s</td><td align=\"right\">%d</td><td>%s</td><td align=\"right\">%d</td><td>%s</td></tr>", WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.channel(i), wifi_EncryptionType(WiFi.encryptionType(i)));
+      }
+      myClient->printf ((const char*)"</table>");
+    }
+  myClient->printf ((const char*)"<br><br><input type=\"submit\" value=\"Save\"></form></td></tr></table><hr></body></html>\r\n");
   }
-  myClient->printf ((const char*)"</td></tr></table><hr></body></html>\r\n");
 }
 
 
@@ -669,6 +709,7 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   const char *dccPwrLabel[] = { "Main & Prog tracks", "Main Only", "Prog Only", "Join Main and Prog tracks" };
   const char *statusLabel[] = { "Top of page", "Bottom of page", "Not shown" };
   const char *powerLabel[]  = { "Not Displayed", "Displayed" };
+  const char *clockLabel[]  = { "24hr (15:20)", "24hr (15h20)", "12hr (3:20)" };
   char labelName[16];
   char labelDesc[64];
   int compInt;
@@ -728,6 +769,16 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   }
   nvs_get_string ("funcOverlay", labelDesc, FUNCOVERLAY, 32);
   myClient->printf ((const char*)"</td></tr><tr><td>Function Overlay</td><td><input type=\"text\" id=\"funcOverlay\" name=\"funcOverlay\" value=\"%s\" minlength=\"16\" maxlength=\"29\" size=\"32\"></td></tr>", labelDesc);
+  myClient->printf ((const char*)"<tr><td>Fast Clock Format</td><td>");
+  compInt = nvs_get_int ("clockFormat", 0);
+  for (uint8_t n=0 ; n<3; n++) {
+    sprintf (labelName, "clockFmt%d", n);
+    if (n>0) myClient->printf ("<br>");
+    myClient->printf ((const char*)"<input type=\"radio\" id=\"%s\" name=\"clockFormat\" value=\"%d\"", labelName, n);
+    if (n == compInt) myClient->printf (" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"%s\">%s</label>", labelName, clockLabel[n]);
+  }
+  myClient->printf ((const char*)"</td></tr>");
   #endif   // NODISPLAY
   #ifdef DELAYONSTART
   compInt = nvs_get_int ("delayOnStart", DELAYONSTART);
@@ -760,7 +811,7 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   #endif    // WARNCOLOR
   myClient->printf ((const char*)"</td></tr></table>");
   #endif    // NODISPLAY
-  if (cmdProtocol == DCCPLUS) {
+  if (cmdProtocol == DCCEX) {
     compInt = nvs_get_int ( "routeDelay", 2);
     myClient->printf ((const char*)"<h2>DCC-Ex Settings</h2><table><tr><td>Delay between setting route turnouts</td><td>");
     for (uint8_t n=0 ; n<sizeof(routeDelay)/sizeof(uint16_t); n++) {
@@ -790,12 +841,12 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   myClient->printf ((const char*)"</td></tr></table>");
   #endif   // BRAKEPRESPIN
   #ifdef RELAYPORT
-  compInt = nvs_get_int ("relayMode", JMRIRELAY);
+  compInt = nvs_get_int ("relayMode", WITHROTRELAY);
   myClient->printf ((const char*)"<h2>Relay Service</h2><table><tr><td>Relay mode</td><td><input type=\"radio\" id=\"relayoff\" name=\"relayMode\" value=\"%d\"", NORELAY);
   if (compInt == NORELAY)  myClient->printf ((const char*)" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"relayoff\">Disabled</label><br><input type=\"radio\" id=\"relayjmri\" name=\"relayMode\" value=\"%d\"", JMRIRELAY);
-  if (compInt == JMRIRELAY)  myClient->printf ((const char*)" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"relayjmri\">JMRI</label><br><input type=\"radio\" id=\"relaydcc\" name=\"relayMode\" value=\"%d\"", DCCRELAY);
+  myClient->printf ((const char*)"><label for=\"relayoff\">Disabled</label><br><input type=\"radio\" id=\"relaywithrot\" name=\"relayMode\" value=\"%d\"", WITHROTRELAY);
+  if (compInt == WITHROTRELAY)  myClient->printf ((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"relaywithrot\">WiThrottle</label><br><input type=\"radio\" id=\"relaydcc\" name=\"relayMode\" value=\"%d\"", DCCRELAY);
   if (compInt == DCCRELAY)  myClient->printf ((const char*)" checked=\"true\"");
   compInt = nvs_get_int ("relayPort", RELAYPORT);
   myClient->printf ((const char*)"><label for=\"relaydcc\">DCC-Ex</label></td></tr><tr><td>Relay port (1-65534)</td><td><input type=\"number\" name=\"relayPort\" value=\"%d\" min=\"1\" max=\"65534\" size=\"7\"> Default is %d</td></tr>", compInt, RELAYPORT);
@@ -837,11 +888,11 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   if (compInt == 1) myClient->printf ((const char*)" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"mdnson\">Use mDNS search then lookup table</label><br><input type=\"radio\" id=\"mdnsoff\" name=\"mdns\" value=\"0\"");
   if (compInt == 0) myClient->printf ((const char*)" checked=\"true\"");
-  compInt = nvs_get_int ("defaultProto", JMRI);
-  myClient->printf ((const char*)"><label for=\"mdnsoff\">Use lookup table only</label></td></tr><tr><td>Default Protocol</td><td><input type=\"radio\" name=\"defaultProto\" id=\"defProtoJMRI\" value=\"%d\"", JMRI);
-  if (compInt == JMRI) myClient->printf (" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"defProtoJMRI\">JMRI</label><br><input type=\"radio\" name=\"defaultProto\" id=\"defProtoDCC\" value=\"%d\"", DCCPLUS);
-  if (compInt == DCCPLUS) myClient->printf (" checked=\"true\"");
+  compInt = nvs_get_int ("defaultProto", WITHROT);
+  myClient->printf ((const char*)"><label for=\"mdnsoff\">Use lookup table only</label></td></tr><tr><td>Default Protocol</td><td><input type=\"radio\" name=\"defaultProto\" id=\"defProtoWITHROT\" value=\"%d\"", WITHROT);
+  if (compInt == WITHROT) myClient->printf (" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"defProtoWITHROT\">WiThrottle</label><br><input type=\"radio\" name=\"defaultProto\" id=\"defProtoDCC\" value=\"%d\"", DCCEX);
+  if (compInt == DCCEX) myClient->printf (" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"defProtoDCC\">DCC-Ex</label></td></tr></table><br><br><table><tr><th>Server</th><th>Port</th></tr>");
   for (uint8_t n=0; n<WIFINETS; n++) {
     sprintf (labelName, "server_%d", n);
@@ -893,57 +944,6 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     Serial.printf ("%s mkWebSave(%x, %x, %d, keepAlive)\r\n", getTimeStamp(), myClient, data, dataSize);
     xSemaphoreGive(displaySem);
   }
-  // Define alternative names for variables, in the event there are no defaults.
-  #ifndef DELAYONSTART
-  #define WS_DOS 20
-  #else
-  #define WS_DOS DELAYONSTART
-  #endif
-  #ifndef MAXRELAY
-  #define WS_MAXR 16
-  #else
-  #define WS_MAXR MAXRELAY
-  #endif
-  #ifndef JMRIRELAY
-  #define WS_JMRI 1
-  #else
-  #define WS_JMRI JMRIRELAY
-  #endif
-  #ifndef DCCRELAY
-  #define WS_DCC  2
-  #else
-  #define WS_DCC DCCRELAY
-  #endif
-  #ifndef RELAYPORT
-  #define WS_RPORT 8080
-  #else
-  #define WS_RPORT RELAYPORT
-  #endif
-  #ifndef WEBPORT
-  #define WS_WPORT 8081
-  #else
-  #define WS_WPORT WEBPORT
-  #endif
-  #ifndef WEBLIFETIME
-  #define WS_WLT 0
-  #else
-  #define WS_WLT WEBLIFETIME
-  #endif
-  #ifndef WEBREFRESH
-  #define WS_WR 0
-  #else
-  #define WS_WR WEBREFRESH
-  #endif
-  #ifndef WEBCACHE
-  #define WS_WC 0
-  #else
-  #define WS_WC WEBCACHE
-  #endif
-  #ifndef SCREENSAVER
-  #define WS_SS 30
-  #else
-  #define WS_SS SCREENSAVER
-  #endif
   char *resultPtr;
   char *altPtr;
   // Lookup table of default, min and max values
@@ -952,27 +952,57 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   #else
   uint16_t wwwFontWidth = sizeof(fontWidth);
   #endif
-  const char *varList[]     = { "cpuspeed", "screenRotate", "fontIndex", "debounceTime", "detentCount", "speedStep", "brakeup", "brakedown", "mdns",    "defaultProto", "sortData",  "tname",     "webuser", "webpass", \
-                                "warnSpeed", "webTimeOut",  "screenSaver", "buttonStop", "funcOverlay", "backlightValue", "routeDelay", "delayOnStart", "maxRelay",     "relayMode", "relayPort", "webPort", "cacheTimeout", \
-                                "dccPower",  "webRefresh",  "webStatus", "webPwrSwitch" };
-  const int8_t varType[]    = { INTEGER,    INTEGER,        INTEGER,     INTEGER,        INTEGER,       INTEGER,     INTEGER,   INTEGER,    INTEGER, INTEGER,           INTEGER,     STRING,  STRING,    PASSWORD , \
-                                INTEGER,    INTEGER,        INTEGER,     INTEGER,        STRING,        INTEGER,     INTEGER,   INTEGER,    INTEGER, INTEGER,           INTEGER,     INTEGER, INTEGER,              \
-                                INTEGER,    INTEGER,        INTEGER,     INTEGER };
-  const int16_t varMin[]    = { 0,          0,              0,           10,             1,             1,           1,         1,           0,      JMRI,              0,           4,      4,         4        , \
-                                50,         0,              0,           0,              16,            100,         0,         0,         WS_MAXR/5,0,                 1,           1,      5,                    \
-                                0,          0,              0,           0};
-  const uint16_t varMax[]   = { 240,        3,              wwwFontWidth, 100,            10,            20,          10,        100,         1,      DCCPLUS,           1,    sizeof(tname), 16,        16       , \
-                                101,        600,            600,         1,              31,            255,        (sizeof(routeDelay)/sizeof(uint16_t))-1, 120, WS_MAXR, WS_DCC, 65534, 65534, 1440,        \
-                                JOIN,       3600,           2,           1};
-  const int16_t numDefault[]= { 0,          0,              0,           DEBOUNCEMS,     2,             4,           1,         20,          1,      JMRI,              1,           0,      0,         0        , \
-                                90,         WS_WLT,    WS_SS, 0,              0,             200,         2,         WS_DOS,      WS_MAXR/2, WS_JMRI,     WS_RPORT,     WS_WPORT,    WS_WC,            \
-                                BOTH,       WS_WR,          0,           1};
-  const char *strDefault[]  = { "",         "",             "",          "",             "",            "",          "",        "",          "",     "",                "",          NAME,   WEBUSER,   WEBPASS  , \
-                                "",         "",             "",          "",             FUNCOVERLAY,   "",          "",        "",          "",     "",                "",          "",     "",                   \
-                                "",         "",             "",          ""};
-  const char *varDesc[]     ={"CPU Speed", "Screen Rotation", "Font ID", "Debounce mS", "Detent Count", "Speed Step", "Brake Up Rate", "Brake Down Rate", "mDNS search enabled", "Default Protocol", "Enable Sorting", "Device Name", "Web Admin Name", "Web Admin Password", \
-                              "Warning speed", "Web server timeout", "Screen saver minutes", "Encoder button stop", "Function overlay", "Screen brightness", "Delay between route steps", "Startup delay", "Max relay clients", "Relay mode", "Relay port", "Web port", \
-                              "Web cache minutes", "DCC-Ex power function", "Status page refresh time", "Web status includes description", "Web power switch dislayed"};
+  struct webVar_s webVars[] = {
+    { "cpuspeed",       INTEGER,    0,           240,            0,          "", "CPU Speed" },
+    { "screenRotate",   INTEGER,    0,             3,            0,          "", "Screen Rotation" },
+    { "fontIndex",      INTEGER,    0,  wwwFontWidth,            0,          "", "Font ID" },
+    { "debounceTime",   INTEGER,   10,           100,   DEBOUNCEMS,          "", "Debounce mS" },
+    { "detentCount",    INTEGER,    1,            10,            2,          "", "Detent Count" },
+    { "speedStep",      INTEGER,    1,            20,            4,          "", "Speed Step" },
+    { "brakeup",        INTEGER,    1,            10,            1,          "", "Brake Up Rate" },
+    { "brakedown",      INTEGER,    1,           100,           20,          "", "Brake Down Rate" },
+    { "sortData",       INTEGER,    0,             1,            1,          "", "Enable Sorting" },
+    { "tname",          STRING,     4, sizeof(tname),            0,        NAME, "Device Name" },
+    { "warnSpeed",      INTEGER,   50,           101,           90,          "", "Warning Speed" },
+    { "clockFormat",    INTEGER,    0,             2,            0,          "", "Fast Clock Format" },
+    #ifdef SCREENSAVER
+    { "screenSaver",    INTEGER,    0,           600,  SCREENSAVER,          "", "Screen Saver Timeout" },
+    #endif
+    { "buttonStop",     INTEGER,    0,             1,            0,          "", "Encoder Button Stop" },
+    { "funcOverlay",    STRING,    16,            31,            0, FUNCOVERLAY, "Function Overlay" },
+    { "backlightValue", INTEGER,  100,           255,          200,          "", "Screen Brightness" },
+    { "routeDelay",     INTEGER,    0, (sizeof(routeDelay)/sizeof(uint16_t))-1, 2, "", "Delay between Route Steps" },
+    #ifdef DELAYONSTART
+    { "delayOnStart",   INTEGER,    0,           120, DELAYONSTART,          "", "Start up delay in seconds" },
+    #endif
+    { "mdns",           INTEGER,    0,             1,            1,          "", "mDNS Search Endabled" },
+    { "defaultProto",   INTEGER, WITHROT,      DCCEX,      WITHROT,          "", "Preferred Protocol" },
+    #ifdef RELAYPORT
+    { "maxRelay",       INTEGER,    0,      MAXRELAY,   MAXRELAY/2,          "", "Max nodes to relay" },
+    { "relayMode",      INTEGER,    0,             1,     DCCRELAY,          "", "Relay mode" },
+    { "relayPort",      INTEGER,    1,         65534,    RELAYPORT,          "", "Relay port" },
+    #endif
+    { "webPort",        INTEGER,    1,         65534,      WEBPORT,          "", "Web server port"},
+    { "webuser",        STRING,     4,            16,            0,     WEBUSER, "Web Admin Name" },
+    { "webpass",        STRING,     4,            16,            0,     WEBPASS, "Web Admin Password" },
+    #ifdef WEBLIFETIME
+    { "webTimeOut",     INTEGER,    0,           600,  WEBLIFETIME,          "", "Web Server Timeout" },
+    #endif
+    #ifdef WEBCACHE
+    { "cacheTimeout",   INTEGER,    5,          1440,     WEBCACHE,          "", "Static web content cache time"},
+    #endif
+    #ifdef WEBREFRESH
+    { "webRefresh",     INTEGER,    0,          3600,   WEBREFRESH,          "", "Status page refresh time" },
+    #endif
+    { "webStatus",      INTEGER,    0,             2,            0,          "", "Device descript at start or end of status page" },
+    { "webPwrSwitch",   INTEGER,    0,             1,            1,          "", "Power on/off from web page" },
+    { "dccPower",       INTEGER,    0,          JOIN,         BOTH,          "", "Outputs to enable on power-on" },
+    { "staConnect",     INTEGER,    0,             3,            2,          "", "Wifi Station selection criteria" },
+    { "APname",         STRING,     4,            32,            0,        NAME, "Access point name" },
+    { "APpass",         STRING,     4,            32,            0,      "none", "Access point password" },
+    { "apChannel",      INTEGER,    1,            13,            6,          "", "Access point channel" },
+    { "apClients",      INTEGER,    1,             8,            4,          "", "Max access point clients" }
+  };
   char checkString[64];
   char varName[16];
   bool hasChanged     = false;
@@ -1052,23 +1082,34 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   // Update any other parameters
   //
   myClient->printf ((const char*)"<h2>Saved Data</h2><ul>");
-  for (uint8_t n=0; n<sizeof(varType); n++) {
-    resultPtr = webScanData (data, (char*) varList[n], dataSize);
+  inputNum = 0;
+  resultPtr = webScanData (data, "APEnable",  dataSize);
+  if (resultPtr != NULL && strcmp (resultPtr, "yes") == 0) inputNum += 2;
+  resultPtr = webScanData (data, "STAEnable", dataSize);
+  if (resultPtr != NULL && strcmp (resultPtr, "yes") == 0) inputNum += 1;
+  checkNum = nvs_get_int ("WiFiMode", WIFISTA);
+  if (inputNum != 0 && inputNum != checkNum) {
+    nvs_put_int ("WiFiMode", inputNum);
+    myClient->printf ("<li>WiFi Mode = %d</li>", inputNum);
+    hasChanged = true;
+  }
+  for (uint8_t n=0; n<(sizeof(webVars)/sizeof(struct webVar_s)); n++) {
+    resultPtr = webScanData (data, (char*) webVars[n].varName, dataSize);
     if (resultPtr != NULL && resultPtr[0]!='\0') {
-      if (varType[n] == INTEGER) {
-        checkNum = nvs_get_int ((char*) varList[n], numDefault[n]);
+      if (webVars[n].varType == INTEGER) {
+        checkNum = nvs_get_int ((char*) webVars[n].varName, webVars[n].numDefault);
         inputNum = util_str2int (resultPtr);
         if (checkNum != inputNum) {
-          if (inputNum<varMin[n] || inputNum>varMax[n]) {
-            myClient->printf ((const char*)"<li>%s Acceptable Range Between %d And %d</li>", varDesc[n], varMin[n], varMax[n]);
+          if (inputNum<webVars[n].varMin || inputNum>webVars[n].varMax) {
+            myClient->printf ((const char*)"<li>%s (%s) Acceptable Range Between %d And %d</li>", webVars[n].varName, webVars[n].varDesc, webVars[n].varMin, webVars[n].varMax);
           }
           else {
-            nvs_put_int (varList[n], inputNum);
-            myClient->printf ("<li>%s = %d</li>", varDesc[n], inputNum);
+            nvs_put_int (webVars[n].varName, inputNum);
+            myClient->printf ("<li>%s = %d</li>", webVars[n].varDesc, inputNum);
             hasChanged = true;
             #ifdef SCREENSAVER
-            if (strcmp (varList[n], "backlightValue") == 0) { backlightValue = inputNum; ledcWrite(0, backlightValue); }
-            if (strcmp (varList[n], "screenSaver") == 0) {
+            if (strcmp (webVars[n].varName, "backlightValue") == 0) { backlightValue = inputNum; ledcWrite(0, backlightValue); }
+            if (strcmp (webVars[n].varName, "screenSaver") == 0) {
               if (xSemaphoreTake(screenSvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 blankingTime  = inputNum * 60 * uS_TO_S_FACTOR;
                 xSemaphoreGive(screenSvrSem);
@@ -1080,21 +1121,19 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
         }
       }
       else {
-        resultPtr = webScanData (data, (char*) varList[n], dataSize);
-        nvs_get_string (varList[n], checkString, strDefault[n], varMax[n]);
-        if (strlen(resultPtr) > varMax[n]) {
-          resultPtr[varMax[n]] = '\0';
-          myClient->printf ((const char*)"<li>%s truncated to %d characters</li>", varDesc[n], varMax[n]);
+        nvs_get_string (webVars[n].varName, checkString, webVars[n].strDefault, webVars[n].varMax);
+        if (strlen(resultPtr) > webVars[n].varMax) {
+          resultPtr[webVars[n].varMax] = '\0';
+          myClient->printf ((const char*)"<li>%s truncated to %d characters</li>", webVars[n].varDesc, webVars[n].varMax);
         }
-        if (strlen(resultPtr) < varMin[n]) {
-          myClient->printf ((const char*)"<li>%s ignored, should be %d or more characters long</li>", varDesc[n], varMin[n]);
+        if (strlen(resultPtr) < webVars[n].varMin) {
+          myClient->printf ((const char*)"<li>%s ignored, should be %d or more characters long</li>", webVars[n].varDesc, webVars[n].varMin);
         }
         else if (strcmp (resultPtr, checkString) != 0) {
-          nvs_put_string (varList[n], resultPtr);
+          nvs_put_string (webVars[n].varName, resultPtr);
           hasChanged = true;
-          if (strcmp (varList[n], "tname") == 0) strcpy (tname, resultPtr);
-          if (varType[n]==STRING) myClient->printf ("<li>%s = %s</li>", varDesc[n], resultPtr);
-          else myClient->printf ((const char*)"<li>%s changed</li>", varDesc[n]);
+          if (strcmp (webVars[n].varName, "tname") == 0) strcpy (tname, resultPtr);
+          myClient->printf ("<li>%s = %s</li>", webVars[n].varDesc, resultPtr);
         }
       }
     }
@@ -1355,7 +1394,7 @@ void mkWebFunctionMap (WiFiClient *myClient, char *postData, uint16_t dataSize, 
     else semFailed ("velociSem", __FILE__, __LINE__);
   }
   if (pgHeader[0]=='\0') {
-    if (cmdProtocol==DCCPLUS) strcpy (pgHeader, "Default");
+    if (cmdProtocol==DCCEX) strcpy (pgHeader, "Default");
     else strcpy (pgHeader, "Functions Affect");
   }
   if (webScanData (postData, "fLabel_0", dataSize) != NULL) { // we must contain some function key update
@@ -1422,12 +1461,12 @@ void mkWebFunctionMap (WiFiClient *myClient, char *postData, uint16_t dataSize, 
   // create form
   myClient->printf ((const char*) "<form action=\"/functions\" method=\"post\"><input type=\"hidden\" name=\"locoIdx\" value=\"%d\">", locoIdx);
   myClient->printf ((const char*) "<table><tr><th>Function<br>Number</th>");
-  if (cmdProtocol==DCCPLUS) myClient->printf ((const char*) "<th>Latching</th>");
+  if (cmdProtocol==DCCEX) myClient->printf ((const char*) "<th>Latching</th>");
   if (loco==65535) myClient->printf ((const char*) "<th>MultiThrottle Consist<br>Lead Loco Only</th>");
   myClient->printf ((const char*) "<th>Description</th></tr>");
   for (n=0, mask=1; n<29; n++, mask<<=1) {
     myClient->printf ((const char*) "<tr><td style=\"text-align:center;\">%d</td", n);
-    if (cmdProtocol==DCCPLUS) {
+    if (cmdProtocol==DCCEX) {
       myClient->printf ((const char*) "><td style=\"text-align:center;\"><input type=\"checkbox\" id=\"latch_%d\" name=\"latch_%d\" value=\"%d\"", n, n, n);
       if ((latchVal&mask) > 0) myClient->printf ((const char*) " checked=\"true\"");
     }
@@ -1456,6 +1495,7 @@ void mkWebDeviceDescript (WiFiClient *myClient)
   uint16_t hours = mins / 60;
   uint16_t days  = hours / 24;
   uint8_t pwrState = 0;
+  uint8_t lcdLines = 0;
   const char *pwrValue[] = {"Off", "On"};
 
   mins = mins - (hours * 60);
@@ -1527,6 +1567,17 @@ void mkWebDeviceDescript (WiFiClient *myClient)
     }
     else semFailed ("fastClockSem", __FILE__, __LINE__);
     #endif
+    myClient->printf ((const char*)"</td></tr>");
+  }
+  for (uint8_t n=0; n<4; n++) if (dccLCD[n][0] != '\0') lcdLines++;
+  if (lcdLines>0) {
+    lcdLines = 0;
+    myClient->printf ((const char*)"<tr><td align=\"right\">DCC-Ex LCD</td><td>");
+    for (uint8_t n=0; n<4; n++) if (dccLCD[n][0] != '\0') {
+      if (lcdLines>0) myClient->printf ((const char*)"<br>");
+      myClient->printf ((const char*) "%s", dccLCD[n]);
+      lcdLines++;
+    }
     myClient->printf ((const char*)"</td></tr>");
   }
   myClient->printf ((const char*)"</table>");
@@ -1636,7 +1687,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
     myClient->printf ((const char*)"<th>Operator</th>");
     #endif
     myClient->printf ((const char*)"<th align=\"right\">Speed %%</th><th>Speed Graph</th>");
-    if (cmdProtocol==DCCPLUS) {
+    if (cmdProtocol==DCCEX) {
       myClient->printf ((const char*)"<th>Configure</td>");
     }
     myClient->printf ((const char*)"</tr>");
@@ -1671,7 +1722,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
             if (relayIdx == 255) myClient->printf ((const char*)"<td></td>");
             else {
               char suffix[5];
-              if (relayMode == JMRIRELAY) sprintf (suffix, "+%c", throttleNr);
+              if (relayMode == WITHROTRELAY) sprintf (suffix, "+%c", throttleNr);
               else suffix[0] = '\0';
               if (locoRoster[n].relayIdx == 240) myClient->printf ((const char*)"<td>Serial line%s</td>", suffix);
               else if (remoteSys[relayIdx].nodeName[0] != '\0') myClient->printf ((const char*)"<td>%s%s</td>", remoteSys[relayIdx].nodeName, suffix);
@@ -1694,7 +1745,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
                      break;
           }
           myClient->printf ((const char*)"</td><td width=\"%dpx\" class=\"speed\"></td><td width=\"%dpx\" class=\"space\"></td></tr></table></td>", speedPercent, 100-speedPercent);
-          if (cmdProtocol==DCCPLUS) {
+          if (cmdProtocol==DCCEX) {
             if (n<locomotiveCount)
               myClient->printf ((const char*)"<td><form action=\"/functions\" method=\"post\"><input type=\"hidden\" name=\"locoIdx\" value=\"%d\"><input type=\"submit\" value=\"Functions\"></form></td>", n);
             else myClient->printf ((const char*)"<td>&nbsp;</td>");

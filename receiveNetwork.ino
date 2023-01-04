@@ -45,9 +45,9 @@ void receiveNetData(void *pvParameters)
       }
       else semFailed ("tcpipSem", __FILE__, __LINE__);
   #endif
-      if (inChar == '\r' || inChar == '\n' || (cmdProtocol==DCCPLUS && inChar=='>') || bufferPtr == (NETWBUFFSIZE-1)) {
+      if (inChar == '\r' || inChar == '\n' || (cmdProtocol==DCCEX && inChar=='>') || bufferPtr == (NETWBUFFSIZE-1)) {
         if (bufferPtr > 0) {
-          if (cmdProtocol==DCCPLUS && inChar=='>') inBuffer[bufferPtr++] = '>';
+          if (cmdProtocol==DCCEX && inChar=='>') inBuffer[bufferPtr++] = '>';
           inBuffer[bufferPtr] = '\0';
           processPacket (inBuffer);
           bufferPtr = 0;
@@ -56,7 +56,7 @@ void receiveNetData(void *pvParameters)
       else inBuffer[bufferPtr++] = inChar;
     }
     delay (debounceTime);
-    if (cmdProtocol == DCCPLUS) { // send out periodic <s> status request - a keep alive of sorts on an approx 10 minute basis
+    if (cmdProtocol == DCCEX) { // send out periodic <s> status request - a keep alive of sorts on an approx 10 minute basis
       if (bumpCount++ > 1000) {
         bumpCount = 0;
         if (statusTime+(600*uS_TO_S_FACTOR) < esp_timer_get_time()) {
@@ -95,9 +95,9 @@ bool netConnState (uint8_t chkmode)
   bool retval = false;
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     switch (chkmode) {
-    case 1: retval = WiFi.status() == WL_CONNECTED && client.connected();
+    case 1: retval = (APrunning || WiFi.status() == WL_CONNECTED) && client.connected();
             break;
-    case 2: retval = WiFi.status() == WL_CONNECTED && client.connected() && client.available()>0;
+    case 2: retval = (APrunning || WiFi.status() == WL_CONNECTED) && client.connected() && client.available()>0;
             break;
     }
     xSemaphoreGive(tcpipSem);
@@ -138,13 +138,13 @@ void processPacket (char *packet)
   // First handle some simple things
   if (strncmp (packet, "VN", 2) == 0 || strncmp (packet, "PFC", 3) == 0) {  // protocol version
     // Version number
-    if (cmdProtocol != JMRI) { // Looks like JMRI, but we have defaulted to the wrong thing
-      cmdProtocol = JMRI;
+    if (cmdProtocol != WITHROT) { // Looks like WITHROT, but we have defaulted to the wrong thing
+      cmdProtocol = WITHROT;
       setInitialData();
     }
     if (strncmp (packet, "VN", 2) == 0 && strcmp (packet, "VN2.0") != 0) {
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.printf  ("%s Warning: Unexpected JMRI JThrottle protocol version not supported.\r\n", getTimeStamp());
+        Serial.printf  ("%s Warning: Unexpected WiThrottle protocol version not supported.\r\n", getTimeStamp());
         Serial.print   ("         Expected VN2.0, found ");
         Serial.println (packet);
         xSemaphoreGive(displaySem);
@@ -153,10 +153,10 @@ void processPacket (char *packet)
   }
   else {
     switch (cmdProtocol) {
-      case JMRI:
-        processJmriPacket (packet);
+      case WITHROT:
+        processWiThrotPacket (packet);
         break;
-      case DCCPLUS:
+      case DCCEX:
         processDccPacket (packet);
         break;
       default:

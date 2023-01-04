@@ -58,8 +58,8 @@ void switchMonitor(void *pvParameters)
   bool changed = false;
   uint8_t readChar;
   #ifdef POTTHROTPIN
-  uint16_t potReading = 0;
-  uint16_t lastPotReading = 0;
+  int32_t potReading = 0;
+  uint8_t lastPotReading = 0;
   const uint8_t potLoopLimit = 10;
   uint8_t potLoopCount = 0;
   #endif
@@ -80,7 +80,7 @@ void switchMonitor(void *pvParameters)
   #endif
   #ifdef POTTHROTPIN
   // We only need 8 bit resolution, higher resolution is wasted compute power
-  analogReadResolution(10);
+  analogReadResolution(12);
   adcAttachPin(POTTHROTPIN);
   analogSetPinAttenuation(POTTHROTPIN, ADC_11db);  // param 2 = attenuation, range 0-3 sets FSD: 0:ADC_0db=800mV, 1:ADC_2_5db=1.1V, 2:ADC_6db=1.35V, 3:ADC_11db=2.6V
   #endif
@@ -161,8 +161,16 @@ void switchMonitor(void *pvParameters)
       // Oversample to get a more stable average
       potReading += analogRead(POTTHROTPIN);
       if (++potLoopCount >= potLoopLimit) {
-        potReading = (potReading / potLoopCount) >> 2;
+        if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          static int voo = potReading / potLoopCount;
+          static int vim = voo >> 4;
+          Serial.printf (" - Pot Reading: (%d / %d) = %d Adjust: %d\r\n", potReading, potLoopCount, voo, vim);
+          xSemaphoreGive(displaySem);
+        }
+        potReading = (potReading / potLoopCount) >> 4; // oversample and over scale adjustment to DCC sized values
         if (abs (lastPotReading - potReading) > 1) {  // ignore changes teetering on the cusp of change
+          if      (potReading < 0)   potReading = 0;
+          else if (potReading > 255) potReading = 255;
           lastPotReading = potReading;
           if (bidirectionalMode) {
             if (potReading <= 127) {
@@ -222,9 +230,12 @@ void sendPotThrot (int8_t dir, int8_t speed)
 {
   int16_t limit = locomotiveCount + MAXCONSISTSIZE;
   int16_t tSpeed;
+  int16_t actSpeed;
+  int16_t actSteps;
   #ifdef BRAKEPRESPIN
   int16_t lastSpeed;
   #endif
+  int8_t actDirec;
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s sendPotThrot(%d, %d)\r\n", getTimeStamp(), dir, speed);
@@ -232,46 +243,30 @@ void sendPotThrot (int8_t dir, int8_t speed)
   }
 
   for (int8_t n=0; n<limit; n++) if (locoRoster[n].owned) {
-    if (locoRoster[n].steps!=128) tSpeed = ((speed<<7)/locoRoster[n].steps) -1;
+    if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      actSpeed = locoRoster[n].speed;
+      actSteps = locoRoster[n].steps;
+      actDirec = locoRoster[n].direction;
+      xSemaphoreGive(displaySem);
+    }
+    if (actSteps!=128) tSpeed = ((speed<<7)/actSteps) -1;
     else tSpeed = speed -1;
-    if (tSpeed >= locoRoster[n].steps - 1) tSpeed = locoRoster[n].steps - 2;
-    if (locoRoster[n].speed != tSpeed) {
+    if (tSpeed >= actSteps - 1) tSpeed = actSteps- 2;
+    if (actSpeed != tSpeed) {
       #ifdef BRAKEPRESPIN
-      lastSpeed = locoRoster[n].speed;
+      lastSpeed = actSpeed;
       #endif
-      if (tSpeed <= 0) {
-        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          setLocoSpeed (n, tSpeed, STOP);
-          xSemaphoreGive(velociSem);
-        }
-        else semFailed ("velociSem", __FILE__, __LINE__);
-      }
-      else if (dir!=UNCHANGED) {
-        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          setLocoSpeed (n, tSpeed, dir);
-          xSemaphoreGive(velociSem);
-        }
-        else semFailed ("velociSem", __FILE__, __LINE__);
-      }
-      else {
-        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          setLocoSpeed (n, tSpeed, locoRoster[n].direction);
-          xSemaphoreGive(velociSem);
-        }
-        else semFailed ("velociSem", __FILE__, __LINE__);
-      }
+      if      (tSpeed <= 0)    setLocoSpeed (n, tSpeed, STOP);
+      else if (dir!=UNCHANGED) setLocoSpeed (n, tSpeed, dir);
+      else                     setLocoSpeed (n, tSpeed, actDirec);
       #ifdef BRAKEPRESPIN
-      if (lastSpeed > tSpeed && (dir==UNCHANGED || dir==locoRoster[n].direction)) {
+      if (lastSpeed > tSpeed && (dir==UNCHANGED || dir==actDirec)) {
         brakedown(lastSpeed - tSpeed);
       }
       #endif
     }
-    if (dir!=UNCHANGED && dir!=locoRoster[n].direction) {
-      if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        setLocoDirection (n, dir);
-        xSemaphoreGive(velociSem);
-      }
-      else semFailed ("velociSem", __FILE__, __LINE__);
+    if (dir!=UNCHANGED && dir!=actDirec) {
+      setLocoDirection (n, dir);
       #ifdef BRAKEPRESPIN
       brakedown(lastSpeed + tSpeed);
       #endif

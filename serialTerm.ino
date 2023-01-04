@@ -159,6 +159,7 @@ void processSerialCmd (uint8_t *inBuffer)
   #endif
   #ifdef USEWIFI
   else if (nparam<=4 && strcmp (param[0], "wifi") == 0)          mt_set_wifi         (nparam, param);
+  else if (nparam<=2 && strcmp (param[0], "wifimode") == 0)      mt_set_wifimode     (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "wifiscan") == 0)      mt_set_wifiscan     (nparam, param);
   #endif
   else if (nparam==1 && strcmp (param[0], "locos") == 0)         displayLocos        ();
@@ -343,8 +344,8 @@ void mt_export()
     count = nvs_get_int ( "defaultProto", -1);
     if (count >= 0) {
       Serial.print ("protocol ");
-      if (count == JMRI) Serial.println ("jmri");
-      else Serial.println ("dcc++");
+      if (count == WITHROT) Serial.println ("withrottle");
+      else Serial.println ("dccex");
     }
     for (uint8_t n=0; n<WIFINETS; n++) {
       sprintf (varName, "wifissid_%d", n);
@@ -598,6 +599,9 @@ void mt_sys_config()   // display all known configuration data
     Serial.println("---------------------------------------------");
     xSemaphoreGive(displaySem);
   }
+  for (uint8_t n=0; n<4; n++) {
+    if (dccLCD[n][0] != '\0') Serial.printf ("LCD%d: %s\r\n", n, dccLCD[n]);
+  }
 }
 
 void mt_sys_restart (const char *reason) // restart the throttle
@@ -612,7 +616,7 @@ void mt_sys_restart (const char *reason) // restart the throttle
   for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
     setLocoSpeed (n, 0, STOP);
     setLocoOwnership (n, false);
-    if (cmdProtocol==DCCPLUS) locoRoster[n].owned = false;
+    if (cmdProtocol==DCCEX) locoRoster[n].owned = false;
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("-> Stopping loco: %s\r\n", locoRoster[n].name);
       xSemaphoreGive(displaySem);
@@ -905,8 +909,13 @@ void mt_set_wifi (int nparam, char **param)  // set WiFi parameters
         Serial.print (", IP: ");
         Serial.println (WiFi.localIP());
       }
-      else Serial.println ("WiFi not connected");
+      else Serial.println ("WiFi not connected in station mode");
+      if (APrunning) {
+        Serial.println ("WiFi running in access point mode");
+      }
+      Serial.println ("Checking for non-hidden SSIDs");
       xSemaphoreGive(displaySem);
+      wifi_scanNetworks();
     }
     return;
     }
@@ -939,28 +948,30 @@ void mt_set_wifi (int nparam, char **param)  // set WiFi parameters
 
 void mt_set_wifiscan(int nparam, char **param)
 {
-  int use_multiwifi = 99;
+  int staConnect = 99;
   
   if (nparam==1) {
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.print ("wifi scan: ");
-      use_multiwifi = nvs_get_int ("use_multiwifi", 0);
-      if (use_multiwifi == 0) Serial.println ("disabled");
-      else Serial.println ("enabled");
+      Serial.print ("wifi station mode scan: ");
+      staConnect = nvs_get_int ("staConnect", 0);
+      if (staConnect == 0) Serial.println ("list");
+      else if (staConnect == 1) Serial.println ("strength");
+      else Serial.println ("any");
       xSemaphoreGive(displaySem);
     }
   }
   else {
-    if (strcmp (param[1], "disabled") == 0) use_multiwifi = 0;
-    else if (strcmp (param[1], "enabled") == 0) use_multiwifi = 1;
+    if (strcmp (param[1], "list") == 0) staConnect = 0;
+    else if (strcmp (param[1], "strength") == 0) staConnect = 1;
+    else if (strcmp (param[1], "any") == 0) staConnect = 2;
     else {
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.println ("wifiscan should be enabled or disabled");
+        Serial.println ("wifiscan should be list, strength or any");
         xSemaphoreGive(displaySem);
       }
       return;
     }
-    if (use_multiwifi==0 || use_multiwifi==1) nvs_put_int ("use_multiwifi", use_multiwifi);
+    if (staConnect>=0 || staConnect<=2) nvs_put_int ("staConnect", staConnect);
   }
 }
 
@@ -1040,7 +1051,7 @@ void mt_set_server (int nparam, char **param)  // set details about remote serve
         else sprintf (outBuffer, "%5d | none", index);
         Serial.println (outBuffer);
       }
-      if (WiFi.status() != WL_CONNECTED) {
+      if (!client.connected()) {
         Serial.println ("--- Server not connected ---");
       }
       xSemaphoreGive(displaySem);
@@ -1080,19 +1091,46 @@ void mt_set_protocol(int nparam, char **param)
   if (nparam==1) {
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Default protocol is ");
-      if (nvs_get_int ("defaultProto", JMRI) == JMRI) Serial.println ("JMRI");
+      if (nvs_get_int ("defaultProto", WITHROT) == WITHROT) Serial.println ("WiThrottle");
       else Serial.println ("DCC-Ex");
       xSemaphoreGive(displaySem);
     }
   }
   else {
-    if (strcmp (param[1], "jmri") == 0 || strcmp (param[1], "dcc++") == 0) {
-      if (strcmp (param[1], "jmri") == 0) nvs_put_int ("defaultProto", JMRI);
-      else nvs_put_int ("defaultProto", DCCPLUS);
+    if (strcmp (param[1], "withrot") == 0 || strcmp (param[1], "withrottle") == 0 || strcmp (param[1], "dccex") == 0) {
+      if (strcmp (param[1], "withrot") == 0 || strcmp (param[1], "withrottle") == 0) nvs_put_int ("defaultProto", WITHROT);
+      else nvs_put_int ("defaultProto", DCCEX);
     }
     else {
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.println ("protocol should be one of: jmri, dcc++");
+        Serial.println ("protocol should be one of: withrot, dccex");
+        xSemaphoreGive(displaySem);
+      }
+    }
+  }
+}
+
+void mt_set_wifimode(int nparam, char **param)
+{
+  uint8_t mode;
+
+  if (nparam==1) {
+    mode = nvs_get_int ("WiFiMode", WIFISTA);
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.print ("Default WiFi mode is ");
+      if (mode == WIFIAP) Serial.println ("AP");
+      else if (mode == WIFIAP) Serial.println ("STA");
+      else Serial.println ("BOTH");
+      xSemaphoreGive(displaySem);
+    }
+  }
+  else {
+    if      (strcmp (param[1], "ap")   == 0) nvs_put_int ("WiFiMode", WIFIAP);
+    else if (strcmp (param[1], "sta")  == 0) nvs_put_int ("WiFiMode", WIFISTA);
+    else if (strcmp (param[1], "both") == 0) nvs_put_int ("WiFiMode", WIFIBOTH);
+    else {
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.println ("wifimode should be one of: ap, sta or both");
         xSemaphoreGive(displaySem);
       }
     }
@@ -1427,6 +1465,7 @@ void showPinConfig()  // Display pin out selection
 
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ((char*) "Hardware configuration, check pin numbers are not duplicated");
+    Serial.println ((char*) "Reset          =  EN");
     Serial.println ((char*) "Console - Tx   =  1");
     Serial.println ((char*) "Console - Rx   =  3");
     #ifdef DCCTX
@@ -1762,10 +1801,10 @@ void help(int nparam, char **param)  // show help data
     }
     #ifndef SERIALCTRL
     if (all || strcmp(param[1], "protocol")==0) {
-      Serial.println ((const char*) "protocol {jmri|dcc++}");
+      Serial.println ((const char*) "protocol {withrot|dccex}");
       if (!summary) {
         Serial.println ((const char*) "    Select default protocol to use");
-        Serial.println ((const char*) "    permanent setting, default jmri");
+        Serial.println ((const char*) "    permanent setting, default withrottle");
       }
     }
     #endif
@@ -1883,16 +1922,26 @@ void help(int nparam, char **param)  // show help data
     if (all || strcmp(param[1], "wifi")==0) {
       Serial.println ((const char*) "wifi [<index> <ssid> [<password>]]");
       if (!summary) {
-        Serial.println ((const char*) "    Set WiFi SSID and password");
+        Serial.println ((const char*) "    Set WiFi SSID and password for a known network");
+        Serial.println ((const char*) "    Leave password blank for open access points");
+        Serial.println ((const char*) "    permanent setting");
+      }
+    }
+    if (all || strcmp(param[1], "wifimode")==0) {
+      Serial.println ((const char*) "wifimode [ap|sta|both]");
+      if (!summary) {
+        Serial.println ((const char*) "    Set WiFi mode to Access Point (AP), Station (sta) or both (both)");
         Serial.println ((const char*) "    permanent setting");
       }
     }
     if (all || strcmp(param[1], "wifiscan")==0) {
-      Serial.println ((const char*) "wifiscan [enable|disable]");
+      Serial.println ((const char*) "wifiscan [list|strength|any]");
       if (!summary) {
-        Serial.println ((const char*) "    set wifi to scan for non-hidden ssids and use strongest signal");
-        Serial.println ((const char*) "    NB: the network used must be predefined by \"wifi\", or it will be ignored");
-        Serial.println ((const char*) "    permanent setting, default disable");
+        Serial.println ((const char*) "    set wifi scanning technique");
+        Serial.println ((const char*) "    - list: use the list of known WiFi networks as listed by preference");
+        Serial.println ((const char*) "    - strength: use the strongest signal of known WiFi networks");
+        Serial.println ((const char*) "    - any: use the strongest signal even if unknown open access point");
+        Serial.println ((const char*) "    permanent setting");
       }
     }
     #endif

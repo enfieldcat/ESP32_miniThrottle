@@ -227,21 +227,21 @@ void relayHandler(void *pvParameters)
         if (trackKeepAlive) thisRelay->keepAlive = esp_timer_get_time();
       }
       else if (inchar>31 && inchar<127) inBuffer[inPtr++] = inchar;
-      if (trackKeepAlive && (esp_timer_get_time() - thisRelay->keepAlive) > maxRelayTimeOut) {
-        keepAlive = false;
-        if (debuglevel>0 && xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            Serial.printf ("%s Relay client at %d.%d.%d.%d keep-alive time-out\r\n", getTimeStamp(), thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
-            xSemaphoreGive(displaySem);
-          }
-          xSemaphoreGive(relaySvrSem);
-        }
-        else semFailed ("relaySvrSem", __FILE__, __LINE__);
-      }
       if (!relayConnState(thisRelay, 2)) delay(20);
     }
+    if (trackKeepAlive && (esp_timer_get_time() - thisRelay->keepAlive) > maxRelayTimeOut) {
+      keepAlive = false;
+      if (debuglevel>0 && xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s Relay client at %d.%d.%d.%d keep-alive time-out\r\n", getTimeStamp(), thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
+          xSemaphoreGive(displaySem);
+        }
+        xSemaphoreGive(relaySvrSem);
+      }
+      else semFailed ("relaySvrSem", __FILE__, __LINE__);
+    }
+    delay(20);
   }
-
   // Tear down message
   if ( debuglevel>0 && xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

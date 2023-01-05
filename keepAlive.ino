@@ -23,7 +23,7 @@ void keepAlive(void *pvParameters)
   bool turnOff = true;
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s keepAlive(NULL) (core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    Serial.printf ("%s keepAlive(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
   if (keepAliveQueue == NULL) {

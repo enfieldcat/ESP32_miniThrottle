@@ -14,26 +14,60 @@ void processWiThrotPacket (char *packet)
     // Power status
     dccPowerChange(packet[3]);
   }
-  else if (strncmp (packet, "PTA", 3) == 0) { // Change of turnout
+  else if (strncmp (packet, "PTA", 3) == 0 && strlen(packet)>4) { // Change of turnout
+    char *tPtr = &packet[4];
     uint8_t state = packet[3];
     uint8_t ptr = 0;
     bool found = false;
 
-     // only update if in known state
+    // only update if in known state
     if (state=='2' || state=='4' || state=='1' || state=='8') {
       // first attempt to find by name
       for (ptr=0; ptr<turnoutCount && !found; ptr++) {
-        if (strcmp (turnoutList[ptr].sysName, &packet[4]) == 0) found = true;
+        if (xSemaphoreTake(turnoutSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (strcmp (turnoutList[ptr].sysName, tPtr) == 0) found = true;
+          xSemaphoreGive(turnoutSem);
+        }
+        else semFailed ("turnoutSem", __FILE__, __LINE__);
       }
       if (!found) {
         for (ptr=0; ptr<turnoutCount && !found; ptr++) {
-          if (strcmp (turnoutList[ptr].userName, &packet[4])) found = true;
+          if (xSemaphoreTake(turnoutSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            if (strcmp (turnoutList[ptr].userName, tPtr) == 0) found = true;
+            xSemaphoreGive(turnoutSem);
+          }
+          else semFailed ("turnoutSem", __FILE__, __LINE__);
         }
       }
       if (found) {
         if (ptr > 0) ptr--; // the for loop should have incremented ptr past the found spot.
-        turnoutList[ptr].state = state - '0';
+        if (xSemaphoreTake(turnoutSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          turnoutList[ptr].state = state - '0';
+          xSemaphoreGive(turnoutSem);
+        }
+        else semFailed ("turnoutSem", __FILE__, __LINE__);
       }
+    }
+  }
+  else if (strncmp (packet, "PTA", 3) == 0 && strlen(packet)>4) { // Change of turnout
+    char *tPtr = &packet[4];
+    uint8_t state = packet[3];
+    uint8_t ptr = 0;
+    bool found = false;
+    for (ptr=0; ptr<routeCount && !found; ptr++) {
+      if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (strcmp (routeList[ptr].sysName, tPtr) == 0) found = true;
+        xSemaphoreGive(routeSem);
+      }
+      else semFailed ("routeSem", __FILE__, __LINE__);
+    }
+    if (found) {
+      if (ptr > 0) ptr--; // the for loop should have incremented ptr past the found spot.
+      if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        routeList[ptr].state = state;
+        xSemaphoreGive(routeSem);
+      }
+      else semFailed ("routeSem", __FILE__, __LINE__);
     }
   }
   else if (packet[0] == '*') {

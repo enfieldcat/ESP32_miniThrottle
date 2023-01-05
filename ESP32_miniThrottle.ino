@@ -212,7 +212,7 @@ const char *cssTemplate = {"* { font-family: system-ui; }\n" \
 "a:active { color: #0000DD !important; }\n" \
 ".Active, .active, .thrown, .Thrown { background-color: #CCFFCC !important; }\n" \
 ".Inactive, .inactive, .closed, .Closed { background-color: #CCCCFF !important; }\n" \
-".unknown, .Unknown { background-color: #FFCCCC !important; }\n" \
+".unknown, .Unknown .Inconsistent { background-color: #FFCCCC !important; }\n" \
 ".failed, .Failed { background-color: #CC0000 !important; color: #FFFFFF !important; }\n" \
 ".speed, .On { background-color: #008800 !important; padding: 0px; border-spacing: 0px; }\n" \
 ".space { background-color: #FFFFEE !important; padding: 0px; border-spacing: 0px; }\n" \
@@ -497,7 +497,7 @@ void loop()
   #endif   // NODISPLAY
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s loop() (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    Serial.printf ("%s loop()\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
   delay (250);
@@ -545,11 +545,11 @@ void loop()
     #ifndef SERIALCTRL
     if (!client.connected()) {
       uint8_t answer;
-      bool    stateChange   = true;
+      static bool stateChange   = true;
       bool    wifiConnected = false;
       bool    APConnected   = false;
 
-      if (tState < 3 && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
+      if ((!APrunning) && WiFi.status() != WL_CONNECTED && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
         mkConfigMenu();
         stateChange = true;
       }
@@ -563,12 +563,13 @@ void loop()
           stateChange   = true;
         }
         if (APrunning && !APConnected) { //Access-point just started?
-          APconnected = true;
+          APConnected = true;
           stateChange = true;
         }
         if (stateChange) {  // Update display if there is something to update
           uint8_t lineNr = 0;
           char outData[SSIDLENGTH + 10];
+          stateChange = false;
           display.clear();
           displayScreenLine ("No Connection", lineNr++, true);
           sprintf (outData, "Name: %s", tname);
@@ -587,7 +588,7 @@ void loop()
           }
           if (APrunning || WiFi.status() == WL_CONNECTED) {
             if (APrunning) {
-              displayScreenLine ("WiFi: AP Mode", lineNr++, flase);
+              displayScreenLine ("WiFi: AP Mode", lineNr++, false);
             }
             else if (WiFi.status() == WL_CONNECTED && strlen(ssid)>0) {
               sprintf (outData, "WiFi: %s", ssid);
@@ -602,7 +603,6 @@ void loop()
       }
     }
     else {
-      stateChange = true;
       while (client.connected()) {
     #else
     // handling for Serial connection

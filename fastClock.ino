@@ -21,7 +21,7 @@ void fastClock (void *pvParameters)
   uint32_t period = 1000;
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s fastClock(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    Serial.printf ("%s fastClock(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
   if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

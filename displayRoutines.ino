@@ -739,7 +739,8 @@ void displayInfo()
   if (currentOpt == 7) {
     currentOpt++;
     for (uint8_t n=0; n<4; n++) if (dccLCD[n][0] != '\0') {
-      sprintf (outData, "LCD%d: %s", n, dccLCD[n]);
+      if (charsPerLine<=16) sprintf (outData, "*%s", dccLCD[n]);
+      else sprintf (outData, "LCD%d: %s", n, dccLCD[n]);
       displayScreenLine (outData, lineNr++, false);
       if (lineNr >= linesPerScreen) return;
     }

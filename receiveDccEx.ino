@@ -234,10 +234,10 @@ void dccAckTurnout (char *ack)
     xSemaphoreGive(displaySem);
   }
   xQueueSend (dccAckQueue, &result, 0);
-  if (ack[0]=='8' && ack[1]=='4') {   // DCC-Ex may bodge our name and change letters to numbers, Turnout names start 'T'
-    ack[0]='T';
-    for (uint8_t n=1; n<strlen(ack); n++) ack[n] = ack[n+1];
-  }
+  //if (ack[0]=='8' && ack[1]=='4') {   // DCC-Ex may bodge our name and change letters to numbers, Turnout names start 'T'
+  //  ack[0]='T';
+  //  for (uint8_t n=1; n<strlen(ack); n++) ack[n] = ack[n+1];
+  //}
   for (uint8_t n=0; n<strlen(ack); n++) if (ack[n]==' ') {
     ack[n]='\0';
     result = ack[n+1];
@@ -473,7 +473,7 @@ void dccPopulateTurnout()
     while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS) {} // clear ack Queue
     for (int n=0; n<numEntries; n++) {
       turnoutData[n].state = '1';
-      sprintf (turnoutData[n].sysName, "T%02d", (1+n));
+      sprintf (turnoutData[n].sysName, "%02d", (1+n));
       strcpy (turnoutData[n].userName, curData);
       curData = curData + 16;
       sprintf (commandBuffer, "<T %s %s>", turnoutData[n].sysName, curData);
@@ -521,9 +521,9 @@ void dccPopulateRoutes()
     routeState[1].state = '4';
     strcpy (routeState[1].name, "Inactive");
     routeState[2].state = '8';
-    strcpy (routeState[2].name, "Error");
-    routeState[3].state = '1';
-    strcpy (routeState[3].name, "SettingUp");
+    strcpy (routeState[2].name, "Inconsistent");
+    routeState[3].state = '0';
+    strcpy (routeState[3].name, "Unknown");
     routeStateCount = 4;
 
     curData = rawData;

@@ -10,7 +10,7 @@ void receiveNetData(void *pvParameters)
   bool quit = false;
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s receiveNetData(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    Serial.printf ("%s receiveNetData(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

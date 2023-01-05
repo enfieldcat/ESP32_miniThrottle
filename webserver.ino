@@ -14,7 +14,7 @@ void webListener(void *pvParameters)
   bool notAssigned = true;
  
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s webListener(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    Serial.printf ("%s webListener(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
   // Want only one web server thread at a time
@@ -214,7 +214,7 @@ void webHandler(void *pvParameters)
   fs::FS fs = (fs::FS) SPIFFS;
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s webHandler(%x) (Core %d)\r\n", getTimeStamp(), myClient, xPortGetCoreID());
+    Serial.printf ("%s webHandler(%x)\r\n", getTimeStamp(), myClient);
     xSemaphoreGive(displaySem);
   }
   myUri[0] = '\0';
@@ -1654,6 +1654,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
             else semFailed ("routeSem", __FILE__, __LINE__);
           }
           if (targetUnit < routeCount) {
+            xTaskCreate(setRouteBg, "setRouteBgWeb", 4096, &targetUnit, 4, NULL);
           }
         }
       }
@@ -1780,8 +1781,11 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
       for (uint8_t z=0; z<routeStateCount && tPtr==NULL; z++) if (routeList[n].state == routeState[z].state) tPtr = routeState[z].name;
       if (tPtr == NULL) tPtr = (char*)"unknown";
       if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        myClient->printf ((const char*)"<tr><td align=\"left\">%s</td><td align=\"left\">%s</td><td align=\"right\" class=\"%s\">%s</td><td><form action=\"/status\" method=\"post\">", routeList[n].sysName, routeList[n].userName, tPtr, tPtr);
-        myClient->printf ((const char*)"<input type=\"hidden\" name=\"op\" value=\"route\"><input type=\"hidden\" name=\"unit\" value=\"%d\"><input type=\"submit\" value=\"Activate\"></form></td></tr>", n);
+        myClient->printf ((const char*)"<tr><td align=\"left\">%s</td><td align=\"left\">%s</td><td align=\"right\" class=\"%s\">%s</td><td>", routeList[n].sysName, routeList[n].userName, tPtr, tPtr);
+        if (routeList[n].state == '4') {
+          myClient->printf ((const char*)"<form action=\"/status\" method=\"post\"><input type=\"hidden\" name=\"op\" value=\"route\"><input type=\"hidden\" name=\"unit\" value=\"%d\"><input type=\"submit\" value=\"Activate\"></form>", n);
+        }
+        myClient->printf ((const char*)"</td></tr>");
         xSemaphoreGive(routeSem);
       }
       else semFailed ("routeSem", __FILE__, __LINE__);

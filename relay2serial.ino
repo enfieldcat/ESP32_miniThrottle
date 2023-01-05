@@ -9,7 +9,7 @@ void relayListener(void *pvParameters)
   char relayName[16];
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s relayListener(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    Serial.printf ("%s relayListener(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
 
@@ -152,7 +152,7 @@ void relayHandler(void *pvParameters)
   bool trackKeepAlive = false;
   
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s relayHandler(%x) (Core %d)\r\n", getTimeStamp(), thisRelay, xPortGetCoreID());
+    Serial.printf ("%s relayHandler(%x)\r\n", getTimeStamp(), thisRelay);
     xSemaphoreGive(displaySem);
   }
 
@@ -395,6 +395,20 @@ void wiThrotRelayPkt (struct relayConnection_s *thisRelay, char *inPacket, char 
     if (func<199) {
       sprintf (outBuffer, "<T %s %d>\r\n", turnName, func);
       forward2serial (outBuffer);
+    }
+  }
+  // Routes - Find route and set as a background task
+  else if (buffLen>4 && strncmp(inPacket, "PRA2", 4) == 0) {
+    char *param = &inPacket[4];
+    uint8_t id = 255;
+    for (uint8_t n=0; n<routeCount && id==255;n++) if (strcmp (routeList[n].sysName, param)==0) id = n;
+    if (id < routeCount) {
+      xTaskCreate(setRouteBg, "setRouteBgRelay", 4096, &id, 4, NULL);
+      delay (250);
+    }
+    else {
+      sprintf (outBuffer, "PRA0%s\r\n", param);
+      relay2WiThrot (outBuffer);
     }
   }
   // Operate loco in multi controller
@@ -797,6 +811,28 @@ void sendWiThrotHeader(struct relayConnection_s *thisRelay, char *inBuffer)
         strcat (inBuffer, tBuffer);
       }
       xSemaphoreGive(turnoutSem);
+      strcat (inBuffer, "\r\n");
+      reply2relayNode (thisRelay, inBuffer);
+    }
+  }
+  if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    strcpy (inBuffer, "PRT]\\[Routes}|{Route");
+    for (uint8_t n=0; n<routeStateCount; n++) {
+      sprintf (tBuffer, "]\\[%s}|{%c", routeState[n].name, routeState[n].state);
+      strcat (inBuffer, tBuffer);
+    }
+    xSemaphoreGive(routeSem);
+    strcat (inBuffer, "\r\n");
+    reply2relayNode (thisRelay, inBuffer);
+  }
+  if (routeCount>0 && turnoutList!=NULL) {
+    if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      sprintf (inBuffer, "PRL");
+      for (uint8_t n=0; n<routeCount; n++) {
+        sprintf (tBuffer, "]\\[%s}|{%s}|{%c", routeList[n].sysName, routeList[n].userName, routeList[n].state);
+        strcat (inBuffer, tBuffer);
+      }
+      xSemaphoreGive(routeSem);
       strcat (inBuffer, "\r\n");
       reply2relayNode (thisRelay, inBuffer);
     }

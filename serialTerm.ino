@@ -9,7 +9,7 @@ void serialConsole(void *pvParameters)
   uint8_t inBuffer[BUFFSIZE];
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s serialConsole(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    Serial.printf ("%s serialConsole(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
 

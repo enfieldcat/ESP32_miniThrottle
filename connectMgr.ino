@@ -26,7 +26,7 @@ void connectionManager(void *pvParameters)
 
   uint8_t use_multiwifi = nvs_get_int ("use_multiwifi", 0);
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s connectionManager(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    Serial.printf ("%s connectionManager(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
 
@@ -90,7 +90,7 @@ void connectionManager(void *pvParameters)
             nextWifi = 0;
             // nothing found
             if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-              Serial.printf ("%s ConnectionManager: No networks defined\r\n", getTimeStamp(), xPortGetCoreID());
+              Serial.printf ("%s ConnectionManager: No networks defined\r\n", getTimeStamp());
               xSemaphoreGive(displaySem);
             }
           }
@@ -493,7 +493,7 @@ void txPacket (const char *header, const char *pktData)
 void serialConnectionManager(void *pvParameters)
 {
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s serialConnectionManager(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    Serial.printf ("%s serialConnectionManager(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
 

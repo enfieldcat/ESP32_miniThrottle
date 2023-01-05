@@ -91,11 +91,12 @@ void setTrackPower (uint8_t desiredState)
   }
 }
 
-void setTurnout (uint8_t turnoutNr, const char desiredState)
+bool setTurnout (uint8_t turnoutNr, const char desiredState)
 {
   char outPacket[21];
   //char string[6];
   uint8_t reqState;
+  bool retVal = true;
  
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setTurnout(%d, %d)\r\n", getTimeStamp(), turnoutNr, (int8_t) desiredState);
@@ -107,7 +108,7 @@ void setTurnout (uint8_t turnoutNr, const char desiredState)
       Serial.printf ("%s Requested turnout %d is out of range, %d turnouts known\r\n", getTimeStamp(), turnoutNr, turnoutCount);
       xSemaphoreGive(displaySem);
     }
-    return;
+    return (false);
   }
   if (desiredState<turnoutStateCount) reqState = turnoutState[desiredState].state;
   if (cmdProtocol == WITHROT) {
@@ -121,7 +122,10 @@ void setTurnout (uint8_t turnoutNr, const char desiredState)
       xSemaphoreGive(turnoutSem);
       txPacket (outPacket);
     }
-    else semFailed ("turnoutSem", __FILE__, __LINE__);
+    else {
+      retVal = false;
+      semFailed ("turnoutSem", __FILE__, __LINE__);
+    }
   }
   else if (cmdProtocol == DCCEX) {
     while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS) {} // clear ack Queue
@@ -137,6 +141,7 @@ void setTurnout (uint8_t turnoutNr, const char desiredState)
       txPacket (outPacket);
       if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
         // wait for ack
+        retVal = false;
         if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           turnoutList[turnoutNr].state = '8';
           Serial.printf ("%s Warning: No response for setting Turnout\r\n", getTimeStamp());
@@ -144,14 +149,21 @@ void setTurnout (uint8_t turnoutNr, const char desiredState)
         }
       }
     }
-    else semFailed ("turnoutSem", __FILE__, __LINE__);
+    else {
+      retVal = false;
+      semFailed ("turnoutSem", __FILE__, __LINE__);
+    }
   }
+  return (retVal);
 }
 
 void setRoute (uint8_t routeNr)
 {
   char outPacket[BUFFSIZE];
   char message[40];
+  #ifdef RELAYPORT
+  char     relayMsg[40];
+  #endif
   
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s sendRoute(%d)\r\n", getTimeStamp(), routeNr);
@@ -178,6 +190,15 @@ void setRoute (uint8_t routeNr)
       int limit = strlen (route);
       int turnoutNr;
       char *start;
+      if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        routeList[routeNr].state = '8';
+        xSemaphoreGive(routeSem);
+        #ifdef RELAYPORT
+        sprintf (relayMsg, "PRA8%s\r\n", routeList[routeNr].sysName);
+        relay2WiThrot (relayMsg);
+        #endif
+      }
+      else semFailed ("routeSem", __FILE__, __LINE__);
       for (int n=0; n<limit; n++) {
         start = route + n;
         while (route[n] != ' ' && n<limit) n++;
@@ -187,13 +208,30 @@ void setRoute (uint8_t routeNr)
           if (strcmp (turnoutList[j].userName, start) == 0) turnoutNr = j;
         }
         if (turnoutNr < 1024) {
+          #ifndef NODISPLAY
           if (route[n] == 'C') strcpy (message, "Close ");
           else strcpy (message, "Throw ");
           strcat (message, start);
-          #ifndef NODISPLAY
           displayTempMessage (NULL, message, false);
           #endif
-          setTurnout (turnoutNr, route[n]);
+          if (!setTurnout (turnoutNr, route[n])) {
+            if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              if (routeList[routeNr].state != '4') {
+                routeList[routeNr].state = '4';
+                #ifdef RELAYPORT
+                sprintf (relayMsg, "PRA4%s\r\n", routeList[routeNr].sysName);
+                #endif
+              }
+              #ifdef RELAYPORT
+              else relayMsg[0] = '\0';
+              #endif
+              xSemaphoreGive(routeSem);
+              #ifdef RELAYPORT
+              if (relayMsg[0] != '\0') relay2WiThrot (relayMsg);
+              #endif
+            }
+            else semFailed ("routeSem", __FILE__, __LINE__);
+          }
           if (pause>0) {
             delay (pause);
           }
@@ -204,6 +242,15 @@ void setRoute (uint8_t routeNr)
         }
         n++;
       }
+      if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (routeList[routeNr].state == '8') routeList[routeNr].state = '2';
+        xSemaphoreGive(routeSem);
+        #ifdef RELAYPORT
+        sprintf (relayMsg, "PRA2%s\r\n", routeList[routeNr].sysName);
+        relay2WiThrot (relayMsg);
+        #endif
+      }
+      else semFailed ("routeSem", __FILE__, __LINE__);
     }
   }
 }
@@ -432,4 +479,98 @@ void getCV(int16_t cv)
     sprintf (packette, "<R %d %d %d>", cv, CALLBACKNUM, CALLBACKSUB);
     txPacket (packette);
   }  
+}
+
+
+/*
+ * Set up up route as a background task
+ */
+void setRouteBg (void *pvParameters)
+{
+  int      turnoutNr;
+  uint16_t pause = routeDelay[nvs_get_int("routeDelay", 2)];
+  uint8_t  routeNr = ((uint8_t*) pvParameters)[0];
+  char     route[BUFFSIZE];
+  char     *start;
+  #ifdef RELAYPORT
+  char     relayMsg[40];
+  #endif
+
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s setRouteBg(%d)\r\n", getTimeStamp(), routeNr);
+    xSemaphoreGive(displaySem);
+  }
+
+  if (routeNr < routeCount) {    
+    nvs_get_string ("route", routeList[routeNr].userName, route, "not found", BUFFSIZE);
+    if (strcmp (route, "not found") != 0) {
+      int limit = strlen (route);
+      if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        routeList[routeNr].state = '8';
+        xSemaphoreGive(routeSem);
+        #ifdef RELAYPORT
+        sprintf (relayMsg, "PRA8%s\r\n", routeList[routeNr].sysName);
+        relay2WiThrot (relayMsg);
+        #endif
+      }
+      else semFailed ("routeSem", __FILE__, __LINE__);
+      for (int n=0; n<limit; n++) {
+        start = route + n;
+        while (route[n] != ' ' && n<limit) n++;
+        route[n++] = '\0';
+        turnoutNr = 1024;
+        for (uint8_t j=0; j<turnoutCount && turnoutNr == 1024; j++) {
+          if (strcmp (turnoutList[j].userName, start) == 0) turnoutNr = j;
+        }
+        if (turnoutNr < 1024) {
+          if (!setTurnout (turnoutNr, route[n])) {
+            if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              if (routeList[routeNr].state != '4') {
+                routeList[routeNr].state = '4';
+                #ifdef RELAYPORT
+                sprintf (relayMsg, "PRA4%s\r\n", routeList[routeNr].sysName);
+                #endif
+              }
+              #ifdef RELAYPORT
+              else relayMsg[0] = '\0';
+              #endif
+              xSemaphoreGive(routeSem);
+              #ifdef RELAYPORT
+              if (relayMsg[0] != '\0') relay2WiThrot (relayMsg);
+              #endif
+            }
+            else semFailed ("routeSem", __FILE__, __LINE__);
+          }
+          if (pause>0) {
+            delay (pause);
+          }
+        }
+        else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s route: turnout %s not found\r\n", getTimeStamp(), start);
+          xSemaphoreGive(displaySem);
+        }
+        n++;
+      }
+      if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        uint8_t chk = 8;
+        if (routeList[routeNr].state == '8') {
+          routeList[routeNr].state = '2';
+          chk = 2;
+        }
+        xSemaphoreGive(routeSem);
+        #ifdef RELAYPORT
+        if (chk == 2) {
+          sprintf (relayMsg, "PRA2%s\r\n", routeList[routeNr].sysName);
+          relay2WiThrot (relayMsg);
+        }
+        #endif  // RELAYPORT
+      }
+      else semFailed ("routeSem", __FILE__, __LINE__);
+    }
+  }
+  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s setRouteBg(%d) called with out of range route, max = %d\r\n", getTimeStamp(), routeNr, routeCount);
+    xSemaphoreGive(displaySem);
+  }
+  vTaskDelete( NULL );
 }

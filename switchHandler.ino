@@ -65,7 +65,7 @@ void switchMonitor(void *pvParameters)
   #endif
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s switchMonitor(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    Serial.printf ("%s switchMonitor(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
 

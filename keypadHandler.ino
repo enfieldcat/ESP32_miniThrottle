@@ -13,7 +13,7 @@ void keypadMonitor(void *pvParameters)
   bool keyRelPending = false;
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s keypadHandler(NULL) (Core %d)\r\n", getTimeStamp(), xPortGetCoreID());
+    Serial.printf ("%s keypadHandler(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
 

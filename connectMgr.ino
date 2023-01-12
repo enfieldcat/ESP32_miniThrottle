@@ -163,7 +163,7 @@ void connectionManager(void *pvParameters)
         }
         // Connect to the network
         if (networkFound) {
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s WiFi Station mode connecting to: %s\r\n", getTimeStamp(), stassid);
             xSemaphoreGive (displaySem);
           }
@@ -343,14 +343,7 @@ void connect2server (char *server, int port)
     }
     if (cmdProtocol==DCCEX) {
       strcpy (remServerType, "DCC-Ex");
-      dccPopulateLoco();
-      dccPopulateTurnout();
-      dccPopulateRoutes();
-      if (nvs_get_int("sortData", SORTDATA) == 1) {
-        sortLoco();
-        sortTurnout();
-        sortRoute();
-      }
+      initDccEx();
     }
   }
 }
@@ -502,23 +495,13 @@ void serialConnectionManager(void *pvParameters)
     serial_dev.begin (DCCSPEED, SERIAL_8N1, DCCRX, DCCTX);
     cmdProtocol = DCCEX;
     xSemaphoreGive(serialSem);
-    delay (1000);
+    delay (1500);
     // Once connected, we can listen for returning packets
     xTaskCreate(receiveNetData, "Network_In", 5120, NULL, 4, NULL);
   }
   else semFailed ("serialSem", __FILE__, __LINE__);
-  delay (1000);
-  // Send initial data
-  setInitialData();
-  // Load stored data from Non-Volatile Storage (NVS)
-  dccPopulateLoco();
-  dccPopulateTurnout();
-  dccPopulateRoutes();
-  if (nvs_get_int("sortData", SORTDATA) == 1) {
-    sortLoco();
-    sortTurnout();
-    sortRoute();
-  }
+  delay (1500);
+  initDccEx();
   vTaskDelete( NULL );
 }
 
@@ -555,6 +538,21 @@ void txPacket (const char *header, const char *pktData)
   else semFailed ("serialSem", __FILE__, __LINE__);
 }
 #endif // SERIALCTRL
+
+
+void initDccEx()
+{
+  // Send initial data
+  setInitialData();
+  // Load stored data from Non-Volatile Storage (NVS)
+  dccPopulateLoco();
+  if (nvs_get_int("sortData", SORTDATA) == 1) sortLoco();
+  dccPopulateTurnout();
+  if (nvs_get_int("sortData", SORTDATA) == 1) sortTurnout();
+  dccPopulateRoutes();
+  if (nvs_get_int("sortData", SORTDATA) == 1) sortRoute();
+}
+
 
 void txPacket (const char *pktData)
 {

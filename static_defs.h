@@ -27,7 +27,7 @@
 #undef VERSION
 #endif
 #define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.5d"         // Version string
+#define VERSION     "0.5e"         // Version string
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.
@@ -95,10 +95,12 @@ extern "C" {
 // Define application things
 #define MAXFUNCTIONS   30   // only expect 0-29 supported
 #define MAXCONSISTSIZE  8   // max number of locomotives to drive in one session
-#define MAXPARAMS      43   // Maximum number of parameters a serial console comand can have, 43 => route of up to 20 switches
-#define NAMELENGTH     32   // Length of names for locos, turnoutss, routes etc
+#define NAMELENGTH     32   // Length of names for locos, turnouts, routes etc
+#define SYSNAMELENGTH  16   // Length of system names for locos, turnouts, routes etc
 #define SSIDLENGTH     33   // Length to permit SSIDs and passwords
 #define SORTDATA        1   // 0 = unsorted, 1 = sorted lists of data
+#define MAXRTSTEPS     25   // Max number of steps / waypoints in a route.
+#define MAXPARAMS  (MAXRTSTEPS*2)+3   // Maximum number of parameters a serial console comand can have, 43 => route of up to 20 switches
 
 // Define Network and buffer sizes
 #define WIFINETS        6   // Count of number network credentials to store
@@ -111,8 +113,8 @@ extern "C" {
 #define BUMPCOUNT     100   // re-evalute loco count every N times through loco control routine
 #define TIMEOUT      2000   // Network timeout in milliseconds
 #define APCHANNEL       6   // Default WiFi Channel for AP mode
-#define MAXAPCLIENTS    8   // Max number of clients
-#define DEFAPCLIENTS    4   // Default number of clients allowed
+#define MAXAPCLIENTS    8   // Max number of access point clients
+#define DEFAPCLIENTS    4   // Default number of access point clients allowed
 
 // Divisor for converting uSeconds to Seconds
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
@@ -155,29 +157,31 @@ struct locomotive_s {
   char steal;                     // Is a steal required?
   char type;                      // Long or short addr. 127 and below should be short, 128 and above should be long
   char name[NAMELENGTH];          // name of loco
-  bool owned;                     // Is loco owned y this throttle?
+  bool owned;                     // Is loco owned by this throttle?
 };
 
 struct turnoutState_s {
   uint8_t state;                  // numeric state value
-  char name[NAMELENGTH];          // human readible equivalent
+  char name[SYSNAMELENGTH];       // human readible equivalent
 };
 
 struct turnout_s {
   uint8_t state;                  // numeric turnout state
-  char sysName[NAMELENGTH];       // DCC address / system name
+  char sysName[SYSNAMELENGTH];    // DCC address / system name
   char userName[NAMELENGTH];      // human readible name
 };
 
 struct routeState_s {
   uint8_t state;                  // numeric state value
-  char name[NAMELENGTH];          // human readible equivalent
+  char name[SYSNAMELENGTH];       // human readible equivalent
 };
 
 struct route_s {
   uint8_t state;                  // State of the route
-  char sysName[NAMELENGTH];       // System name of the route
+  char sysName[SYSNAMELENGTH];    // System name of the route
   char userName[NAMELENGTH];      // User Name
+  uint8_t turnoutNr[MAXRTSTEPS];  // turnout numbers
+  uint8_t desiredSt[MAXRTSTEPS];  // desired state of turnout
 };
 
 #ifdef RELAYPORT

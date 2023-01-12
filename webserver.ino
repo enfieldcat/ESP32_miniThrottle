@@ -822,7 +822,7 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
       if (n == compInt) myClient->printf ((const char*)" checked=\"true\"");
       myClient->printf ((const char*)"><label for=\"%s\">%s</label>", labelName, labelDesc);
     }
-    myClient->printf ((const char*)"<tr><td>Power on affects</td><td>");
+    myClient->printf ((const char*)"</td></tr><tr><td>Power on affects</td><td>");
     compInt = nvs_get_int ("dccPower", DCCPOWER);
     for (uint8_t n=0 ; n<=JOIN; n++) {
       sprintf (labelName, "dccPwr%d", n);
@@ -831,7 +831,8 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
       if (n == compInt) myClient->printf ((const char*)" checked=\"true\"");
       myClient->printf ((const char*)"><label for=\"%s\">%s</label>", labelName, dccPwrLabel[n]);
     }
-    myClient->printf ((const char*)"</td></tr></table>");
+    compInt = nvs_get_int ("toOffset", 100);
+    myClient->printf ((const char*)"</td></tr><tr><td>Turnout numbering starts at</td><td><input type=\"number\" name=\"toOffset\" value=\"%d\" min=\"1\" max=\"1000\" size=\"6\"></td></tr></table>", compInt);
   }
   #ifdef BRAKEPRESPIN
   compInt = nvs_get_int ( "brakeup", 1);
@@ -977,9 +978,10 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     #endif
     { "mdns",           INTEGER,    0,             1,            1,          "", "mDNS Search Endabled" },
     { "defaultProto",   INTEGER, WITHROT,      DCCEX,      WITHROT,          "", "Preferred Protocol" },
+    { "toOffset",       INTEGER,    1,          1000,          100,          "", "turnout numbering starts at" },
     #ifdef RELAYPORT
     { "maxRelay",       INTEGER,    0,      MAXRELAY,   MAXRELAY/2,          "", "Max nodes to relay" },
-    { "relayMode",      INTEGER,    0,             1,     DCCRELAY,          "", "Relay mode" },
+    { "relayMode",      INTEGER,    0,             2,            1,          "", "Relay mode" },
     { "relayPort",      INTEGER,    1,         65534,    RELAYPORT,          "", "Relay port" },
     #endif
     { "webPort",        INTEGER,    1,         65534,      WEBPORT,          "", "Web server port"},
@@ -1315,6 +1317,11 @@ void mkFastClock(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepA
         mins = util_str2int(&time[n+1]);
         time[n] = '\0';
         hours = util_str2int(time);
+        if (webScanData (data, "retain", dataSize) != NULL) {
+          nvs_put_int ("fc_hour", hours);
+          nvs_put_int ("fc_min",  mins);
+          nvs_put_int ("fc_rate", (int) (multiplier*100.00));
+        }
         mins = ((hours*60) + mins) * 60;
         if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           if (fc_time != mins || fc_multiplier != multiplier) {
@@ -1342,9 +1349,10 @@ void mkFastClock(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepA
   mkWebHeader(myClient, 200, 0, keepAlive);
   mkWebHtmlHeader (myClient, "Fast Clock", nvs_get_int("webRefresh", WEBREFRESH));
   myClient->printf ((const char*) "<form action=\"/fastclock\" method=\"post\"><table>");
-  myClient->printf ((const char*) "<tr><td>Time (HH:MM)</td><td><input type=\"time\" name=\"fctime\" value=\"%02d:%02d\"></td></tr>", hours, mins);
-  myClient->printf ((const char*) "<tr><td>Multiplier</td><td><input type=\"number\" name=\"fcmultiplier\" value=\"%3.2f\" min=\"0\" max=\"5\" size=\"5\" step=\"0.05\"></td></tr>", multiplier);
+  myClient->printf ((const char*) "<tr><td align=\"right\">Time (HH:MM)</td><td><input type=\"time\" name=\"fctime\" value=\"%02d:%02d\"></td></tr>", hours, mins);
+  myClient->printf ((const char*) "<tr><td align=\"right\">Multiplier</td><td><input type=\"number\" name=\"fcmultiplier\" value=\"%3.2f\" min=\"0\" max=\"12\" size=\"5\" step=\"0.05\"></td></tr>", multiplier);
   myClient->printf ((const char*) "<tr><td>&nbsp;</td><td>Multiplier=0.00, clock stopped</td></tr><tr><td>&nbsp;</td><td>Multiplier=1.00, normal pace of time</td></tr><tr><td>&nbsp;</td><td>Multiplier=3.00, 1 min wall clock time is 3 mins scale time</td></tr>");
+  myClient->printf ((const char*) "<tr><td align=\"right\">Retain</td><td><input type=\"checkbox\" name=\"retain\" id=\"retain\" value=\"low\"><label for=\"retain\">Use above settings as startup default</label></td></tr>");
   myClient->printf ((const char*) "</table><input type=\"submit\" value=\"Set Time\"></form></td></tr></table><hr></body></html>\r\n");
 }
 #endif
@@ -1516,8 +1524,12 @@ void mkWebDeviceDescript (WiFiClient *myClient)
   else semFailed ("fastClockSem", __FILE__, __LINE__);
 
   myClient->printf ((const char*)"<h2>Device Description</h2><table>");
-  myClient->printf ((const char*)"<tr><td align=\"right\">Device Name:</td><td>%s</td></tr>", tname);
-  myClient->printf ((const char*)"<tr><td align=\"right\">Hardware:</td><td>%d core ESP32 revision %d, flash = %d MB %s</td></tr>", \
+  myClient->printf ((const char*)"<tr><td align=\"right\">Device Name:</td><td>%s", tname);
+  if (WiFi.status() == WL_CONNECTED) {
+    IPAddress ip = WiFi.localIP();
+    myClient->printf (" (%d.%d.%d.%d)", ip[0], ip[1], ip[2], ip[3]);
+  }
+  myClient->printf ((const char*)"</td></tr><tr><td align=\"right\">Hardware:</td><td>%d core ESP32 revision %d, flash = %d MB %s</td></tr>", \
      chip_info.cores, \
      ESP.getChipRevision(), \
      spi_flash_get_chip_size() / (1024 * 1024), \
@@ -1554,7 +1566,9 @@ void mkWebDeviceDescript (WiFiClient *myClient)
   myClient->printf ((const char*)"</tr></table></td></tr>");
   myClient->printf ((const char*)"<tr><td align=\"right\">Max Web Clients:</td><td>%d used of %d provisioned</td></tr>", maxWebClientCount, MAXWEBCONNECT);
   #ifdef RELAYPORT
-  myClient->printf ((const char*)"<tr><td align=\"right\">Max Relay Clients:</td><td>%d used of %d provisioned</td></tr>", maxRelayCount, maxRelay);
+  myClient->printf ((const char*)"<tr><td align=\"right\">Max Relay Clients:</td><td>");
+  if (relayMode == NORELAY) myClient->printf ((const char*)"Disabled</td></tr>");
+  else myClient->printf ((const char*)"%d used of %d provisioned</td></tr>", maxRelayCount, maxRelay);
   #endif
   if (throt_time != 36) {
     char tString[10];
@@ -1647,14 +1661,15 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
         if (resultPtr != NULL) {
           if (util_str_isa_int (resultPtr)) targetUnit = util_str2int(resultPtr); // Assume parameter is index number
           else {                                                                  // Assume parameter in sysName
-            if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {   // avoid contention when accessing data
+            if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {     // avoid contention when accessing data
               for (uint8_t n=0; n<routeCount && targetUnit==255; n++) if (strcmp (routeList[n].sysName, resultPtr) == 0) targetUnit = n;
               xSemaphoreGive(routeSem);
             }
             else semFailed ("routeSem", __FILE__, __LINE__);
           }
           if (targetUnit < routeCount) {
-            xTaskCreate(setRouteBg, "setRouteBgWeb", 4096, &targetUnit, 4, NULL);
+            if (cmdProtocol == WITHROT) setRoute(targetUnit);
+            else xTaskCreate(setRouteBg, "setRouteBgWeb", 4096, &targetUnit, 4, NULL);
           }
         }
       }
@@ -1759,15 +1774,20 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
     myClient->printf ((const char*)"</table>");
   }
   if (turnoutCount>0 && turnoutCount<255 && turnoutList!=NULL && turnoutState!=NULL) {
+    char prefix[] = {'\0','\0'};
     myClient->printf ((const char*)"<h2>Turnouts</h2><table><tr><th>ID</th><th>Description</th><th>State</th><th>Operate</th></tr>");
     for (uint8_t n=0; n<turnoutCount; n++) {
       tPtr = NULL;
       for (uint8_t z=0; z<turnoutStateCount && tPtr==NULL; z++) if (turnoutList[n].state == turnoutState[z].state) tPtr = turnoutState[z].name;
       if (tPtr == NULL) tPtr = (char*)"unknown";
       if (xSemaphoreTake(turnoutSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        myClient->printf ((const char*)"<tr><td align=\"left\">%s</td><td align=\"left\">%s</td>", turnoutList[n].sysName, turnoutList[n].userName);
+        myClient->printf ((const char*)"<tr><td align=\"left\">");
+        if (cmdProtocol == DCCEX) {
+          myClient->printf ((const char*)"T");
+        }
+        myClient->printf ((const char*)"%s</td><td align=\"left\">%s</td>", turnoutList[n].sysName, turnoutList[n].userName);
         xSemaphoreGive(turnoutSem);
-        myClient->printf ((const char*)"<td align=\"right\" class=\"%s\">%s</td><td><form action=\"/status\" method=\"post\">", tPtr, tPtr);
+        myClient->printf ((const char*)"<td class=\"%s\">%s</td><td><form action=\"/status\" method=\"post\">", tPtr, tPtr);
         myClient->printf ((const char*)"<input type=\"hidden\" name=\"op\" value=\"turn\"><input type=\"hidden\" name=\"unit\" value=\"%d\"><input type=\"submit\" value=\"Change\"></form></td></tr>", n);
       }
       else semFailed ("turnoutSem", __FILE__, __LINE__);
@@ -1781,7 +1801,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
       for (uint8_t z=0; z<routeStateCount && tPtr==NULL; z++) if (routeList[n].state == routeState[z].state) tPtr = routeState[z].name;
       if (tPtr == NULL) tPtr = (char*)"unknown";
       if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        myClient->printf ((const char*)"<tr><td align=\"left\">%s</td><td align=\"left\">%s</td><td align=\"right\" class=\"%s\">%s</td><td>", routeList[n].sysName, routeList[n].userName, tPtr, tPtr);
+        myClient->printf ((const char*)"<tr><td align=\"left\">%s</td><td align=\"left\">%s</td><td class=\"%s\">%s</td><td>", routeList[n].sysName, routeList[n].userName, tPtr, tPtr);
         if (routeList[n].state == '4') {
           myClient->printf ((const char*)"<form action=\"/status\" method=\"post\"><input type=\"hidden\" name=\"op\" value=\"route\"><input type=\"hidden\" name=\"unit\" value=\"%d\"><input type=\"submit\" value=\"Activate\"></form>", n);
         }
@@ -1802,7 +1822,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
     char remoteName[NAMELENGTH];
     uint32_t inPackets;
     uint32_t outPackets;
-    myClient->printf ((const char*)"<h2>Relay Statistics</h2><p>Relay port is: %d</p><table><tr><th>Remote IP</th><th>Name</th><th>Received Commands</th><th>Sent Commands</th></tr>", relayPort);
+    myClient->printf ((const char*)"<h2>Relay Statistics</h2><p>Relay port is: %d, relay protocol is %s.</p><table><tr><th>Remote IP</th><th>Name</th><th>Received Commands</th><th>Sent Commands</th></tr>", relayPort, relayTypeList[relayMode]);
     if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       myClient->printf ((const char*)"<tr><td>Serial line</td><td>%s</td><td align=\"right\">%d</td><td align=\"right\">%d</td></tr>", tname, localinPkts, localoutPkts);
       xSemaphoreGive(relaySvrSem);

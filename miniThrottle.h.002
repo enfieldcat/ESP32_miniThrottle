@@ -1,6 +1,13 @@
 /*
  * Use this file to centralise any defines and includes
  * This file should contain only customisable data as far as possible
+ * minThrottle.002 template for:
+ *  - Serial connected throttle - direct to DCC-Ex serial port
+ *  - WiThrottle relay over WiFi, up to 8 throttles
+ *  - External ST7735 display - 128x160x16 SPI
+ *  - 4x5 keypad
+ *  - With encoder
+ *  - web enabled configuration
  */
 
 /* ***********************************************************************\

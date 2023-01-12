@@ -1,6 +1,15 @@
 /*
  * Use this file to centralise any defines and includes
  * This file should contain only customisable data as far as possible
+ *
+ * miniThrottle.h.004 template for
+ *  - Serially attached with no local throttle - direct attached to DCC-Ex serial port
+ *  - WiThrottle over WiFi relay
+ *  - built in SDD1306 display
+ *  - No keypad
+ *  - No potentiometer
+ *  - No encoder
+ *  - web enabled configuration
  */
 
 /* ***********************************************************************\

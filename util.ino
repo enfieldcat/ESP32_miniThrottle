@@ -103,7 +103,7 @@ void timeFormat (char *tString, uint32_t tint)
              sprintf (tString, "%d:%02d %s", time/60, time%60, indicator[indexer]);
              break;
     default : if (time<60) time+=720; 
-             sprintf (tString, "%d:%02d", time/60, time%60);
+             sprintf (tString, "%2d:%02d", time/60, time%60);
              break;
   }
 }
@@ -139,11 +139,17 @@ void sortLoco()
   bool hasSwapped = true;
   uint8_t limit = locomotiveCount - 1;
 
+
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s sortLoco()\r\n", getTimeStamp());
+    xSemaphoreGive(displaySem);
+  }
+
   if (locomotiveCount > 1) {
     while (hasSwapped) {
       hasSwapped = false;
       for (uint8_t n=0; n<limit; n++) {
-        if (strcmp (locoRoster[n].name, locoRoster[n+1].name) > 1) {
+        if (strcasecmp (locoRoster[n].name, locoRoster[n+1].name) > 0) {
           hasSwapped = true;
           swapRecord (&locoRoster[n], &locoRoster[n+1], sizeof(struct locomotive_s));
         }
@@ -161,11 +167,17 @@ void sortTurnout()
   bool hasSwapped = true;
   uint8_t limit = turnoutCount - 1;
 
+
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s sortTurnout()\r\n", getTimeStamp());
+    xSemaphoreGive(displaySem);
+  }
+
   if (turnoutCount > 1) {
     while (hasSwapped) {
       hasSwapped = false;
       for (uint8_t n=0; n<limit; n++) {
-        if (strcmp (turnoutList[n].userName, turnoutList[n+1].userName) > 1) {
+        if (strcasecmp (turnoutList[n].userName, turnoutList[n+1].userName) > 0) {
           hasSwapped = true;
           swapRecord (&turnoutList[n], &turnoutList[n+1], sizeof(struct turnout_s));
         }
@@ -180,6 +192,12 @@ void sortTurnout()
  */
 void sortRoute()
 {
+
+  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s sortRoute()\r\n", getTimeStamp());
+    xSemaphoreGive(displaySem);
+  }
+
   if (routeCount > 1) {
     bool hasSwapped = true;
     uint8_t limit = routeCount - 1;
@@ -187,7 +205,7 @@ void sortRoute()
     while (hasSwapped) {
       hasSwapped = false;
       for (uint8_t n=0; n<limit; n++) {
-        if (strcmp (routeList[n].userName, routeList[n+1].userName) > 1) {
+        if (strcasecmp (routeList[n].userName, routeList[n+1].userName) > 0) {
           hasSwapped = true;
           swapRecord (&routeList[n], &routeList[n+1], sizeof(struct route_s));
         }

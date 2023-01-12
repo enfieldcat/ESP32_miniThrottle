@@ -247,7 +247,8 @@ const char *sampleConfig = {"# Sample file for adding definitions to miniThrottl
 "add loco 3 factory default loco\n" \
 "add turnout riverRd01 SERVO 101 132 198 2\n" \
 "add turnout riverRd02 SERVO 102 132 198 2\n" \
-"add route byPass riverRd01 T riverRd02 T\n" \
+"add route platform-1 riverRd01 T riverRd02 T\n" \
+"add route platform-2 riverRd01 C riverRd02 C\n" \
 "del loco 7\n" \
 "cpuspeed 240\n" \
 "name trainCtrl\n" \

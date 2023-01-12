@@ -49,7 +49,7 @@ void processWiThrotPacket (char *packet)
       }
     }
   }
-  else if (strncmp (packet, "PTA", 3) == 0 && strlen(packet)>4) { // Change of turnout
+  else if (strncmp (packet, "PTR", 3) == 0 && strlen(packet)>4) { // Change of turnout
     char *tPtr = &packet[4];
     uint8_t state = packet[3];
     uint8_t ptr = 0;
@@ -371,7 +371,7 @@ void processWiThrotPacket (char *packet)
         }
         if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0';   // Allow up to 32 chars in a name
         strcpy (routeStateData[tokenPtr-1].name, workingToken);
-        routeStateData[tokenPtr-1].state = subToken[0][0] - '0'; // Assume single digit, and nor white space
+        routeStateData[tokenPtr-1].state = subToken[0][0]; // Assume single digit, and nor white space
       }
       if (routeState != NULL) free(routeState);
       routeState      = routeStateData;
@@ -398,7 +398,7 @@ void processWiThrotPacket (char *packet)
         strcpy (routeData[tokenPtr].sysName, workingToken);
         if (strlen(subToken[0]) > (NAMELENGTH-1)) subToken[0][NAMELENGTH-1] = '\0'; // Allow up to 32 chars in a name
         strcpy (routeData[tokenPtr].userName, subToken[0]);
-        routeData[tokenPtr].state = subToken[1][0] - '0'; // Assume single digit, and nor white space
+        routeData[tokenPtr].state = subToken[1][0]; // Assume single digit, and nor white space
       }
       if (routeList != NULL) free(routeList);
       routeList  = routeData;

@@ -226,6 +226,7 @@ void dccSpeedChange (char* speedSet)
 void dccAckTurnout (char *ack)
 {
   uint8_t result = 255;
+  uint8_t state = 'C';
   #ifdef RELAYPORT
   char outBuffer[32];
   #endif
@@ -234,14 +235,13 @@ void dccAckTurnout (char *ack)
     xSemaphoreGive(displaySem);
   }
   xQueueSend (dccAckQueue, &result, 0);
-  //if (ack[0]=='8' && ack[1]=='4') {   // DCC-Ex may bodge our name and change letters to numbers, Turnout names start 'T'
-  //  ack[0]='T';
-  //  for (uint8_t n=1; n<strlen(ack); n++) ack[n] = ack[n+1];
-  //}
   for (uint8_t n=0; n<strlen(ack); n++) if (ack[n]==' ') {
     ack[n]='\0';
     result = ack[n+1];
-    if (result == '1') result = '4';
+    if (result == '1') {
+      result = '4';
+      state = 'T';
+    }
     else result = '2';
   }
   for (uint8_t n=0; n<turnoutCount; n++) if (strcmp (ack, turnoutList[n].sysName) == 0) {
@@ -252,6 +252,7 @@ void dccAckTurnout (char *ack)
       sprintf (outBuffer, "PTA%c%s\r\n", result, ack);
       relay2WiThrot (outBuffer);
       #endif
+      invalidateRoutes (n, state);
       n = turnoutCount;
     }
   }
@@ -410,6 +411,10 @@ void dccPopulateLoco()
       if (locoData[n].id > 127) locoData[n].type = 'L';
       else locoData[n].type = 'S';
       strcpy (locoData[n].name, curData);
+      if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("Loading locomotive %s\r\n", curData);
+        xSemaphoreGive(displaySem);
+      }
       curData = curData + NAMELENGTH;
       locoData[n].direction = STOP;
       locoData[n].speed     = 0;
@@ -456,6 +461,7 @@ void dccPopulateTurnout()
     char *curData;
     struct turnout_s *turnoutData = (struct turnout_s*) malloc (numEntries * sizeof(struct turnout_s));
     char commandBuffer[3*NAMELENGTH]; 
+    uint16_t offset = nvs_get_int("toOffset", 100);
     
     if (turnoutState != NULL) free (turnoutState);
     turnoutState = (struct turnoutState_s*) malloc (4 * sizeof(struct turnoutState_s));
@@ -473,8 +479,12 @@ void dccPopulateTurnout()
     while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS) {} // clear ack Queue
     for (int n=0; n<numEntries; n++) {
       turnoutData[n].state = '1';
-      sprintf (turnoutData[n].sysName, "%02d", (1+n));
+      sprintf (turnoutData[n].sysName, "%d", (offset+n));
       strcpy (turnoutData[n].userName, curData);
+      if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("Loading turnout %s\r\n", curData);
+        xSemaphoreGive(displaySem);
+      }
       curData = curData + 16;
       sprintf (commandBuffer, "<T %s %s>", turnoutData[n].sysName, curData);
       curData = curData + (2*NAMELENGTH);
@@ -512,7 +522,14 @@ void dccPopulateRoutes()
   if (numEntries > 0) {
     char *rawData  = (char*) nvs_extractStr ("route", numEntries, BUFFSIZE);
     char *curData;
+    char *turnoutData;
     struct route_s *rData = (struct route_s*) malloc (numEntries * sizeof(struct route_s));
+    uint16_t offset = nvs_get_int("toOffset", 100);
+    uint16_t limit  = 0;
+    uint16_t ptr    = 0;  // byte offset pointer
+    uint16_t wPtr   = 0;  // word pointer
+    uint8_t  tCnt   = 0;  // turnout counter
+    uint8_t  tVal   = 0;
 
     if (routeState != NULL) free (routeState);
     routeState = (struct routeState_s*) malloc (4 * sizeof(struct routeState_s));
@@ -528,9 +545,58 @@ void dccPopulateRoutes()
 
     curData = rawData;
     for (int n=0; n<numEntries; n++) {
+      // Populate base data of each route
       rData[n].state = '4';
-      sprintf (rData[n].sysName, "R%02d", 1+n);
+      sprintf (rData[n].sysName, "R%02d", offset+n);
       strcpy  (rData[n].userName, curData);
+      // populate details of turnouts and desired states.
+      // for 10 routes of upto 25 steps each, this is only 500 bytes of memory if stored using turnout index and desired state
+      turnoutData = curData + 16;
+      ptr = 0;
+      tCnt = 0;
+      if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("Loading route %s\r\n", curData);
+        xSemaphoreGive(displaySem);
+      }
+      limit = strlen (turnoutData);
+      while (turnoutData[ptr]!=0 && tCnt<MAXRTSTEPS && ptr<limit) {
+        while (turnoutData[ptr] == ' ' && turnoutData[ptr]!='\0') ptr++;
+        wPtr = ptr;
+        while (turnoutData[ptr] != ' ' && turnoutData[ptr]!='\0') ptr++;   // skip to white space
+        while (turnoutData[ptr] == ' ' && turnoutData[ptr]!='\0') {
+          turnoutData[ptr] = '\0';
+          ptr++;
+        }
+        tVal = 200;  // 255 => end of route, 200 => MIA / removed turnout.
+        for (uint8_t n=0; n<turnoutCount && tVal == 200; n++) if (strcasecmp(turnoutList[n].userName, &turnoutData[wPtr]) == 0) {
+          tVal = n;
+        }
+        rData[n].turnoutNr[tCnt] = tVal;  // 255 => end of route, 200 => MIA / removed turnout.
+        if (tVal == 200) {
+          if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("%s dccPopulateRoutes: route %s, ERROR: turnout %s not found or removed?\r\n", getTimeStamp(), curData, &turnoutData[wPtr]);
+            xSemaphoreGive(displaySem);
+          }
+        }
+        turnoutData[ptr] = toupper(turnoutData[ptr]);
+        if (turnoutData[ptr] == 'T' || turnoutData[ptr] == 'C') {
+          rData[n].desiredSt[tCnt] = turnoutData[ptr];
+        }
+        else {
+          rData[n].desiredSt[tCnt] = 200;
+          if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("%s dccPopulateRoutes: State of route %s, switch %s should be T (for thrown) or C (for closed).\r\n", getTimeStamp(), curData, &turnoutData[wPtr]);
+            xSemaphoreGive(displaySem);
+          }
+        }
+        tCnt++;
+        ptr++;
+      }
+      while (tCnt < MAXRTSTEPS) {
+        rData[n].turnoutNr[tCnt] = 255;
+        rData[n].desiredSt[tCnt] = 255;
+        tCnt++;
+      }
       curData = curData + (16 + BUFFSIZE);
     }
     if (rawData != NULL) {

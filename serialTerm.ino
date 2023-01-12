@@ -516,17 +516,20 @@ void mt_add_gadget (int nparam, char **param)
 void mt_del_gadget (int nparam, char **param)
 {
   if (strcmp (param[1], "loco") == 0 || strcmp (param[1], "turnout") == 0 || strcmp (param[1], "route") == 0) {
-    if (util_str_isa_int(param[2]) && util_str2int(param[2])<=10239 && util_str2int(param[2])>0) {
-      nvs_del_key (param[1], param[2]);
-    }
-    else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.print   ("Error: ");
-        Serial.print   (param[1]);
-        Serial.println (" number must be between 1 and 10239");
-        xSemaphoreGive(displaySem);
+    if (strcmp (param[1], "loco") == 0) {
+      if (util_str_isa_int(param[2]) && util_str2int(param[2])<=10239 && util_str2int(param[2])>0) {
+        nvs_del_key (param[1], param[2]);
+      }
+      else {
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.print   ("Error: ");
+          Serial.print   (param[1]);
+          Serial.println (" number must be between 1 and 10239");
+          xSemaphoreGive(displaySem);
+        }
       }
     }
+    else nvs_del_key (param[1], param[2]);
   }
   else {
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

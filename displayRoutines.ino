@@ -133,7 +133,8 @@ void mkLocoMenu()
 void mkTurnoutMenu()
 {
   char *switchMenu[turnoutCount + 1];
-  char *stateMenu[turnoutStateCount];
+  char *stateMenu[] ={"Close", "Throw"};
+  char operation = 'C';
   uint8_t result = 255;
   uint8_t reqState = 255;
   uint8_t option = 0;
@@ -148,7 +149,7 @@ void mkTurnoutMenu()
   }
   for (uint8_t n=0; n<turnoutCount; n++) switchMenu[n] = turnoutList[n].userName;
   switchMenu[turnoutCount] = (char*) prevMenuOption;
-  for (uint8_t n=0; n<turnoutStateCount; n++) stateMenu[n] = turnoutState[n].name;
+  //for (uint8_t n=0; n<turnoutStateCount; n++) stateMenu[n] = turnoutState[n].name;
   while (result!=0
     #ifndef SERIALCTRL
     && client.connected()
@@ -160,9 +161,11 @@ void mkTurnoutMenu()
       lastSwitchMenuOption = result - 1;
       if (turnoutList[result-1].state == turnoutState[0].state) option = 0;
       else option = 1;
-      reqState = displayMenu ((const char**) stateMenu, turnoutStateCount, option);
+      // reqState = displayMenu ((const char**) stateMenu, turnoutStateCount, option);
+      reqState = displayMenu ((const char**) stateMenu, 2, option);
       if (reqState != 0) {
-        setTurnout (result-1, reqState-1);
+        if (reqState == 2) operation = 'T';
+        setTurnout (result-1, operation);
       }
       result = 255;
     }

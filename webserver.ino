@@ -614,7 +614,7 @@ void mkWebWiFi(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     char passName[16];
     char myssid[33];
     char mypass[33];
-    uint8_t WiFiMode   = nvs_get_int ("WiFiMode", WIFISTA);
+    uint8_t WiFiMode   = nvs_get_int ("WiFiMode", WIFIBOTH);
     uint8_t apChannel  = nvs_get_int ("apChannel", APCHANNEL);
     uint8_t staConnect = nvs_get_int ("staConnect", 0);
     
@@ -723,6 +723,10 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   const char *rotateOpts[] = {"0 deg (Normal)", "90 deg Right", "180 deg (Invert)", "90 deg Left"};
   #endif   // SCREENROTATE == 2
   #endif   // SCREENROTATE
+  #ifdef OTAUPDATE
+  char ota_url[120];
+  ota_control theOtaControl;
+  #endif
 
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkWebConfig(%x, keepAlive)\r\n", getTimeStamp(), myClient);
@@ -831,6 +835,14 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
       if (n == compInt) myClient->printf ((const char*)" checked=\"true\"");
       myClient->printf ((const char*)"><label for=\"%s\">%s</label>", labelName, dccPwrLabel[n]);
     }
+    myClient->printf ((const char*)"</td></tr><tr><td>On error in setting routes</td><td>");
+    compInt = nvs_get_int ("dccRtError", 0);
+    myClient->printf ((const char*)"<input type=\"radio\" id=\"dccRtError0\" name=\"dccRtError\" value=\"0\"");
+    if (compInt==0) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"dccRtError0\">Continue setting up remainder of route</label><br><input type=\"radio\" id=\"dccRtError1\" name=\"dccRtError\" value=\"1\"");
+    if (compInt==1) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"dccRtError1\">Abort setting up route</label>");
+
     compInt = nvs_get_int ("toOffset", 100);
     myClient->printf ((const char*)"</td></tr><tr><td>Turnout numbering starts at</td><td><input type=\"number\" name=\"toOffset\" value=\"%d\" min=\"1\" max=\"1000\" size=\"6\"></td></tr></table>", compInt);
   }
@@ -906,6 +918,24 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   }
   myClient->printf ((const char*)"</table>");
   #endif   // WEBLIFETIME
+  #ifdef OTAUPDATE
+  nvs_get_string ("ota_url", ota_url, OTAUPDATE, sizeof(ota_url));
+  myClient->printf ((const char*)"<h2>Over The Air Updates</h2><table><tr><td>Source</td><td><input type=\"text\" name=\"ota_url\" value=\"%s\" minlength=\"16\" maxlength=\"%d\" size=\"64\"></td></tr>", ota_url, sizeof(ota_url));
+  sprintf (labelName, "ota_%s", theOtaControl.get_boot_partition_label());
+  nvs_get_string (labelName, ota_url, "Initial Installation", sizeof(ota_url));
+  myClient->printf ((const char*)"<tr><td>Boot: %s</td><td>%s</td></tr>", theOtaControl.get_boot_partition_label(), ota_url);
+  if (nvs_get_int ("ota_initial", 0) == 1) {
+    sprintf (labelName, "ota_%s", theOtaControl.get_next_partition_label());
+    nvs_get_string (labelName, ota_url, "Initial Installation", sizeof(ota_url));
+    myClient->printf ((const char*)"<tr><td>Next: %s</td><td>%s</td></tr>", theOtaControl.get_next_partition_label(), ota_url);
+  }
+  myClient->printf ((const char*)"<tr><td>Update Options</td><td><input type=\"radio\" id=\"otaNone\" name=\"ota_action\" value=\"0\" checked=\"true\"><label for=\"otaNone\">No OTA check</label>");
+  myClient->printf ((const char*)"<br><input type=\"radio\" id=\"otaCheck\" name=\"ota_action\" value=\"1\"><label for=\"otaCheck\">Check for update</label>");
+  if (nvs_get_int ("ota_initial", 0) == 1) {
+    myClient->printf ((const char*)"<br><input type=\"radio\" id=\"otaBackout\" name=\"ota_action\" value=\"2\"><label for=\"otaBackout\">Switch boot partitions</label>");
+  }
+  myClient->printf ((const char*)"</td></tr></table>");
+  #endif
   myClient->printf ((const char*)"<h2>Misc Settings</h2><table><tr><td>Roster</td><td><input type=\"radio\" name=\"sortData\" id=\"sortTrue\" value=\"1\"");
   compInt = nvs_get_int ((const char*)"sortData", 1);
   if (compInt == 1) myClient->printf (" checked=\"true\"");
@@ -976,6 +1006,9 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     #ifdef DELAYONSTART
     { "delayOnStart",   INTEGER,    0,           120, DELAYONSTART,          "", "Start up delay in seconds" },
     #endif
+    #ifdef OTAUPDATE
+    { "ota_url",        STRING,    16,           120,            0,   OTAUPDATE, "OTA update URL" },
+    #endif
     { "mdns",           INTEGER,    0,             1,            1,          "", "mDNS Search Endabled" },
     { "defaultProto",   INTEGER, WITHROT,      DCCEX,      WITHROT,          "", "Preferred Protocol" },
     { "toOffset",       INTEGER,    1,          1000,          100,          "", "turnout numbering starts at" },
@@ -999,6 +1032,8 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     { "webStatus",      INTEGER,    0,             2,            0,          "", "Device descript at start or end of status page" },
     { "webPwrSwitch",   INTEGER,    0,             1,            1,          "", "Power on/off from web page" },
     { "dccPower",       INTEGER,    0,          JOIN,         BOTH,          "", "Outputs to enable on power-on" },
+    { "dccRtError",     INTEGER,    0,             1,            0,          "", "Stop route setup on error" },
+    { "dccRmLoco",      INTEGER,    0,             1,            0,          "", "Delete locos on DCC-Ex when not in use" },
     { "staConnect",     INTEGER,    0,             3,            2,          "", "Wifi Station selection criteria" },
     { "APname",         STRING,     4,            32,            0,        NAME, "Access point name" },
     { "APpass",         STRING,     4,            32,            0,      "none", "Access point password" },
@@ -1089,7 +1124,7 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   if (resultPtr != NULL && strcmp (resultPtr, "yes") == 0) inputNum += 2;
   resultPtr = webScanData (data, "STAEnable", dataSize);
   if (resultPtr != NULL && strcmp (resultPtr, "yes") == 0) inputNum += 1;
-  checkNum = nvs_get_int ("WiFiMode", WIFISTA);
+  checkNum = nvs_get_int ("WiFiMode", WIFIBOTH);
   if (inputNum != 0 && inputNum != checkNum) {
     nvs_put_int ("WiFiMode", inputNum);
     myClient->printf ("<li>WiFi Mode = %d</li>", inputNum);
@@ -1189,6 +1224,21 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   if (!hasChanged) {
      myClient->printf ((const char*)"<li>No changes saved.</li>");
   }
+  #ifdef OTAUPDATE
+  resultPtr = webScanData (data, "ota_action", dataSize);
+  if (strcmp (resultPtr, "1") == 0) {
+    char outBuffer[120];
+    outBuffer[0] = '\0';
+    myClient->printf ((const char*)"<li>Checking if Update available, this may take several minutes...</li>");
+    OTAcheck4update(outBuffer);
+    if (outBuffer[0] != '\0') myClient->printf ((const char*)"<li><pre>%s</pre></li>", outBuffer);
+  }
+  else if (strcmp (resultPtr, "2") == 0) {
+    myClient->printf ((const char*)"<li>Switch boot partitions, will reboot afterwards</li></ul></body></html>");
+    delay (2000);
+    OTAcheck4rollback();
+  }
+  #endif
   resultPtr = webScanData (data, "rebootOnUpdate", dataSize);
   if (resultPtr!=NULL && (resultPtr[0]=='Y' || (hasChanged && resultPtr[0]=='C'))) {
     rebootRequired = true;

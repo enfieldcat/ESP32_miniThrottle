@@ -49,7 +49,7 @@ void processWiThrotPacket (char *packet)
       }
     }
   }
-  else if (strncmp (packet, "PTR", 3) == 0 && strlen(packet)>4) { // Change of turnout
+  else if (strncmp (packet, "PRA", 3) == 0 && strlen(packet)>4) { // Change of route
     char *tPtr = &packet[4];
     uint8_t state = packet[3];
     uint8_t ptr = 0;

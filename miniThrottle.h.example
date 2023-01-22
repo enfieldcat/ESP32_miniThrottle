@@ -1,6 +1,12 @@
 /*
  * Use this file to centralise any defines and includes
  * This file should contain only customisable data as far as possible
+ * 
+ * miniThrottle.h.005 template for
+ *  - WiFi connected throttle
+ *  - built in SDD1306 display
+ *  - 4x4 keypad
+ *  - web enabled configuration
  */
 
 /* ***********************************************************************\
@@ -41,12 +47,12 @@
 // A further use of the serial DCC-Ex connection is for acting as a WiFi relay.
 // If using serial connection, then the WiFi connectivity is not required, but may
 // be useful for configuration or network relay purposes.
-#define SERIALCTRL 1
+//#define SERIALCTRL 1
 #ifdef SERIALCTRL
 // These are used for the serial connected throttle, ie not using WiFi
 // I/O pins to use
-#define DCCRX 33
-#define DCCTX 32
+#define DCCRX 36
+#define DCCTX 16
 // Serial speed of serially connected DCC-EX unit
 #define DCCSPEED 115200
 #ifdef USEWIFI
@@ -112,9 +118,9 @@
 // NODISPLAY is intended for "headless" relay configuration. It will spare some memory and CPU cycles for relay work.
 // Other displays can be supported, but initialisation in ESP32_miniThrottle.ino and some defs below will need adjusting
 //#define NODISPLAY    // No display
-//#define SSD1306      // SSD1306 128x64     I2C
+#define SSD1306      // SSD1306 128x64     I2C
 //#define SSD1327      // SSD1327 128x128    I2C
-#define ST7735       // ST7735  128x160x16 SPI
+//#define ST7735       // ST7735  128x160x16 SPI
 //#define ST7789       // ST7789  135x240x16 SPI
 //#define ILI9341      // ILI9341 240x320x16 SPI
 
@@ -123,7 +129,7 @@
 // BACKLIGHTPIN - any PWM capable output
 // BACKLIGHTREF - Optional: Pins 32 - 39 only, optional 0-3V reference voltage for backlight, otherwise can be set at prompt
 // SCREENSAVER  - define idle time in minutes to screen blanking (screen saver), 0 = never blank
-#define BACKLIGHTPIN 22
+//#define BACKLIGHTPIN 22
 #ifdef BACKLIGHTPIN
 //#define BACKLIGHTREF 35
 #define SCREENSAVER 60
@@ -136,8 +142,8 @@
 //#define keynone
 //#define key1x5
 //#define key3x4
-//#define key4x4
-#define key4x5
+#define key4x4
+//#define key4x5
 
 /* ***********************************************************************\
  * NETWORK DEFAULTS
@@ -160,10 +166,10 @@
  * NB: pins 06 to 11 are connected to the internal flash memory, do not use these even if available on your board
  * 
  * ADC is used for Potentiometer throttle (Pot-Throt / POTTHROTPIN)
- *     ADC1_CH0 - GPIO 36  (SVN - Sense V Neg)
+ *     ADC1_CH0 - GPIO 36  (SVP / Sense V Pos)
  *     ADC1_CH1 - GPIO 37
  *     ADC1_CH2 - GPIO 38
- *     ADC1_CH3 - GPIO 39  (SVP - Sense V Pos)
+ *     ADC1_CH3 - GPIO 39  (SVN / Sense V Neg)
  *     ADC1_CH4 - GPIO 32
  *     ADC1_CH5 - GPIO 33
  *     ADC1_CH6 - GPIO 34
@@ -196,7 +202,7 @@
  * INDICATOR LEDS
 \*********************************************************************** */
 // define either of TRACKPWR or TRACKPWRINV or neither. do not set both
-#define TRACKPWR       26   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
+//#define TRACKPWR       16   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
 //#define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
 // To enable bidirectional mode indicator
 //#define TRAINSETLED    16
@@ -207,12 +213,12 @@
 /* ***********************************************************************\
  * ENCODERS AND SWITCHES
 \*********************************************************************** */
-#define ENCODE_UP      36   // encoder up bounce
-#define ENCODE_DN      39   // encoder down bounce
-#define ENCODE_SW      34   // encoder switch
+//#define ENCODE_UP      39   // encoder up bounce
+//#define ENCODE_DN      16   // encoder down bounce
+//#define ENCODE_SW      36   // encoder switch
 //#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
 //#define DIRREVPIN      33   // Direction sw spdt center off LOW active
-//#define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
+//#define POTTHROTPIN    39   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
 
 /* ***********************************************************************\
  * ANALOGUE VOLT METER OUTPUT
@@ -304,7 +310,7 @@
 
 /* ***********************************************************************\
  * KEYPAD MAPPING
- * Define both the pin mapping and th key character assignment
+ * Define both the pin mapping and the key character assignment
 \*********************************************************************** */
 
 //
@@ -312,8 +318,8 @@
 #ifdef key4x5
 #define COLCOUNT        4
 #define ROWCOUNT        5
-#define MEMBR_COLS     19,23,18,05
-#define MEMBR_ROWS     17,16,04,00,02
+#define MEMBR_COLS     16,25,26,00
+#define MEMBR_ROWS     02,14,12,13,15
 // F1, F2 = X and Y
 // Arrow keys are "U"p, "D"own, "L"eft and "R"ight
 // ESC = "E" and ENT = "S"ubmit
@@ -373,4 +379,3 @@ char keymap[ROWCOUNT][COLCOUNT] = {
   { '*', '#', 'S', 'E', 'X' }
 };
 #endif
-

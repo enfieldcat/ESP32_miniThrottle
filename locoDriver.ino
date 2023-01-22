@@ -284,35 +284,37 @@ void locomotiveDriver()
             t_steps = locoRoster[initialLoco].steps;
             xSemaphoreGive(velociSem);
             if (bidirectionalMode && t_direction != FORWARD) {
-              if (t_speed > 0) {
+              if (t_speed > 0) {                                 // Up => decrease reverse speed
                 t_speed = t_speed - speedStep;
                 if (t_speed < 0) t_speed = 0;
-                setLocoSpeed (initialLoco, t_speed, t_direction);
                 #ifdef BRAKEPRESPIN
-                brakedown(1);
+                brakedown(speedStep);
                 #endif
               }
-              else if (t_direction == REVERSE) {
-                t_direction = STOP;     // move from REVERSE to STOP
+              else if (t_direction == REVERSE) {                  // stoped already change direction
+                if (cmdProtocol == DCCEX) t_direction = STOP;     // move from REVERSE to STOP
+                else t_direction = FORWARD;                       //   or from REVERSE to FORWARD
+                dirChange = true;
               }
               else {
-                t_direction = FORWARD;  // move from STOP to FORWARD
-                setLocoSpeed (initialLoco, 0, FORWARD);
-                setLocoDirection (initialLoco, FORWARD);
+                t_direction = FORWARD;                            // move from STOP to FORWARD
                 dirChange = true;
               }
               speedChange = true;
             }
-            else if (t_speed < (t_steps - 2)) {
+            else if (t_speed < (t_steps - 2)) {                   // FORWARD or not bidirectional
+              if (t_direction == STOP) {                          // if stopped default direction is forward
+                dirChange = true;
+                t_direction = FORWARD;
+              }
               speedChange = true;
               t_speed = t_speed + speedStep;
               if (t_speed > (t_steps - 2)) {
                 t_speed = t_steps - 2;
               }
-              setLocoSpeed (initialLoco, t_speed, t_direction);
             }
-            // now set increased speed for other controlled locos, based on initial loco speed
-            for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && n != initialLoco) {
+            // now set increased speed for all our controlled locos, based on initial loco speed
+            for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
               setLocoSpeed (n, t_speed, t_direction);
               if (dirChange) {
                 setLocoDirection (n, t_direction);
@@ -331,38 +333,39 @@ void locomotiveDriver()
             // In bidirectional mode down is an increase of speed if in reverse
             if (bidirectionalMode && t_direction != FORWARD) {
               // if in bidirectional and direction is not FORWARD, then special handling is required
-              if (t_direction == STOP) {
+              if (t_direction == STOP) {              // If in STOP, then "down" places us in reverse
                 t_direction = REVERSE;
                 speedChange = true;
-                setLocoSpeed (initialLoco, 0, REVERSE);
-                setLocoDirection (initialLoco, REVERSE);
                 dirChange = true;
               }
-              else if (t_speed < (t_steps - 2)) {
+              else if (t_speed < (t_steps - 2)) {     // bidirectional && REVERSE, make go faster reverse
                 speedChange = true;
                 t_speed = t_speed + speedStep;
                 if (t_speed > (t_steps - 2)) {
                   t_speed = t_steps - 2;
                 }
-                setLocoSpeed (initialLoco, t_speed, t_direction);
               }
             }
-            else if (t_speed > 0) { // FORWARD and speed > 0
+            else if (t_speed > 0) {                   // not bidirectional and speed > 0
               speedChange = true;
               t_speed = t_speed - speedStep;
               if (t_speed < 0) t_speed = 0;
-              setLocoSpeed (initialLoco, t_speed, t_direction);
               #ifdef BRAKEPRESPIN
-              brakedown(1);
+              brakedown(speedStep);
               #endif
             }
-            else if (bidirectionalMode) {            // FORWARD and speed <= 0
-              t_direction = STOP;
-              setLocoSpeed (initialLoco, 0, t_direction);
-              speedChange = true;
+            if (t_speed == 0) {                       // Down to zero speed, direction state may change
+              if (cmdProtocol == DCCEX && t_direction != STOP) {
+                t_direction = STOP;     // move to STOP
+                dirChange = true;
+              }
+              else if (bidirectionalMode && t_direction != REVERSE) {
+                t_direction = REVERSE;
+                dirChange = true;
+              }
             }
-            // now set reduced speed for other controlled locos, based on initial loco speed
-            for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && n != initialLoco) {
+            // now set reduced speed for all our controlled locos, based on initial loco speed
+            for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
               setLocoSpeed (n, t_speed, t_direction);
               if (dirChange) {
                 setLocoDirection (n, t_direction);

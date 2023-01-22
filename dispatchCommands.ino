@@ -466,9 +466,6 @@ void setRouteBg (void *pvParameters)
 bool routeSetup (int8_t routeNr, bool displayable)
 {
   uint16_t pause = routeDelay[nvs_get_int("routeDelay", 2)];
-  #ifdef RELAYPORT
-  char relayMsg[25];
-  #endif
   #ifndef NODISPLAY
   char message[40];
   #endif
@@ -491,23 +488,11 @@ bool routeSetup (int8_t routeNr, bool displayable)
       }
       #endif
       if (!setTurnout (routeList[routeNr].turnoutNr[n], routeList[routeNr].desiredSt[n])) {
+        routeDeactivate (routeNr);
         retVal = false;
-        if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          if (routeList[routeNr].state != '4') {
-            routeList[routeNr].state = '4';
-            #ifdef RELAYPORT
-            sprintf (relayMsg, "PRA4%s\r\n", routeList[routeNr].sysName);
-            #endif
-          }
-          #ifdef RELAYPORT
-          else relayMsg[0] = '\0';
-          #endif
-          xSemaphoreGive(routeSem);
-          #ifdef RELAYPORT
-          if (relayMsg[0] != '\0') relay2WiThrot (relayMsg);
-          #endif
+        if (nvs_get_int ("dccRtError", 0) == 1) {
+          n = MAXRTSTEPS;
         }
-        else semFailed ("routeSem", __FILE__, __LINE__);
       }
     }
     else {
@@ -515,12 +500,44 @@ bool routeSetup (int8_t routeNr, bool displayable)
         Serial.printf ("%s Error in route %s step %d.\r\n", getTimeStamp(), routeList[routeNr].userName, (n+1));
         xSemaphoreGive(displaySem);
       }
+      if (nvs_get_int ("dccRtError", 0) == 1) {
+        n = MAXRTSTEPS;
+        routeDeactivate (routeNr);
+        retVal = false;
+      }
     }
     if (pause>0) {
       delay (pause);
     }
   }
   return (retVal);
+}
+
+
+/*
+*/
+void routeDeactivate (uint8_t routeNr)
+{
+  #ifdef RELAYPORT
+  char relayMsg[25];
+  #endif
+
+  if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (routeList[routeNr].state != '4') {
+      routeList[routeNr].state = '4';
+      #ifdef RELAYPORT
+      sprintf (relayMsg, "PRA4%s\r\n", routeList[routeNr].sysName);
+      #endif
+    }
+    #ifdef RELAYPORT
+    else relayMsg[0] = '\0';
+    #endif
+    xSemaphoreGive(routeSem);
+    #ifdef RELAYPORT
+    if (relayMsg[0] != '\0') relay2WiThrot (relayMsg);
+    #endif
+  }
+  else semFailed ("routeSem", __FILE__, __LINE__);
 }
 
 
@@ -550,7 +567,7 @@ void routeInitiate (int8_t routeNr)
 
 
 /*
- * if a route remains inconsistent after setup it has not been invalidated, and in now active
+ * if a route remains inconsistent after setup it has not been invalidated, and is now active
  */
 void routeConfirm (int8_t routeNr)
 {
@@ -582,9 +599,6 @@ void routeConfirm (int8_t routeNr)
 void invalidateRoutes (int8_t turnoutNr, char state)
 {
   bool active;
-  #ifdef RELAYPORT
-  char relayMsg[25];
-  #endif
 
   for (uint8_t n=0; n<turnoutCount; n++) {
     if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -594,16 +608,7 @@ void invalidateRoutes (int8_t turnoutNr, char state)
       if (active) {
         for (uint8_t i=0; i<MAXRTSTEPS && routeList[n].turnoutNr[i] != 255; i++) {
           if (routeList[n].turnoutNr[i] == turnoutNr && routeList[n].desiredSt[i] != state) {
-            if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-              routeList[n].state = '4';
-              #ifdef RELAYPORT
-              sprintf (relayMsg, "PRA4%s\r\n", routeList[n].sysName);
-              #endif
-              xSemaphoreGive(routeSem);
-              #ifdef RELAYPORT
-              relay2WiThrot (relayMsg);
-              #endif
-            }
+            routeDeactivate	 (i); 
             i = MAXRTSTEPS;
           }
         }

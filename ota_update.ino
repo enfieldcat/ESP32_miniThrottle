@@ -15,6 +15,7 @@ class ota_control {
     char message[120];
     char image_name[80];
     char chksum[65];
+    char ota_label[50];
     uint32_t image_size;
     HTTPClient *http = NULL;
     
@@ -52,6 +53,7 @@ class ota_control {
       char inPtr;
       char inBuffer[80];
       WiFiClient *inStream = getHttpStream(url, cert, http);
+      ota_label[0] = '\0';
       if (inStream != NULL) {
         inPtr = 0;
          // process the character stream from the http/s source
@@ -93,6 +95,9 @@ class ota_control {
         if (strlen (chksum) == 0) {
           strcpy (message, "Missing SHA256 checksum in metadata");
           retVal = false;
+        }
+        if (strlen (ota_label) == 0) {
+          sprintf (ota_label, "Sequence %d", newSequence);
         }
       }
       return (retVal);
@@ -136,6 +141,9 @@ class ota_control {
       else if (strcmp (paramName, "name:") == 0) {
         if (strlen(paramValue) < sizeof(image_name)) strcpy (image_name, paramValue);
       }
+      else if (strcmp (paramName, "label:") == 0) {
+        if (strlen(paramValue) < sizeof(ota_label)) strcpy (ota_label, paramValue);
+      }
       else sprintf (message, "Parameter %s not recognised", paramName);
     }
 
@@ -153,7 +161,10 @@ class ota_control {
       mbedtls_sha256_context sha256ctx;
       int sha256status, retryCount;
 
-      Serial.println ("Loading new over the air image");
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.println ("Loading new over the air image");
+        xSemaphoreGive(displaySem);
+      }
       targetPart = esp_ota_get_next_update_partition(NULL);
       if (targetPart == NULL) {
         sprintf (message, "Cannot identify target partition for update");
@@ -170,6 +181,10 @@ class ota_control {
           while (totalByte < image_size && retryCount > 0) {
             inByte = inStream->read(inBuffer, WEB_BUFFER_SIZE);
             if (inByte > 0) {
+              if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                Serial.printf (".");
+                xSemaphoreGive(displaySem);
+              }
               totalByte += inByte;
               if (sha256status == 0) sha256status = mbedtls_sha256_update_ret(&sha256ctx, (const unsigned char*) inBuffer, inByte);
               esp_ota_write(targetHandle, (const void*) inBuffer, inByte);
@@ -184,6 +199,10 @@ class ota_control {
             else delay (10); //play nice in multithreading environment
           }
           if (sha256status == 0) {
+            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              Serial.printf ("-end-\r\n");
+              xSemaphoreGive(displaySem);
+            }
             sha256status = mbedtls_sha256_finish_ret(&sha256ctx, (unsigned char*) inBuffer);
             message[0] = '\0'; // Truncate message buffer, then use it as a temporary store of the calculated sha256 string
             for (retryCount=0; retryCount<32; retryCount++) {
@@ -195,8 +214,13 @@ class ota_control {
           if (strcmp (message, chksum) == 0) {
             if (esp_ota_end(targetHandle) == ESP_OK) {
               retVal = true;
-              if (esp_ota_set_boot_partition(targetPart) == ESP_OK) put_sequence_id(newSequence);
-              strcpy (message, "Reboot to run updated image.");
+              sprintf ((char*) inBuffer, "ota_%s", get_next_partition_label());
+              if (esp_ota_set_boot_partition(targetPart) == ESP_OK) {
+                put_sequence_id(newSequence);
+                nvs_put_string ((char*) inBuffer, ota_label);
+                strcpy (message, "Reboot to run updated image.");
+              }
+              else strcpy (message, "Failed to update boot partition ID.");
             }
             else strcpy (message, "Could not finalise writing of over the air update");
           }
@@ -206,6 +230,10 @@ class ota_control {
         }
       }
       closeHttpStream (http);
+      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.println ("\r\nOver the air image - load complete");
+        xSemaphoreGive(displaySem);
+      }
       return (retVal);
     }
 
@@ -317,7 +345,7 @@ class ota_control {
 };
 
 
-void OTAcheck4update()
+void OTAcheck4update(char* retVal)
 {
   ota_control theOtaControl;
   char ota_url[120];
@@ -343,25 +371,28 @@ void OTAcheck4update()
   if (theOtaControl.update (ota_url, rootCACertificate, "metadata.php")) {
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println (theOtaControl.get_status_message());
-      Serial.println ("OTA update successful, will reboot in 10 seconds.");
+      Serial.println ("OTA update successful, will reboot.");
       xSemaphoreGive(displaySem);
     }
-    delay (10000);
+    nvs_put_int ("ota_initial", 1);
     esp_restart();
   }
   else {
     // Do not reboot if OTA area is not updated
     Serial.println (theOtaControl.get_status_message());
   }
+  if (retVal != NULL) strcpy (retVal, theOtaControl.get_status_message());
 }
 
 void OTAcheck4rollback()
 {
   ota_control theOtaControl;
   if (theOtaControl.revert ()) {
-    Serial.println (theOtaControl.get_status_message());
-    Serial.println ("OTA revert successful, will reboot in 10 seconds.");
-    delay (10000);
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.println (theOtaControl.get_status_message());
+      Serial.println ("OTA revert successful, will reboot.");
+      xSemaphoreGive(displaySem);
+    }
     esp_restart();
   }
   else {

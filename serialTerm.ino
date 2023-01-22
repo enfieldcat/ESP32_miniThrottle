@@ -1017,7 +1017,7 @@ void mt_ota (int nparam, char **param)
     xSemaphoreGive(displaySem);
   }
   else if (nparam==2) {
-    if (strcmp(param[1], "update") == 0) OTAcheck4update();
+    if (strcmp(param[1], "update") == 0) OTAcheck4update(NULL);
     else if (strcmp(param[1], "revert") == 0) OTAcheck4rollback();
     else if (strncmp(param[1], "http://", 7) == 0 || strncmp(param[1], "https://", 8) == 0) {
       nvs_put_string ("ota_url", param[1]);
@@ -1118,7 +1118,7 @@ void mt_set_wifimode(int nparam, char **param)
   uint8_t mode;
 
   if (nparam==1) {
-    mode = nvs_get_int ("WiFiMode", WIFISTA);
+    mode = nvs_get_int ("WiFiMode", WIFIBOTH);
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Default WiFi mode is ");
       if (mode == WIFIAP) Serial.println ("AP");

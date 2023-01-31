@@ -80,7 +80,7 @@ void switchMonitor(void *pvParameters)
   #endif
   #ifdef POTTHROTPIN
   // We only need 8 bit resolution, higher resolution is wasted compute power
-  analogReadResolution(12);
+  analogReadResolution(10);
   adcAttachPin(POTTHROTPIN);
   analogSetPinAttenuation(POTTHROTPIN, ADC_11db);  // param 2 = attenuation, range 0-3 sets FSD: 0:ADC_0db=800mV, 1:ADC_2_5db=1.1V, 2:ADC_6db=1.35V, 3:ADC_11db=2.6V
   #endif
@@ -163,11 +163,11 @@ void switchMonitor(void *pvParameters)
       if (++potLoopCount >= potLoopLimit) {
         if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           static int voo = potReading / potLoopCount;
-          static int vim = voo >> 4;
+          static int vim = voo >> 2;
           Serial.printf (" - Pot Reading: (%d / %d) = %d Adjust: %d\r\n", potReading, potLoopCount, voo, vim);
           xSemaphoreGive(displaySem);
         }
-        potReading = (potReading / potLoopCount) >> 4; // oversample and over scale adjustment to DCC sized values
+        potReading = (potReading / potLoopCount) >> 2; // oversample and over scale adjustment to DCC sized values
         if (abs (lastPotReading - potReading) > 1) {  // ignore changes teetering on the cusp of change
           if      (potReading < 0)   potReading = 0;
           else if (potReading > 255) potReading = 255;
@@ -243,11 +243,11 @@ void sendPotThrot (int8_t dir, int8_t speed)
   }
 
   for (int8_t n=0; n<limit; n++) if (locoRoster[n].owned) {
-    if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       actSpeed = locoRoster[n].speed;
       actSteps = locoRoster[n].steps;
       actDirec = locoRoster[n].direction;
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(velociSem);
     }
     if (actSteps!=128) tSpeed = ((speed<<7)/actSteps) -1;
     else tSpeed = speed -1;

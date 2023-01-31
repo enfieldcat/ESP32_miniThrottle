@@ -1226,17 +1226,20 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   }
   #ifdef OTAUPDATE
   resultPtr = webScanData (data, "ota_action", dataSize);
-  if (strcmp (resultPtr, "1") == 0) {
-    char outBuffer[120];
-    outBuffer[0] = '\0';
-    myClient->printf ((const char*)"<li>Checking if Update available, this may take several minutes...</li>");
-    OTAcheck4update(outBuffer);
-    if (outBuffer[0] != '\0') myClient->printf ((const char*)"<li><pre>%s</pre></li>", outBuffer);
-  }
-  else if (strcmp (resultPtr, "2") == 0) {
-    myClient->printf ((const char*)"<li>Switch boot partitions, will reboot afterwards</li></ul></body></html>");
-    delay (2000);
-    OTAcheck4rollback();
+  if (resultPtr != NULL) {
+    if (strcmp (resultPtr, "1") == 0) {
+      char outBuffer[120];
+      outBuffer[0] = '\0';
+      myClient->printf ((const char*)"<li>Checking if update is available, this may take several minutes... ...please wait.</li>");
+      if (OTAcheck4update(outBuffer)) hasChanged = true;;
+      if (outBuffer[0] != '\0') myClient->printf ((const char*)"<li><pre>%s</pre></li>", outBuffer);
+    }
+    else if (strcmp (resultPtr, "2") == 0) {
+      char outBuffer[120];
+      myClient->printf ((const char*)"<li>Switching boot partitions, reboot required to take effect</li></ul></body></html>");
+      if (OTAcheck4rollback(outBuffer)) hasChanged = true;;
+      if (outBuffer[0] != '\0') myClient->printf ((const char*)"<li><pre>%s</pre></li>", outBuffer);
+    }
   }
   #endif
   resultPtr = webScanData (data, "rebootOnUpdate", dataSize);
@@ -1247,6 +1250,7 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   myClient->printf ((const char*)"</ul><p><a href=\"/\">Back to main page</a></p></td></tr></table><hr></body></html>\r\n");
   if (rebootRequired) {
     myClient->stop();
+    delay (1000);
     mt_sys_restart ((const char*)"web requested reboot");
   }
 }

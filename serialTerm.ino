@@ -1017,8 +1017,8 @@ void mt_ota (int nparam, char **param)
     xSemaphoreGive(displaySem);
   }
   else if (nparam==2) {
-    if (strcmp(param[1], "update") == 0) OTAcheck4update(NULL);
-    else if (strcmp(param[1], "revert") == 0) OTAcheck4rollback();
+    if (strcmp(param[1], "update") == 0) if (OTAcheck4update(NULL))  mt_sys_restart ("Restarting to boot updated code.");
+    else if (strcmp(param[1], "revert") == 0) if (OTAcheck4rollback(NULL)) mt_sys_restart ("Restarting to boot reverted code.");
     else if (strncmp(param[1], "http://", 7) == 0 || strncmp(param[1], "https://", 8) == 0) {
       nvs_put_string ("ota_url", param[1]);
     }

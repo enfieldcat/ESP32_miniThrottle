@@ -177,30 +177,35 @@ class ota_control {
           mbedtls_sha256_init(&sha256ctx);
           sha256status = mbedtls_sha256_starts_ret(&sha256ctx, 0);
           totalByte = 0;
-          retryCount = image_size / WEB_BUFFER_SIZE;
+          retryCount = 30;
           while (totalByte < image_size && retryCount > 0) {
             inByte = inStream->read(inBuffer, WEB_BUFFER_SIZE);
             if (inByte > 0) {
               if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-                Serial.printf (".");
+                if (inByte > (WEB_BUFFER_SIZE/2)) Serial.printf ("#");
+                else if (inByte > (WEB_BUFFER_SIZE/4)) Serial.printf ("*");
+                else if (inByte > (WEB_BUFFER_SIZE/8)) Serial.printf (".");
+                else Serial.printf (" ");
                 xSemaphoreGive(displaySem);
               }
               totalByte += inByte;
               if (sha256status == 0) sha256status = mbedtls_sha256_update_ret(&sha256ctx, (const unsigned char*) inBuffer, inByte);
               esp_ota_write(targetHandle, (const void*) inBuffer, inByte);
+              retryCount = 30;
             }
             else retryCount--;
             if (inByte < WEB_BUFFER_SIZE && totalByte < image_size) {
-              if (inByte < (WEB_BUFFER_SIZE/8)) delay(1000);   // We are reading faster than the server can serve, so slow down
-              else if (inByte < (WEB_BUFFER_SIZE/4)) delay(500);  // read rate, rather than just spin through small reads
-              else if (inByte < (WEB_BUFFER_SIZE/2)) delay(250);
-              else delay(100);
+              if (inByte < (WEB_BUFFER_SIZE/8)) delay(500);   // We are reading faster than the server can serve, so slow down
+              else if (inByte < (WEB_BUFFER_SIZE/4)) delay(250);  // read rate, rather than just spin through small reads
+              else if (inByte < (WEB_BUFFER_SIZE/2)) delay(125);
+              else delay(50);
             }
             else delay (10); //play nice in multithreading environment
           }
           if (sha256status == 0) {
             if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-              Serial.printf ("-end-\r\n");
+              if (retryCount>0) Serial.printf ("-end-\r\n");
+              else Serial.printf ("-failed- too many retries -\r\n");
               xSemaphoreGive(displaySem);
             }
             sha256status = mbedtls_sha256_finish_ret(&sha256ctx, (unsigned char*) inBuffer);
@@ -345,13 +350,14 @@ class ota_control {
 };
 
 
-void OTAcheck4update(char* retVal)
+bool OTAcheck4update(char* retVal)
 {
   ota_control theOtaControl;
   char ota_url[120];
   char web_certFile[42];
+  bool status = false;
 
-  if ((!APrunning) && (!WiFi.status() == WL_CONNECTED)) return;
+  if ((!APrunning) && (!WiFi.status() == WL_CONNECTED)) return(status);
   nvs_get_string ("ota_url", ota_url, OTAUPDATE, sizeof(ota_url));
   nvs_get_string ("web_certFile", web_certFile, CERTFILE, sizeof(web_certFile));
   if (strncmp (ota_url, "https://", 8) == 0) {
@@ -369,36 +375,28 @@ void OTAcheck4update(char* retVal)
     xSemaphoreGive(displaySem);
   }
   if (theOtaControl.update (ota_url, rootCACertificate, "metadata.php")) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println (theOtaControl.get_status_message());
-      Serial.println ("OTA update successful, will reboot.");
-      xSemaphoreGive(displaySem);
-    }
     nvs_put_int ("ota_initial", 1);
-    esp_restart();
+    status = true;
   }
-  else {
-    // Do not reboot if OTA area is not updated
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println (theOtaControl.get_status_message());
+    xSemaphoreGive(displaySem);
   }
   if (retVal != NULL) strcpy (retVal, theOtaControl.get_status_message());
+  return (status);
 }
 
-void OTAcheck4rollback()
+bool OTAcheck4rollback (char* retVal)
 {
+  bool status = false;
   ota_control theOtaControl;
-  if (theOtaControl.revert ()) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println (theOtaControl.get_status_message());
-      Serial.println ("OTA revert successful, will reboot.");
-      xSemaphoreGive(displaySem);
-    }
-    esp_restart();
-  }
-  else {
-    // Do not reboot if OTA area is not updated
+  if (theOtaControl.revert ()) status = true;;
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println (theOtaControl.get_status_message());
+    xSemaphoreGive(displaySem);
   }
+  if (retVal != NULL) strcpy (retVal, theOtaControl.get_status_message());
+  return (status);
 }
 
 const char* OTAstatus()

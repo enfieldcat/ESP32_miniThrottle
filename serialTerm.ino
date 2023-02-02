@@ -914,11 +914,11 @@ void mt_set_wifi (int nparam, char **param)  // set WiFi parameters
       }
       else Serial.println ("WiFi not connected in station mode");
       if (APrunning) {
-        Serial.println ("WiFi running in access point mode");
+        Serial.println ("WiFi running in access point mode: IP address 192.168.4.1");
       }
-      Serial.println ("Checking for non-hidden SSIDs");
+      Serial.println ("Checking for SSIDs");
       xSemaphoreGive(displaySem);
-      wifi_scanNetworks();
+      wifi_scanNetworks(true);
     }
     return;
     }
@@ -955,12 +955,13 @@ void mt_set_wifiscan(int nparam, char **param)
   
   if (nparam==1) {
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.print ("wifi station mode scan: ");
+      Serial.print ("wifi station scan mode: ");
       staConnect = nvs_get_int ("staConnect", 0);
       if (staConnect == 0) Serial.println ("list");
       else if (staConnect == 1) Serial.println ("strength");
       else Serial.println ("any");
       xSemaphoreGive(displaySem);
+      wifi_scanNetworks (true);
     }
   }
   else {
@@ -1122,7 +1123,7 @@ void mt_set_wifimode(int nparam, char **param)
     if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Default WiFi mode is ");
       if (mode == WIFIAP) Serial.println ("AP");
-      else if (mode == WIFIAP) Serial.println ("STA");
+      else if (mode == WIFISTA) Serial.println ("STA");
       else Serial.println ("BOTH");
       xSemaphoreGive(displaySem);
     }

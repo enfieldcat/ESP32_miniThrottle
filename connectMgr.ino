@@ -24,20 +24,17 @@ void connectionManager(void *pvParameters)
   uint8_t staPref   = 0;
   bool networkFound = false;
 
-  uint8_t use_multiwifi = nvs_get_int ("use_multiwifi", 0);
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s connectionManager(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(displaySem);
   }
 
-  // If not in station mode scan networks at startup just for the record
-  if ((nvs_get_int("WiFiMode", WIFIBOTH) & 1) == 0) {
-    if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
-      wifi_scanNetworks();
-      xSemaphoreGive(tcpipSem);
-    }
-    else semFailed ("tcpipSem", __FILE__, __LINE__);
+  // Scan networks at startup just for the record
+  if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
+    wifi_scanNetworks(true);
+    xSemaphoreGive(tcpipSem);
   }
+  else semFailed ("tcpipSem", __FILE__, __LINE__);
   // Start AP if required
   if ((nvs_get_int("WiFiMode", WIFIBOTH) & 2) > 0) {
     nvs_get_string ("APname", apssid, tname,  sizeof(apssid));
@@ -305,8 +302,15 @@ char* wifi_EncryptionType(wifi_auth_mode_t encryptionType)
 
 void wifi_scanNetworks()
 {
+if (debuglevel>1) wifi_scanNetworks (true);
+else wifi_scanNetworks (false);
+}
+
+
+void wifi_scanNetworks(bool echo)
+{
   numberOfNetworks = WiFi.scanNetworks();
-  if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (echo && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf("Number of networks found: %d\r\n", numberOfNetworks);
     Serial.printf("%-16s %8s %-17s Channel Type\r\n", "Name", "Strength", "Address");
     for (int i = 0; i < numberOfNetworks; i++) {

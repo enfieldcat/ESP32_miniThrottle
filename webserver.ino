@@ -1,3 +1,31 @@
+/*
+miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
+
+MIT License
+
+Copyright (c) [2021-2023] [Enfield Cat]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+
+
 #ifdef WEBLIFETIME
 /* --------------------------------------------------------------------------- *\
  *
@@ -977,69 +1005,6 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   }
   char *resultPtr;
   char *altPtr;
-  // Lookup table of default, min and max values
-  #ifdef NODISPLAY
-  uint16_t wwwFontWidth = 0;
-  #else
-  uint16_t wwwFontWidth = sizeof(fontWidth);
-  #endif
-  struct webVar_s webVars[] = {
-    { "cpuspeed",       INTEGER,    0,           240,            0,          "", "CPU Speed" },
-    { "screenRotate",   INTEGER,    0,             3,            0,          "", "Screen Rotation" },
-    { "fontIndex",      INTEGER,    0,  wwwFontWidth,            0,          "", "Font ID" },
-    { "debounceTime",   INTEGER,   10,           100,   DEBOUNCEMS,          "", "Debounce mS" },
-    { "detentCount",    INTEGER,    1,            10,            2,          "", "Detent Count" },
-    { "speedStep",      INTEGER,    1,            20,            4,          "", "Speed Step" },
-    { "brakeup",        INTEGER,    1,            10,            1,          "", "Brake Up Rate" },
-    { "brakedown",      INTEGER,    1,           100,           20,          "", "Brake Down Rate" },
-    { "sortData",       INTEGER,    0,             1,            1,          "", "Enable Sorting" },
-    { "tname",          STRING,     4, sizeof(tname),            0,        NAME, "Device Name" },
-    { "warnSpeed",      INTEGER,   50,           101,           90,          "", "Warning Speed" },
-    { "clockFormat",    INTEGER,    0,             2,            0,          "", "Fast Clock Format" },
-    #ifdef SCREENSAVER
-    { "screenSaver",    INTEGER,    0,           600,  SCREENSAVER,          "", "Screen Saver Timeout" },
-    #endif
-    { "buttonStop",     INTEGER,    0,             1,            0,          "", "Encoder Button Stop" },
-    { "funcOverlay",    STRING,    16,            31,            0, FUNCOVERLAY, "Function Overlay" },
-    { "backlightValue", INTEGER,  100,           255,          200,          "", "Screen Brightness" },
-    { "routeDelay",     INTEGER,    0, (sizeof(routeDelay)/sizeof(uint16_t))-1, 2, "", "Delay between Route Steps" },
-    #ifdef DELAYONSTART
-    { "delayOnStart",   INTEGER,    0,           120, DELAYONSTART,          "", "Start up delay in seconds" },
-    #endif
-    #ifdef OTAUPDATE
-    { "ota_url",        STRING,    16,           120,            0,   OTAUPDATE, "OTA update URL" },
-    #endif
-    { "mdns",           INTEGER,    0,             1,            1,          "", "mDNS Search Endabled" },
-    { "defaultProto",   INTEGER, WITHROT,      DCCEX,      WITHROT,          "", "Preferred Protocol" },
-    { "toOffset",       INTEGER,    1,          1000,          100,          "", "turnout numbering starts at" },
-    #ifdef RELAYPORT
-    { "maxRelay",       INTEGER,    0,      MAXRELAY,   MAXRELAY/2,          "", "Max nodes to relay" },
-    { "relayMode",      INTEGER,    0,             2,            1,          "", "Relay mode" },
-    { "relayPort",      INTEGER,    1,         65534,    RELAYPORT,          "", "Relay port" },
-    #endif
-    { "webPort",        INTEGER,    1,         65534,      WEBPORT,          "", "Web server port"},
-    { "webuser",        STRING,     4,            16,            0,     WEBUSER, "Web Admin Name" },
-    { "webpass",        STRING,     4,            16,            0,     WEBPASS, "Web Admin Password" },
-    #ifdef WEBLIFETIME
-    { "webTimeOut",     INTEGER,    0,           600,  WEBLIFETIME,          "", "Web Server Timeout" },
-    #endif
-    #ifdef WEBCACHE
-    { "cacheTimeout",   INTEGER,    5,          1440,     WEBCACHE,          "", "Static web content cache time"},
-    #endif
-    #ifdef WEBREFRESH
-    { "webRefresh",     INTEGER,    0,          3600,   WEBREFRESH,          "", "Status page refresh time" },
-    #endif
-    { "webStatus",      INTEGER,    0,             2,            0,          "", "Device descript at start or end of status page" },
-    { "webPwrSwitch",   INTEGER,    0,             1,            1,          "", "Power on/off from web page" },
-    { "dccPower",       INTEGER,    0,          JOIN,         BOTH,          "", "Outputs to enable on power-on" },
-    { "dccRtError",     INTEGER,    0,             1,            0,          "", "Stop route setup on error" },
-    { "dccRmLoco",      INTEGER,    0,             1,            0,          "", "Delete locos on DCC-Ex when not in use" },
-    { "staConnect",     INTEGER,    0,             3,            2,          "", "Wifi Station selection criteria" },
-    { "APname",         STRING,     4,            32,            0,        NAME, "Access point name" },
-    { "APpass",         STRING,     4,            32,            0,      "none", "Access point password" },
-    { "apChannel",      INTEGER,    1,            13,            6,          "", "Access point channel" },
-    { "apClients",      INTEGER,    1,             8,            4,          "", "Max access point clients" }
-  };
   char checkString[64];
   char varName[16];
   bool hasChanged     = false;
@@ -1130,23 +1095,23 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     myClient->printf ("<li>WiFi Mode = %d</li>", inputNum);
     hasChanged = true;
   }
-  for (uint8_t n=0; n<(sizeof(webVars)/sizeof(struct webVar_s)); n++) {
-    resultPtr = webScanData (data, (char*) webVars[n].varName, dataSize);
+  for (uint8_t n=0; n<(sizeof(nvsVars)/sizeof(struct nvsVar_s)); n++) {
+    resultPtr = webScanData (data, (char*) nvsVars[n].varName, dataSize);
     if (resultPtr != NULL && resultPtr[0]!='\0') {
-      if (webVars[n].varType == INTEGER) {
-        checkNum = nvs_get_int ((char*) webVars[n].varName, webVars[n].numDefault);
+      if (nvsVars[n].varType == INTEGER) {
+        checkNum = nvs_get_int ((char*) nvsVars[n].varName, nvsVars[n].numDefault);
         inputNum = util_str2int (resultPtr);
         if (checkNum != inputNum) {
-          if (inputNum<webVars[n].varMin || inputNum>webVars[n].varMax) {
-            myClient->printf ((const char*)"<li>%s (%s) Acceptable Range Between %d And %d</li>", webVars[n].varName, webVars[n].varDesc, webVars[n].varMin, webVars[n].varMax);
+          if (inputNum<nvsVars[n].varMin || inputNum>nvsVars[n].varMax) {
+            myClient->printf ((const char*)"<li>%s (%s) Acceptable Range Between %d And %d</li>", nvsVars[n].varName, nvsVars[n].varDesc, nvsVars[n].varMin, nvsVars[n].varMax);
           }
           else {
-            nvs_put_int (webVars[n].varName, inputNum);
-            myClient->printf ("<li>%s = %d</li>", webVars[n].varDesc, inputNum);
+            nvs_put_int (nvsVars[n].varName, inputNum);
+            myClient->printf ("<li>%s = %d</li>", nvsVars[n].varDesc, inputNum);
             hasChanged = true;
             #ifdef SCREENSAVER
-            if (strcmp (webVars[n].varName, "backlightValue") == 0) { backlightValue = inputNum; ledcWrite(0, backlightValue); }
-            if (strcmp (webVars[n].varName, "screenSaver") == 0) {
+            if (strcmp (nvsVars[n].varName, "backlightValue") == 0) { backlightValue = inputNum; ledcWrite(0, backlightValue); }
+            if (strcmp (nvsVars[n].varName, "screenSaver") == 0) {
               if (xSemaphoreTake(screenSvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 blankingTime  = inputNum * 60 * uS_TO_S_FACTOR;
                 xSemaphoreGive(screenSvrSem);
@@ -1158,19 +1123,19 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
         }
       }
       else {
-        nvs_get_string (webVars[n].varName, checkString, webVars[n].strDefault, webVars[n].varMax);
-        if (strlen(resultPtr) > webVars[n].varMax) {
-          resultPtr[webVars[n].varMax] = '\0';
-          myClient->printf ((const char*)"<li>%s truncated to %d characters</li>", webVars[n].varDesc, webVars[n].varMax);
+        nvs_get_string (nvsVars[n].varName, checkString, nvsVars[n].strDefault, nvsVars[n].varMax);
+        if (strlen(resultPtr) > nvsVars[n].varMax) {
+          resultPtr[nvsVars[n].varMax] = '\0';
+          myClient->printf ((const char*)"<li>%s truncated to %d characters</li>", nvsVars[n].varDesc, nvsVars[n].varMax);
         }
-        if (strlen(resultPtr) < webVars[n].varMin) {
-          myClient->printf ((const char*)"<li>%s ignored, should be %d or more characters long</li>", webVars[n].varDesc, webVars[n].varMin);
+        if (strlen(resultPtr) < nvsVars[n].varMin) {
+          myClient->printf ((const char*)"<li>%s ignored, should be %d or more characters long</li>", nvsVars[n].varDesc, nvsVars[n].varMin);
         }
         else if (strcmp (resultPtr, checkString) != 0) {
-          nvs_put_string (webVars[n].varName, resultPtr);
+          nvs_put_string (nvsVars[n].varName, resultPtr);
           hasChanged = true;
-          if (strcmp (webVars[n].varName, "tname") == 0) strcpy (tname, resultPtr);
-          myClient->printf ("<li>%s = %s</li>", webVars[n].varDesc, resultPtr);
+          if (strcmp (nvsVars[n].varName, "tname") == 0) strcpy (tname, resultPtr);
+          myClient->printf ("<li>%s = %s</li>", nvsVars[n].varDesc, resultPtr);
         }
       }
     }
@@ -1582,6 +1547,9 @@ void mkWebDeviceDescript (WiFiClient *myClient)
   if (WiFi.status() == WL_CONNECTED) {
     IPAddress ip = WiFi.localIP();
     myClient->printf (" (%d.%d.%d.%d)", ip[0], ip[1], ip[2], ip[3]);
+  }
+  if (APrunning) {
+    myClient->printf (" (192.168.4.1)");
   }
   myClient->printf ((const char*)"</td></tr><tr><td align=\"right\">Hardware:</td><td>%d core ESP32 revision %d, flash = %d MB %s</td></tr>", \
      chip_info.cores, \

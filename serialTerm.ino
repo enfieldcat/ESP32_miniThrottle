@@ -1,3 +1,28 @@
+/*
+miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
+
+MIT License
+
+Copyright (c) [2021-2023] [Enfield Cat]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
 
 
 void serialConsole(void *pvParameters)
@@ -148,6 +173,7 @@ void processSerialCmd (uint8_t *inBuffer)
   #ifndef SERIALCTRL
   else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
   #endif
+  else if ((nparam==1 || nparam>=3) && strcmp (param[0], "set") == 0) mt_set         (nparam, param);
   else if (nparam>=2 && strcmp (param[0], "sendcmd") == 0)       mt_sendcmd          (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "speedstep") == 0)     mt_set_speedStep    (nparam, param);
   #ifdef WARNCOLOR
@@ -186,6 +212,80 @@ void processSerialCmd (uint8_t *inBuffer)
   else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT))   == pdTRUE) {
     Serial.println ("Command not recognised.");
     xSemaphoreGive(displaySem);
+  }
+}
+
+// Use for seting any known NVS (Non Volatile Storage) variable to a value
+// Expect to use nvs as the get equivalent to read NVS
+void mt_set (int nparam, char **param)
+{
+  uint8_t limit = sizeof(nvsVars) / sizeof(nvsVar_s);
+  bool notFound = true;
+
+  if (nparam == 1) {
+    char msgBuffer[BUFFSIZE];
+    int val;
+    for (uint8_t n=0; n<limit; n++) {
+      if (nvsVars[n].varType==INTEGER) {
+        val = nvs_get_int (nvsVars[n].varName, nvsVars[n].numDefault);
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("set %-15s %d\r\n", nvsVars[n].varName, val);
+          xSemaphoreGive(displaySem);
+        }
+      }
+      else if (nvsVars[n].varType==STRING) {
+        nvs_get_string (nvsVars[n].varName, msgBuffer, nvsVars[n].strDefault, sizeof(msgBuffer));
+        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("set %-15s %s\r\n", nvsVars[n].varName, msgBuffer);
+          xSemaphoreGive(displaySem);
+        }
+      }
+    }
+    return;
+  }
+  for (uint8_t n=0; n<limit && notFound; n++) {
+    if (strcmp (param[1], nvsVars[n].varName) == 0) {
+      notFound = false;
+      if (nvsVars[n].varType == INTEGER) {
+        if (nparam==3 && util_str_isa_int (param[2])) {
+          int val = util_str2int(param[2]);
+          if (val>=nvsVars[n].varMin && val<=nvsVars[n].varMax) nvs_put_int (param[1], val);
+          else {
+            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              Serial.printf ("Integer variable \"%s\" should be between %d and %d\r\n", param[1], nvsVars[n].varMin, nvsVars[n].varMax);
+              xSemaphoreGive(displaySem);
+            }
+          }
+        }
+        else {
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("Integer variable \"%s\" should have one numeric value\r\n", param[1]);
+            xSemaphoreGive(displaySem);
+          }
+        }
+      }
+      else if (nvsVars[n].varType == STRING) {
+        char msgBuffer[BUFFSIZE];
+        strcpy (msgBuffer, param[2]);
+        for (uint8_t n=3; n<nparam; n++) {
+          strcat (msgBuffer, " ");
+          strcat (msgBuffer, param[n]);
+        }
+        if (strlen(msgBuffer) >= nvsVars[n].varMin && strlen(msgBuffer) <= nvsVars[n].varMax) nvs_put_string (param[1], msgBuffer);
+        else {
+          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("String variable \"%s\" should be between %d and %d chars long\r\n", param[1], nvsVars[n].varMin, nvsVars[n].varMax);
+            xSemaphoreGive(displaySem);
+          }
+        }
+      }
+    }
+  }
+  if (notFound) {
+    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("Variable \"%s\" not valid using set command\r\n", param[1]);
+      xSemaphoreGive(displaySem);
+    }
   }
 }
 
@@ -266,9 +366,11 @@ void mt_export()
 {
   const char *namespaces[] = {"loco", "turnout", "route"};
   int count;
+  int limit = sizeof(nvsVars) / sizeof(nvsVar_s);
   char *nvsData, *nvsPtr;
   char varName[16];
   char msgBuffer[BUFFSIZE];
+  bool differs = true;
 
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ("#");
@@ -391,6 +493,28 @@ void mt_export()
       free (nvsData);
     }
   }
+  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.print ("\r\n\r\n#\r\n# The following set commands complement CLI commands above to complete configuration\r\n#\r\n");
+    xSemaphoreGive(displaySem);
+  }
+  for (uint8_t n=0; n<limit; n++) {
+    if (nvsVars[n].varType == INTEGER) {
+      count = nvs_get_int (nvsVars[n].varName, nvsVars[n].numDefault);
+      if (count != nvsVars[n].numDefault && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("# %s (min=%d, max=%d, default=%d)\r\n", nvsVars[n].varDesc, nvsVars[n].varMin, nvsVars[n].varMax, nvsVars[n].numDefault);
+        Serial.printf ("set %s %d\r\n", nvsVars[n].varName, count);
+        xSemaphoreGive(displaySem);
+      }
+    }
+    else if (nvsVars[n].varType == STRING) {
+      nvs_get_string (nvsVars[n].varName, msgBuffer, nvsVars[n].strDefault, sizeof(msgBuffer));
+      if (strcmp (msgBuffer, nvsVars[n].strDefault) == 0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("# %s (default: \"%s\")\r\n", nvsVars[n].varDesc, nvsVars[n].strDefault);
+        Serial.printf ("set %s %s\r\n", nvsVars[n].varName, msgBuffer);
+        xSemaphoreGive(displaySem);
+      }
+    }
+  } 
 }
 
 /*
@@ -1460,108 +1584,86 @@ void mt_set_warnspeed(int nparam, char **param)
 }
 #endif
 
-void showPinConfig()  // Display pin out selection
+bool showPinConfig()  // Display pin out selection
 {
   #ifndef keynone
   uint8_t rows[] = { MEMBR_ROWS };
   uint8_t cols[] = { MEMBR_COLS };
   #endif
+  char prtTemplate[16];
+  uint8_t limit = sizeof(pinVars)/sizeof(pinVar_s);
+  uint8_t maxWidth = 0;
+  bool retVal = true;
 
+  for (uint8_t n=0; n<limit; n++) if (maxWidth<strlen(pinVars[n].pinDesc)) maxWidth = strlen(pinVars[n].pinDesc);
   if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.println ((char*) "Hardware configuration, check pin numbers are not duplicated");
-    Serial.println ((char*) "Reset          =  EN");
-    Serial.println ((char*) "Console - Tx   =  1");
-    Serial.println ((char*) "Console - Rx   =  3");
-    #ifdef DCCTX
-    Serial.printf  ((char*) "DCC - Tx       = %2d\r\n", DCCTX);
-    #endif
-    #ifdef DCCRX
-    Serial.printf  ((char*) "DCC - Rx       = %2d\r\n", DCCRX);
-    #endif
-    #ifdef SDA_PIN
-    Serial.printf  ((char*) "I2C - SDA      = %2d\r\n", SDA_PIN);
-    #endif
-    #ifdef SCK_PIN
-    Serial.printf  ("I2C - SCK      = %2d\r\n", SCK_PIN);
-    #endif
-    #ifdef SPI_RESET
-    Serial.printf  ("SPI - Reset    = %2d\r\n", SPI_RESET);
-    #endif
-    #ifdef SPI_CS
-    Serial.printf  ("SPI - CS       = %2d\r\n", SPI_CS);
-    #endif
-    #ifdef SPI_DC
-    Serial.printf  ("SPI - DC       = %2d\r\n", SPI_DC);
-    #endif
-    #ifdef SPI_SCL
-    Serial.printf  ("SPI - Clock/SCL= %2d\r\n", SPI_SCL);
-    #endif
-    #ifdef SPI_SDA
-    Serial.printf  ("SPI - Data/SDA = %2d\r\n", SPI_SDA);
-    #endif
-    #ifdef BACKLIGHTPIN
-    Serial.printf  ("Backlight      = %2d\r\n", BACKLIGHTPIN);
-    #ifdef BACKLIGHTREF
-    Serial.printf  ("Backlight Ref  = %2d\r\n", BACKLIGHTREF);
-    #endif
-    #endif
-    #ifdef ENCODE_UP
-    Serial.printf  ("Encoder Up     = %2d\r\n", ENCODE_UP);
-    #endif
-    #ifdef ENCODE_DN
-    Serial.printf  ("Encoder Down   = %2d\r\n", ENCODE_DN);
-    #endif
-    #ifdef ENCODE_SW
-    Serial.printf  ("Encoder Switch = %2d\r\n", ENCODE_SW);
-    #endif
-    #ifdef DIRFWDPIN
-    Serial.printf  ("Direction Fwd  = %2d\r\n", DIRFWDPIN);
-    #endif
-    #ifdef DIRREVPIN
-    Serial.printf  ("Direction Rev  = %2d\r\n", DIRREVPIN);
-    #endif
-    #ifdef TRACKPWR
-    Serial.printf  ("Trk Power Indc = %2d\r\n", TRACKPWR);
-    #endif
-    #ifdef TRACKPWRINV
-    Serial.printf  ("Trk Power Indc = %2d (Inverted)\r\n", TRACKPWRINV);
-    #endif
-    #ifdef TRAINSETLEN
-    Serial.printf  ("Bidirectional  = %2d\r\n", TRAINSETPIN);
-    #endif
-    #ifdef F1LED
-    Serial.printf  ("Func 10x Indc  = %2d\r\n", F1LED);
-    #endif
-    #ifdef F2LED
-    Serial.printf  ("Func 20x Indc  = %2d\r\n", F2LED);
-    #endif    
-    #ifdef SPEEDOPIN
-    Serial.printf  ("Speedometer Out= %2d\r\n", SPEEDOPIN);
-    #endif
-    #ifdef BRAKEPRESPIN
-    Serial.printf  ("Brake Pressure = %2d\r\n", BRAKEPRESPIN);
-    #endif
-    #ifdef POTTHROTPIN
-    Serial.printf  ("Throttle Poten = %2d\r\n", POTTHROTPIN);
-    #endif
+    Serial.println ((char*) "Hardware configuration check:");
+    sprintf (prtTemplate, "\t%%-%ds = EN\r\n", maxWidth);
+    Serial.printf (prtTemplate, "Reset");
+    sprintf (prtTemplate, "\t%%-%ds = %%2d", maxWidth);
+    for (uint8_t n=0; n<limit; n++) {
+      Serial.printf (prtTemplate, pinVars[n].pinDesc, pinVars[n].pinNr);
+      for (uint8_t i=0; i<limit; i++) {
+        if (i!=n && pinVars[n].pinNr == pinVars[i].pinNr) {
+          retVal = false;
+          Serial.printf (", Clash with \"%s\"", pinVars[i].pinDesc);
+        }
+      }
+      #ifndef keynone
+      for (uint8_t i=0; i<sizeof(rows); i++) {
+        if (pinVars[n].pinNr == rows[i]) {
+          retVal = false;
+          Serial.printf (", Clash with Keypad-Row \"%d\"", rows[i]);
+        }
+      }
+      for (uint8_t i=0; i<sizeof(cols); i++) {
+        if (pinVars[n].pinNr == cols[i]) {
+          retVal = false;
+          Serial.printf (", Clash with Keypad-Column \"%d\"", cols[i]);
+        }
+      }
+      #endif
+      Serial.printf ("\r\n");
+    }
     #ifdef keynone
     Serial.printf  ("No Keyboard Pins\r\n");
     #else
-    Serial.printf ("Keyboard Rows (%d rows) ", sizeof(rows));
+    Serial.printf ("\tKeyboard Rows (%d rows) = ", sizeof(rows));
     for (uint8_t n=0; n<sizeof(rows); n++) {
       if (n>0) Serial.print (", ");
       Serial.printf ("%2d", rows[n]);
     }
+    for (uint8_t n=0; n<sizeof(rows); n++) {
+      for (uint8_t i=0; i<sizeof(rows); i++) if (i!=n && rows[i] == rows[n]) {
+        retVal = false;
+        Serial.printf (", row pin %d used twice", rows[n]);
+      }
+      for (uint8_t i=0; i<sizeof(cols); i++) if (cols[i] == rows[n]) {
+        retVal = false;
+        Serial.printf (", row pin %d also used as keypad column", rows[n]);
+      }
+    }
     Serial.println ("");
-    Serial.printf ("Keyboard Cols (%d cols) ", sizeof(cols));
+    Serial.printf ("\tKeyboard Cols (%d cols) = ", sizeof(cols));
     for (uint8_t n=0; n<sizeof(cols); n++) {
       if (n>0) Serial.print (", ");
       Serial.printf ("%2d", cols[n]);
+    }
+    for (uint8_t n=0; n<sizeof(cols); n++) {
+      for (uint8_t i=0; i<sizeof(cols); i++) if (i!=n && cols[i] == cols[n]) {
+        retVal = false;
+        Serial.printf (", column pin %d used twice", cols[n]);
+      }
+      for (uint8_t i=0; i<sizeof(rows); i++) if (rows[i] == cols[n]) {
+        retVal = false;
+        Serial.printf (", column pin %d also used as keypad row", cols[n]);
+      }
     }
     Serial.println ("");
     #endif
     xSemaphoreGive(displaySem);
   }
+  return (retVal);
 }
 
 
@@ -1788,7 +1890,7 @@ void help(int nparam, char **param)  // show help data
     }
     #ifdef OTAUPDATE
     if (all || strcmp(param[1], "ota")==0) {
-      Serial.println ((const char*) "nvs [status|update|revert]");
+      Serial.println ((const char*) "ota [status|update|revert]");
       if (!summary) {
         Serial.println ((const char*) "    Manage Over The Air (OTA) updates to firmware");
         Serial.println ((const char*) "    NB: does not check hardware compatibility, use with care!");
@@ -1851,6 +1953,14 @@ void help(int nparam, char **param)  // show help data
       }
     }
     #endif
+    if (all || strcmp(param[1], "set")==0) {
+      Serial.println ((const char*) "set [<variable> <value>]");
+      if (!summary) {
+	Serial.println ((const char*) "    Set most NVS variables to a value, use with care limited checking");
+        Serial.println ((const char*) "    Without parameters set will dump all settable settings");
+        Serial.println ((const char*) "    permanent setting");
+      }
+    }
     #ifndef SERIALCTRL
     if (all || strcmp(param[1], "showkeepalive")==0) {
       Serial.println ((const char*) "[no]showkeepalive");

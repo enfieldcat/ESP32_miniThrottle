@@ -1,4 +1,32 @@
 /*
+miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
+
+MIT License
+
+Copyright (c) [2021-2023] [Enfield Cat]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+
+
+/*
  * Use this file to centralise any defines and includes
  * This file should contain non-customisable definitions
  */
@@ -27,7 +55,7 @@
 #undef VERSION
 #endif
 #define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.5f"         // Version string
+#define VERSION     "0.5g"         // Version string
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.
@@ -124,7 +152,9 @@ extern "C" {
 #define CALLBACKSUB 22112
 
 // Function Mapping
-#define FUNCTNAMES "Headlight~Bell~Whistle~Short Whistle~Steam Release~FX5 Light~FX6 Light~Dimmer~Mute~Water Stop~Injectors~Brake Squeal~Coupler~~~~~~~~~~~~~~~~"
+// Option one from WiThrottle Doc, Option two from DigiTrax SDN144PS
+//#define FUNCTNAMES "Headlight~Bell~Whistle~Short Whistle~Steam Release~FX5 Light~FX6 Light~Dimmer~Mute~Water Stop~Injectors~Brake Squeal~Coupler~~~~~~~~~~~~~~~~"
+#define FUNCTNAMES "Lights~Bell~Horn/Whistle~Coupler Crash~Air Feature~Dyn Brake Fans~Notch Up/Blow Down~Crossing Gate Horn~Mute~Brake Squeal~Air Horn Seq~Greaser~Safety Blow Off~~~~~~~~~~~~~~~~"
 #define FUNCTLATCH 483
 #define FUNCTLEADONLY 225
 
@@ -196,8 +226,8 @@ struct relayConnection_s {
 };
 #endif
 
-#ifdef WEBLIFETIME
-struct webVar_s {
+// structure for holding base information on many NVS values
+struct nvsVar_s {
   char *varName;
   uint8_t varType;
   int16_t varMin; 
@@ -206,10 +236,16 @@ struct webVar_s {
   char *strDefault;
   char *varDesc;
 };
-#endif
+
+// structure for holding pin assignments
+struct pinVar_s {
+  uint8_t pinNr;
+  char *pinDesc;
+};
+
 
 /*
- * Required by Throttle functionality to to loco, turnout and route data, but also useful debug tool for inspecting NVS
+ * Required by Throttle functionality to get loco, turnout and route data, but also useful debug tool for inspecting NVS
  * Inspired by https://github.com/Edzelf/ESP32-Show_nvs_keys/blob/master/Show_nvs_keys.ino
  * Reference: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/storage/nvs_flash.html
  */

@@ -12,9 +12,9 @@
 #  * 64K NVS
 #  * 1.875M File-System
 # Name,   Type, SubType, Offset,  Size,    Flags
-#factory,  app,  factory, 0x10000, 0x200000,
-#nvs,      data, nvs,     0x210000,0x10000,
-#spiffs,   data, spiffs,  0x220000,0x1E0000,
+factory,  app,  factory, 0x10000, 0x200000,
+nvs,      data, nvs,     0x210000,0x10000,
+spiffs,   data, spiffs,  0x220000,0x1E0000,
 #
 # If you are using OTA (Over The Air update) then
 # comment out the entries above, and uncomment the
@@ -25,8 +25,8 @@
 #  * 64K NVS
 #  * 128K File-System
 # Name,   Type, SubType, Offset,  Size,    Flags
-otadata,  data, ota,     0xe000,  0x2000,
-app0,     app,  ota_0,   0x10000, 0x1E0000,
-app1,     app,  ota_1,   0x1F0000,0x1E0000,
-nvs,      data, nvs,     0x3D0000,0x10000,
-spiffs,   data, spiffs,  0x3E0000,0x20000,
+#otadata,  data, ota,     0xe000,  0x2000,
+#app0,     app,  ota_0,   0x10000, 0x1E0000,
+#app1,     app,  ota_1,   0x1F0000,0x1E0000,
+#nvs,      data, nvs,     0x3D0000,0x10000,
+#spiffs,   data, spiffs,  0x3E0000,0x20000,

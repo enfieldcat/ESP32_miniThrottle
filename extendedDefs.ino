@@ -129,7 +129,7 @@ SOFTWARE.
     { SPI_RESET,    "SPI - Reset" },
     #endif
     #ifdef SPI_CS
-    { SCPI_CS,      "SPI - CS" },
+    { SPI_CS,       "SPI - CS" },
     #endif
     #ifdef SPI_DC
     { SPI_DC,       "SPI - DC" },

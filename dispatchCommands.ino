@@ -629,6 +629,7 @@ void invalidateRoutes (int8_t turnoutNr, char state)
 {
   bool active;
 
+  if (routeCount == 0) return;
   for (uint8_t n=0; n<turnoutCount; n++) {
     if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       if (routeList[n].state == '8' || routeList[n].state == '2') active = true;

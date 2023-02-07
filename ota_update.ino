@@ -387,9 +387,10 @@ bool OTAcheck4update(char* retVal)
   if ((!APrunning) && (!WiFi.status() == WL_CONNECTED)) return(status);
   nvs_get_string ("ota_url", ota_url, OTAUPDATE, sizeof(ota_url));
   nvs_get_string ("web_certFile", web_certFile, CERTFILE, sizeof(web_certFile));
-  if (strncmp (ota_url, "https://", 8) == 0) {
+  if (rootCACertificate==NULL && strncmp (ota_url, "https://", 8) == 0) {
     rootCACertificate = util_loadFile(SPIFFS, web_certFile);
     if (rootCACertificate == NULL) {
+      rootCACertificate = defaultCertificate;
       if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print ("When using https for OTA, place root certificate in file ");
         Serial.println (CERTFILE);
@@ -397,7 +398,7 @@ bool OTAcheck4update(char* retVal)
       }
     }
   }
-  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  else if (strncmp (ota_url, "http://", 7) == 0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ("WARNING: using unencrypted link for OTA update. https:// is preferred.");
     xSemaphoreGive(displaySem);
   }

@@ -131,7 +131,7 @@
 // BACKLIGHTPIN - any PWM capable output
 // BACKLIGHTREF - Optional: Pins 32 - 39 only, optional 0-3V reference voltage for backlight, otherwise can be set at prompt
 // SCREENSAVER  - define idle time in minutes to screen blanking (screen saver), 0 = never blank
-#define BACKLIGHTPIN 21
+#define BACKLIGHTPIN 23
 #ifdef BACKLIGHTPIN
 //#define BACKLIGHTREF 35
 #define SCREENSAVER 60
@@ -151,10 +151,10 @@
  * NETWORK DEFAULTS
 \*********************************************************************** */
 // Default settings
-#define MYSSID  "DCC_ESP"
+#define MYSSID  "dccStation"
 #define HOST    "192.168.4.1"
 #define PORT    12090
-#define NAME    "dccStation"
+#define NAME    "HandHeld"
 #define DCCACKTIMEOUT 500
 
 // Define Pin Assignments
@@ -204,7 +204,7 @@
  * INDICATOR LEDS
 \*********************************************************************** */
 // define either of TRACKPWR or TRACKPWRINV or neither. do not set both
-#define TRACKPWR       16   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
+#define TRACKPWR       22   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
 //#define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
 // To enable bidirectional mode indicator
 //#define TRAINSETLED    16
@@ -217,7 +217,7 @@
 \*********************************************************************** */
 #define ENCODE_UP      32   // encoder up bounce
 #define ENCODE_DN      33   // encoder down bounce
-#define ENCODE_SW      25   // encoder switch
+#define ENCODE_SW      15   // encoder switch
 //#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
 //#define DIRREVPIN      33   // Direction sw spdt center off LOW active
 //#define POTTHROTPIN    36   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
@@ -359,8 +359,8 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 #ifdef key3x4
 #define COLCOUNT        3
 #define ROWCOUNT        4
-#define MEMBR_COLS     22,19,23
-#define MEMBR_ROWS     18,05,15,02
+#define MEMBR_COLS     18,19,21
+#define MEMBR_ROWS     05,17,16,04
 char keymap[ROWCOUNT][COLCOUNT] = {
 #ifdef POTTHROTPIN
   { 'P', '0', '#' },

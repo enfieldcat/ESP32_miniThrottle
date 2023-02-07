@@ -607,6 +607,7 @@ void routeConfirm (int8_t routeNr)
     Serial.printf ("%s routeConfirm(%d)\r\n", getTimeStamp(), routeNr);
     xSemaphoreGive(displaySem);
   }
+  if (routeCount == 0) return;
   if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (routeList[routeNr].state == '8') routeList[routeNr].state = '2';
     xSemaphoreGive(routeSem);

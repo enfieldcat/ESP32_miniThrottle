@@ -157,7 +157,7 @@ void processPacket (char *packet)
   }
   if (packet != NULL && packet[0] == '<') { // Stuff that is worth forwarding
     if (relayMode == DCCRELAY) { // if relaying DCC-Ex, just forward to any connected connections
-      for (uint8_t n=0; n<maxRelay; n++) if (remoteSys[n].client->connected()) {
+      for (uint8_t n=0; n<maxRelay; n++) if (remoteSys != NULL && remoteSys[n].client != NULL && remoteSys[n].client->connected()) {
         reply2relayNode (&remoteSys[n], packet);
       }
     }

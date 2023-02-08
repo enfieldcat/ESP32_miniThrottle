@@ -304,6 +304,7 @@ void dccPowerChange(char state)
 {
   uint8_t result = 0;
 
+  if (state != '0' && state != '1') return;
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccPowerChange(%c)\r\n", getTimeStamp(), state);
     xSemaphoreGive(displaySem);

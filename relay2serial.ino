@@ -774,6 +774,7 @@ void dcc_relay (char *packet, char indicator)
 // Send dcc info back to all relay nodes
 void relay2WiThrot (char *outBuffer)
 {
+  if (outBuffer == NULL) return;
   if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s relay2WiThrot(%s", getTimeStamp(), outBuffer);
     xSemaphoreGive(displaySem);
@@ -785,7 +786,7 @@ void relay2WiThrot (char *outBuffer)
     if (chk < 2) return;                       // relay not initialised or running
   }
   if (outBuffer[0]!='\0') {
-    for (uint8_t n=0; n<maxRelay; n++) if (remoteSys[n].client->connected()) {
+    for (uint8_t n=0; n<maxRelay; n++) if (remoteSys != NULL && remoteSys[n].client!=NULL && remoteSys[n].client->connected()) {
       reply2relayNode (&remoteSys[n], outBuffer);
     }
   }

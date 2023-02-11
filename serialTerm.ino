@@ -1288,14 +1288,17 @@ void displayLocos()  // display locomotive data
 
 void displayTurnouts()  // display known data about switches / points
 {
-  char outBuffer[50];
+  char outBuffer[80];
+  char stateBuffer[10];
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("TurnOut (switch/point) statuses = ");
     Serial.println (turnoutStateCount);
     if (turnoutStateCount>0 && turnoutStateCount<255) {
-      Serial.println ("   ID | State");
+      Serial.println ("   ID        | State");
       for (uint8_t n=0; n<turnoutStateCount; n++) {
-        sprintf (outBuffer, "  %3d | %s", turnoutState[n].state, turnoutState[n].name);
+        if (turnoutState[n].state <= 32 || turnoutState[n].state >= 127) sprintf (stateBuffer, "(0x%02x)", turnoutState[n].state);
+        else sprintf (stateBuffer, "(%c)", turnoutState[n].state);
+        sprintf (outBuffer, "  %3d %-6s | %s", turnoutState[n].state, stateBuffer, turnoutState[n].name);
         Serial.println (outBuffer);
       }
     }
@@ -1305,7 +1308,9 @@ void displayTurnouts()  // display known data about switches / points
       sprintf (outBuffer, "%-16s | %-16s | %s", "System-Name", "User-Name", "State");
       Serial.println (outBuffer);
       for (uint8_t n=0; n<turnoutCount; n++) {
-        sprintf (outBuffer, "%-16s | %-16s | %d", turnoutList[n].sysName, turnoutList[n].userName, turnoutList[n].state);
+        if (turnoutList[n].state <= 32 || turnoutList[n].state >= 127) sprintf (stateBuffer, "(0x%02x)", turnoutList[n].state);
+        else sprintf (stateBuffer, "(%c)", turnoutList[n].state);
+        sprintf (outBuffer, "%-16s | %-16s | %d %s", turnoutList[n].sysName, turnoutList[n].userName, turnoutList[n].state, stateBuffer);
         Serial.println (outBuffer);
       }
     }
@@ -1315,14 +1320,17 @@ void displayTurnouts()  // display known data about switches / points
 
 void displayRoutes()  // display known data about switches / points
 {
-  char outBuffer[40];
+  char outBuffer[80];
+  char stateBuffer[10];
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Route statuses = ");
     Serial.println (routeStateCount);
     if (routeStateCount>0 && routeStateCount<255 && routeState != NULL) {
-      Serial.println ("   ID | State");
+      Serial.println ("   ID        | State");
       for (uint8_t n=0; n<routeStateCount; n++) {
-        sprintf (outBuffer, "  %3d | %s", routeState[n].state, routeState[n].name);
+        if (routeState[n].state <= 32 || routeState[n].state >= 127) sprintf (stateBuffer, "(0x%02x)", routeState[n].state);
+        else sprintf (stateBuffer, "(%c)", routeState[n].state);
+        sprintf (outBuffer, "  %3d %-6s | %s", routeState[n].state, stateBuffer, routeState[n].name);
         Serial.println (outBuffer);
       }
     }
@@ -1332,7 +1340,9 @@ void displayRoutes()  // display known data about switches / points
       sprintf (outBuffer, "%-16s | %-16s | %s", "System-Name", "User-Name", "State");
       Serial.println (outBuffer);
       for (uint8_t n=0; n<routeCount; n++) {
-        sprintf (outBuffer, "%-16s | %-16s | %d", routeList[n].sysName, routeList[n].userName, routeList[n].state);
+        if (routeList[n].state <= 32 || routeList[n].state >= 127) sprintf (stateBuffer, "(0x%02x)", routeList[n].state);
+        else sprintf (stateBuffer, "(%c)", routeList[n].state);
+        sprintf (outBuffer, "%-16s | %-16s | %d %s", routeList[n].sysName, routeList[n].userName, routeList[n].state, stateBuffer);
         Serial.println (outBuffer);
       }
     }

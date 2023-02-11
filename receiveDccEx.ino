@@ -488,6 +488,13 @@ void dccPopulateTurnout()
   // to work on
   // get DCC-Ex defined turnouts
   // sort locally defined turnouts and renumber in sequence to maintain consistency when using multiple miniThrottles.
+  // --> <JT>
+  // <-- <jT 100 101 102 103 104 105 106 107>
+  // --> <JT 100>
+  // <-- <jT 100 C "">
+  // --> <JT 110>
+  // <-- <jT 110 X>
+ 
   if (numEntries > 0) {
     char *rawData  = (char*) nvs_extractStr ("turnout", numEntries, 2*NAMELENGTH);
     char *curData;

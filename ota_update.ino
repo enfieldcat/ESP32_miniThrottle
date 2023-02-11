@@ -188,9 +188,9 @@ class ota_control {
       mbedtls_sha256_context sha256ctx;
       int sha256status, retryCount;
 
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("Loading new over the air image");
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
       targetPart = esp_ota_get_next_update_partition(NULL);
       if (targetPart == NULL) {
@@ -208,12 +208,12 @@ class ota_control {
           while (totalByte < image_size && retryCount > 0) {
             inByte = inStream->read(inBuffer, WEB_BUFFER_SIZE);
             if (inByte > 0) {
-              if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 if (inByte > (WEB_BUFFER_SIZE/2)) Serial.printf ("#");
                 else if (inByte > (WEB_BUFFER_SIZE/4)) Serial.printf ("*");
                 else if (inByte > (WEB_BUFFER_SIZE/8)) Serial.printf (".");
                 else Serial.printf (" ");
-                xSemaphoreGive(displaySem);
+                xSemaphoreGive(consoleSem);
               }
               totalByte += inByte;
               if (sha256status == 0) sha256status = mbedtls_sha256_update_ret(&sha256ctx, (const unsigned char*) inBuffer, inByte);
@@ -230,10 +230,10 @@ class ota_control {
             else delay (10); //play nice in multithreading environment
           }
           if (sha256status == 0) {
-            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               if (retryCount>0) Serial.printf ("-end-\r\n");
               else Serial.printf ("-failed- too many retries -\r\n");
-              xSemaphoreGive(displaySem);
+              xSemaphoreGive(consoleSem);
             }
             sha256status = mbedtls_sha256_finish_ret(&sha256ctx, (unsigned char*) inBuffer);
             message[0] = '\0'; // Truncate message buffer, then use it as a temporary store of the calculated sha256 string
@@ -262,9 +262,9 @@ class ota_control {
         }
       }
       closeHttpStream (http);
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("\r\nOver the air image - load complete");
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
       return (retVal);
     }
@@ -391,24 +391,24 @@ bool OTAcheck4update(char* retVal)
     rootCACertificate = util_loadFile(SPIFFS, web_certFile);
     if (rootCACertificate == NULL) {
       rootCACertificate = defaultCertificate;
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print ("When using https for OTA, place root certificate in file ");
         Serial.println (CERTFILE);
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
     }
   }
-  else if (strncmp (ota_url, "http://", 7) == 0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  else if (strncmp (ota_url, "http://", 7) == 0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ("WARNING: using unencrypted link for OTA update. https:// is preferred.");
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (theOtaControl.update (ota_url, rootCACertificate, "metadata.php")) {
     nvs_put_int ("ota_initial", 1);
     status = true;
   }
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println (theOtaControl.get_status_message());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (retVal != NULL) strcpy (retVal, theOtaControl.get_status_message());
   return (status);
@@ -419,9 +419,9 @@ bool OTAcheck4rollback (char* retVal)
   bool status = false;
   ota_control theOtaControl;
   if (theOtaControl.revert ()) status = true;;
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println (theOtaControl.get_status_message());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (retVal != NULL) strcpy (retVal, theOtaControl.get_status_message());
   return (status);

@@ -48,9 +48,9 @@ void fastClock (void *pvParameters)
   uint8_t bumpcount = 0;
   uint32_t period = 1000;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s fastClock(NULL)\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     fc_multiplier = nvs_get_int ("fc_rate", FC_RATE) / 100.00;
@@ -67,9 +67,9 @@ void fastClock (void *pvParameters)
     fastClockTimer = xTimerCreate ("fastClockTimer", pdMS_TO_TICKS(period), pdTRUE, (void *) NULL, fastClockTimerHandler);
   }
   if (fastClockQueue == NULL || fastClockTimer == NULL) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Failed to create timer for fast clock packets\r\n", getTimeStamp());
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
   else {
@@ -78,9 +78,9 @@ void fastClock (void *pvParameters)
       if (fc_multiplier != 0.00) {
         if (bumpcount==0) fc_sendUpdate();
         if (xQueueReceive(fastClockQueue, &queueData, pdMS_TO_TICKS(period+1000)) != pdPASS) {
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s Missing fast-clock timer\r\n", getTimeStamp());
-            xSemaphoreGive(displaySem);
+            xSemaphoreGive(consoleSem);
           }
         }
         if (++bumpcount>59 && xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -110,9 +110,9 @@ void fc_sendUpdate()
 {
   char outPacket[25];
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s fc_sendUpdate()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (remoteSys!=NULL && xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

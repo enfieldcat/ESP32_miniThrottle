@@ -62,9 +62,9 @@ void switchMonitor(void *pvParameters)
   #ifndef DIRREVPIN
   #ifndef BACKLIGHTREF
   // No work for this thread if none of the above are defined
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s No switches or encoder defined\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   vTaskDelete( NULL );
   return;
@@ -92,9 +92,9 @@ void switchMonitor(void *pvParameters)
   uint8_t potLoopCount = 0;
   #endif
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s switchMonitor(NULL)\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   // deal with the encoder first
@@ -189,11 +189,11 @@ void switchMonitor(void *pvParameters)
       // Oversample to get a more stable average
       potReading += analogRead(POTTHROTPIN);
       if (++potLoopCount >= potLoopLimit) {
-        if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           static int voo = potReading / potLoopCount;
           static int vim = voo >> 2;
           Serial.printf (" - Pot Reading: (%d / %d) = %d Adjust: %d\r\n", potReading, potLoopCount, voo, vim);
-          xSemaphoreGive(displaySem);
+          xSemaphoreGive(consoleSem);
         }
         potReading = (potReading / potLoopCount) >> 2; // oversample and over scale adjustment to DCC sized values
         if (abs (lastPotReading - potReading) > 1) {  // ignore changes teetering on the cusp of change
@@ -230,9 +230,9 @@ void sendDirChange (uint8_t fwdPin, uint8_t revPin)
 {
   static char directionCode;
   
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s sendDirChange(%d, %d)\r\n", getTimeStamp(), fwdPin, revPin);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (fwdPin == 0) {       // Switch to forward
@@ -265,9 +265,9 @@ void sendPotThrot (int8_t dir, int8_t speed)
   #endif
   int8_t actDirec;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s sendPotThrot(%d, %d)\r\n", getTimeStamp(), dir, speed);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   for (int8_t n=0; n<limit; n++) if (locoRoster[n].owned) {

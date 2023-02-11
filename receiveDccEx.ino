@@ -28,9 +28,9 @@ SOFTWARE.
 
 void processDccPacket (char *packet)
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s processDccPacket(%s)\r\n", getTimeStamp(), packet);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (strncmp (packet, "<T ", 3) == 0) dccSpeedChange (&packet[3]);
@@ -61,9 +61,9 @@ void dccLocoStatus (char* locoStatus)
   uint8_t result = 0;
   char *ptr, *savePtr;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccLocoStatus(%s)\r\n", getTimeStamp(), locoStatus);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   xQueueSend (dccAckQueue, &result, 0);   // Ack even if garbled.
@@ -73,9 +73,9 @@ void dccLocoStatus (char* locoStatus)
     locoID = util_str2int(locoStatus);
   }
   else {
-    if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("dccLocoStatus: No loco ID\r\n");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return;
   }
@@ -85,9 +85,9 @@ void dccLocoStatus (char* locoStatus)
     locoState = abs(util_str2int(ptr));
   }
   else {
-    if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("dccLocoStatus: No loco state\r\n");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return;
   } */
@@ -97,9 +97,9 @@ void dccLocoStatus (char* locoStatus)
     locoSpeed = util_str2int(ptr);
   }
   else {
-    if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("dccLocoStatus: No loco speed\r\n");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return;
   }
@@ -109,9 +109,9 @@ void dccLocoStatus (char* locoStatus)
     locoFunc = util_str2int(ptr);
   }
   else {
-    if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("dccLocoStatus: No function data\r\n");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return;
   }
@@ -161,9 +161,9 @@ void dccLocoStatus (char* locoStatus)
     }
     else semFailed ("functionSem", __FILE__, __LINE__);
   }
-  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("Invalid loco ID in status update\r\n");
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 }
 
@@ -187,15 +187,15 @@ void dccSpeedChange (char* speedSet)
   bool t_owned = false;
   #endif
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccSpeedChange(%s)\r\n", getTimeStamp(), speedSet);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   xQueueSend (dccAckQueue, &result, 0);
   if (xQueueReceive(dccLocoRefQueue, &locoIndex, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
-    if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s dccSpeedChange failed to get associated LocoID from internal queue\r\n", getTimeStamp());
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return;
   }
@@ -258,9 +258,9 @@ void dccAckTurnout (char *ack)
   #ifdef RELAYPORT
   char outBuffer[32];
   #endif
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccAckTurnout(%s)\r\n", getTimeStamp(), ack);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   xQueueSend (dccAckQueue, &result, 0);
   for (uint8_t n=0; n<strlen(ack); n++) if (ack[n]==' ') {
@@ -290,9 +290,9 @@ void dccAckTurnout ()
 {
   char result = 15;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccAckTurnout()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   xQueueSend (dccAckQueue, &result, 0);
 }
@@ -305,9 +305,9 @@ void dccPowerChange(char state)
   uint8_t result = 0;
 
   if (state != '0' && state != '1') return;
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccPowerChange(%c)\r\n", getTimeStamp(), state);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   xQueueSend (dccAckQueue, &result, 0);
   if (state == '1') {
@@ -344,9 +344,9 @@ void dccComment(char* comment)
   int len = strlen (comment);
   uint8_t result = 0;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccComment(%s)\r\n", getTimeStamp(), comment);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   xQueueSend (dccAckQueue, &result, 0);
   // drop trailing chars
@@ -383,9 +383,9 @@ void dccCV(char* cv)
   int16_t result;
   char *start = NULL;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccCV(%s)\r\n", getTimeStamp(), cv);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (cv[0] == ' ') start = cv + 1;
   else {
@@ -404,9 +404,9 @@ void dccInfo(char *cv)
   uint8_t result = 0;
   int len = strlen (cv);
   
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccInfo(%s)\r\n", getTimeStamp(), cv);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   while (cv[len-1]=='>' || cv[len-1]=='*' || cv[len-1]==' ') len--;
   cv[len] = '\0';
@@ -423,9 +423,9 @@ void dccPopulateLoco()
 {
   int numEntries = nvs_count ("loco", "String");
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccPopulateLoco()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (numEntries > 0) {
     char *rawData  = (char*) nvs_extractStr ("loco", numEntries, NAMELENGTH);
@@ -440,9 +440,9 @@ void dccPopulateLoco()
       if (locoData[n].id > 127) locoData[n].type = 'L';
       else locoData[n].type = 'S';
       strcpy (locoData[n].name, curData);
-      if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf ("Loading locomotive %s\r\n", curData);
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
       curData = curData + NAMELENGTH;
       locoData[n].direction = STOP;
@@ -481,10 +481,13 @@ void dccPopulateTurnout()
   int numEntries = nvs_count ("turnout", "String");
   uint8_t reqState;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccPopulateTurnout()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
+  // to work on
+  // get DCC-Ex defined turnouts
+  // sort locally defined turnouts and renumber in sequence to maintain consistency when using multiple miniThrottles.
   if (numEntries > 0) {
     char *rawData  = (char*) nvs_extractStr ("turnout", numEntries, 2*NAMELENGTH);
     char *curData;
@@ -510,9 +513,9 @@ void dccPopulateTurnout()
       turnoutData[n].state = '1';
       sprintf (turnoutData[n].sysName, "%d", (offset+n));
       strcpy (turnoutData[n].userName, curData);
-      if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf ("Loading turnout %s\r\n", curData);
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
       curData = curData + 16;
       sprintf (commandBuffer, "<T %s %s>", turnoutData[n].sysName, curData);
@@ -521,9 +524,9 @@ void dccPopulateTurnout()
       if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(TIMEOUT*3)) != pdPASS) { // wait for ack - wait longer than usual
         // wait for ack
         turnoutData[n].state = '8';
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.println ("Warning: No response for defining turnout, status = Failed");
-          xSemaphoreGive(displaySem);
+          xSemaphoreGive(consoleSem);
         }
       }
     }
@@ -544,9 +547,9 @@ void dccPopulateRoutes()
 {
   int numEntries = nvs_count ("route", "String");
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccPopulateRoutes()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (numEntries > 0) {
     char *rawData  = (char*) nvs_extractStr ("route", numEntries, BUFFSIZE);
@@ -583,9 +586,9 @@ void dccPopulateRoutes()
       turnoutData = curData + 16;
       ptr = 0;
       tCnt = 0;
-      if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf ("Loading route %s\r\n", curData);
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
       limit = strlen (turnoutData);
       while (turnoutData[ptr]!=0 && tCnt<MAXRTSTEPS && ptr<limit) {
@@ -602,9 +605,9 @@ void dccPopulateRoutes()
         }
         rData[n].turnoutNr[tCnt] = tVal;  // 255 => end of route, 200 => MIA / removed turnout.
         if (tVal == 200) {
-          if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s dccPopulateRoutes: route %s, ERROR: turnout %s not found or removed?\r\n", getTimeStamp(), curData, &turnoutData[wPtr]);
-            xSemaphoreGive(displaySem);
+            xSemaphoreGive(consoleSem);
           }
         }
         turnoutData[ptr] = toupper(turnoutData[ptr]);
@@ -613,9 +616,9 @@ void dccPopulateRoutes()
         }
         else {
           rData[n].desiredSt[tCnt] = 200;
-          if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s dccPopulateRoutes: State of route %s, switch %s should be T (for thrown) or C (for closed).\r\n", getTimeStamp(), curData, &turnoutData[wPtr]);
-            xSemaphoreGive(displaySem);
+            xSemaphoreGive(consoleSem);
           }
         }
         tCnt++;

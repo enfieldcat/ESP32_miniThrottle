@@ -59,9 +59,9 @@ void locomotiveDriver()
   bool dirChange = false;
   bool brakeFlag = true;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s locomotiveDriver()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   potVal[0] = '\0';
@@ -470,9 +470,9 @@ void locomotiveDriver()
               for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
                 setLocoSpeed (n, 0, STOP);
               }
-              if (showPackets && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              if (showPackets && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 Serial.println ("Executed button-stop");
-                xSemaphoreGive(displaySem);
+                xSemaphoreGive(consoleSem);
               }
             }
           }
@@ -521,9 +521,9 @@ void locomotiveDriver()
     if (commandChar == 'E') {
       for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && locoRoster[n].speed > 0) {
         commandChar = 'Z';
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("No escape permitted, loco speed not zero: %s = %d", locoRoster[n].name, locoRoster[n].speed);
-          xSemaphoreGive(displaySem);
+          xSemaphoreGive(consoleSem);
         }
       }
     }
@@ -556,9 +556,9 @@ void brakeup ()
 {
   static int brakeup = nvs_get_int ("brakeup", 1);
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s brakeup()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (brakePres < 255) {
@@ -572,9 +572,9 @@ void brakedown (int steps)
 {
   static int brakedown = nvs_get_int ("brakedown", 20);
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s brakedown(%d)\r\n", getTimeStamp(), steps);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (brakedown < 1) brakedown = 1;
@@ -602,9 +602,9 @@ void displayFunctions (uint8_t lineNr, uint32_t functions)
   char fTemplate[32];
   char dis[2];
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s displayFunctions(%d, %d)\r\n", getTimeStamp(), lineNr, functions);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   nvs_get_string ("funcOverlay", fTemplate, FUNCOVERLAY, sizeof(fTemplate));

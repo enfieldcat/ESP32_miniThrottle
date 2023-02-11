@@ -31,9 +31,9 @@ SOFTWARE.
  */
 void setInitialData()
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setInitialData()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (!initialDataSent) {
@@ -54,9 +54,9 @@ void setInitialData()
       txPacket ("<s>");
       if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
         // wait for ack
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("%s Warning: No response for initial info (DCC-Ex Status)\r\n", getTimeStamp());
-          xSemaphoreGive(displaySem);
+          xSemaphoreGive(consoleSem);
         }
       }
     }
@@ -71,9 +71,9 @@ void setInitialData()
  */
 void setTrackPower (uint8_t desiredState)
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setTrackPower(%d)\r\n", getTimeStamp(), desiredState);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   switch (desiredState) {
@@ -90,9 +90,9 @@ void setTrackPower (uint8_t desiredState)
         else txPacket ("<1 PROG>");
         if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
           // wait for ack
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s Warning: No response for track power on\r\n", getTimeStamp());
-            xSemaphoreGive(displaySem);
+            xSemaphoreGive(consoleSem);
           }
         }
       }
@@ -109,9 +109,9 @@ void setTrackPower (uint8_t desiredState)
         else txPacket ("<0 PROG>");
         if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
           // wait for ack
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s Warning: No response for track power off\r\n", getTimeStamp());
-            xSemaphoreGive(displaySem);
+            xSemaphoreGive(consoleSem);
           }
         }
       }
@@ -126,15 +126,15 @@ bool setTurnout (uint8_t turnoutNr, const char desiredState)
   uint8_t reqState;
   bool retVal = true;
  
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setTurnout(%d, %d)\r\n", getTimeStamp(), turnoutNr, (int8_t) desiredState);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (turnoutNr>=turnoutCount) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Requested turnout %d is out of range, %d turnouts known\r\n", getTimeStamp(), turnoutNr, turnoutCount);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return (false);
   }
@@ -170,10 +170,10 @@ bool setTurnout (uint8_t turnoutNr, const char desiredState)
       if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
         // wait for ack
         retVal = false;
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           turnoutList[turnoutNr].state = '8';
           Serial.printf ("%s Warning: No response for setting Turnout\r\n", getTimeStamp());
-          xSemaphoreGive(displaySem);
+          xSemaphoreGive(consoleSem);
           #ifdef RELAYPORT
           sprintf (outPacket, "PTA8%s\r\n", turnoutList[turnoutNr].sysName);
           relay2WiThrot (outPacket);
@@ -197,15 +197,15 @@ void setRoute (uint8_t routeNr)
   char     relayMsg[40];
   #endif
   
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s sendRoute(%d)\r\n", getTimeStamp(), routeNr);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (routeNr>=routeCount) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Requested route %d is out of range, %d routes known\r\n", getTimeStamp(), routeNr, routeCount);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return;
   }
@@ -227,9 +227,9 @@ void setRoute (uint8_t routeNr)
 bool invalidLocoIndex (const uint8_t locoIndex, const char *description)
 {
   if (locoIndex>=locomotiveCount+MAXCONSISTSIZE) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s %s: Requested locomotive %d is out of range, %d locomotives known\r\n", getTimeStamp(), description, locoIndex, locomotiveCount);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return (true);
   }
@@ -240,10 +240,10 @@ void setLocoFunction (uint8_t locoIndex, uint8_t funcIndex, bool set)
 {
   char commandPacket[40];
   
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (set) Serial.printf ("%s setLocoFunction(%d, %d, TRUE)\r\n",  getTimeStamp(), locoIndex, funcIndex);
     else     Serial.printf ("%s setLocoFunction(%d, %d, FALSE)\r\n", getTimeStamp(), locoIndex, funcIndex);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (invalidLocoIndex(locoIndex, "Set loco function")) return;
@@ -289,9 +289,9 @@ void setLocoFunction (uint8_t locoIndex, uint8_t funcIndex, bool set)
           }
           else semFailed ("velociSem", __FILE__, __LINE__);
           // wait for ack
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s Warning: No response for setting function\r\n", getTimeStamp());
-            xSemaphoreGive(displaySem);
+            xSemaphoreGive(consoleSem);
           }
         }
       }
@@ -303,10 +303,10 @@ void setLocoFunction (uint8_t locoIndex, uint8_t funcIndex, bool set)
 void setLocoOwnership(uint8_t locoIndex, bool owned)
 {
   char commandPacket[40];
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (owned) Serial.printf ("%s setLocoOwnership(%d, TRUE)\r\n",  getTimeStamp(), locoIndex);
     else       Serial.printf ("%s setLocoOwnership(%d, FALSE)\r\n", getTimeStamp(), locoIndex);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (invalidLocoIndex(locoIndex, "Set loco ownership")) return;
@@ -326,9 +326,9 @@ void setLocoOwnership(uint8_t locoIndex, bool owned)
 void setStealLoco(uint8_t locoIndex)
 {
   char commandPacket[40];
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setStealLoco(%d)\r\n", getTimeStamp(), locoIndex);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (invalidLocoIndex(locoIndex, "Steal loco")) return;
@@ -348,9 +348,9 @@ void setLocoSpeed (uint8_t locoIndex, int16_t speed, int8_t direction)
   char commandPacket[40];
   uint8_t reqState;
   
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setLocoSpeed(%d, %d, %d)\r\n", getTimeStamp(), locoIndex, speed, direction);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (invalidLocoIndex(locoIndex, "Set loco speed")) return;
@@ -375,9 +375,9 @@ void setLocoSpeed (uint8_t locoIndex, int16_t speed, int8_t direction)
         // wait for ack
         // if not Ack'ed then remove loco from queue
         xQueueReceive(dccLocoRefQueue, &reqState, 0);
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("%s Warning: No response for setting loco speed\r\n", getTimeStamp());
-          xSemaphoreGive(displaySem);
+          xSemaphoreGive(consoleSem);
         }
       }
     }
@@ -389,9 +389,9 @@ void setLocoSpeed (uint8_t locoIndex, int16_t speed, int8_t direction)
 void setLocoDirection (uint8_t locoIndex, uint8_t direction)
 {
   char commandPacket[40];
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setLocoDirection(%d, %d)\r\n", getTimeStamp(), locoIndex, direction);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (invalidLocoIndex(locoIndex, "Set loco direction")) return;
@@ -413,9 +413,9 @@ void setLocoDirection (uint8_t locoIndex, uint8_t direction)
 
 void setDisconnected()
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setDisconnected()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (cmdProtocol == WITHROT) {
@@ -426,9 +426,9 @@ void setDisconnected()
 
 void getAddress()
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s getAddress()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (cmdProtocol == DCCEX) {
@@ -438,9 +438,9 @@ void getAddress()
 
 void getCV(int16_t cv)
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s getCV(%d)\r\n", getTimeStamp(), cv);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (cmdProtocol == DCCEX) {
@@ -458,9 +458,9 @@ void setRouteBg (void *pvParameters)
 {
   uint8_t  routeNr = ((uint8_t*) pvParameters)[0];
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setRouteBg(%d)\r\n", getTimeStamp(), routeNr);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (routeNr < routeCount) {    
@@ -480,9 +480,9 @@ void setRouteBg (void *pvParameters)
       else semFailed ("routeSem", __FILE__, __LINE__);
     }
   }
-  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setRouteBg(%d) called with out of range route, max = %d\r\n", getTimeStamp(), routeNr, routeCount);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   vTaskDelete( NULL );
 }
@@ -499,11 +499,11 @@ bool routeSetup (int8_t routeNr, bool displayable)
   #endif
   bool retVal = true;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     char *displayState = {"false"};
     if (displayable) displayState = "true";
     Serial.printf ("%s routeSetup(%d, %s)\r\n", getTimeStamp(), routeNr, displayState);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   for (uint8_t n=0; n<MAXRTSTEPS && routeList[routeNr].turnoutNr[n] < 255; n++) {
     if (routeList[routeNr].turnoutNr[n] < 200 && routeList[routeNr].desiredSt[n] < 200) {
@@ -524,9 +524,9 @@ bool routeSetup (int8_t routeNr, bool displayable)
       }
     }
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf ("%s Error in route %s step %d.\r\n", getTimeStamp(), routeList[routeNr].userName, (n+1));
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
       if (nvs_get_int ("dccRtError", 0) == 1) {
         n = MAXRTSTEPS;
@@ -578,9 +578,9 @@ void routeInitiate (int8_t routeNr)
   char     relayMsg[25];
   #endif
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s routeInitiate(%d)\r\n", getTimeStamp(), routeNr);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     routeList[routeNr].state = '8';
@@ -603,9 +603,9 @@ void routeConfirm (int8_t routeNr)
   char relayMsg[25];
   #endif
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s routeConfirm(%d)\r\n", getTimeStamp(), routeNr);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (routeCount == 0) return;
   if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

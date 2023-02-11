@@ -413,15 +413,15 @@ void nvs_dumper(const char *target)
     part = esp_partition_get (partIt);
     esp_partition_iterator_release (partIt);
     sprintf (outline, "NVS partition size: %d bytes", part->size);
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println (outline);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     while (nsoffset < part->size) {
       if (esp_partition_read (part, nsoffset, nsbuff, sizeof(nvs_page)) != ESP_OK) {
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.println ("Error reading NVS data");
-          xSemaphoreGive(displaySem);
+          xSemaphoreGive(consoleSem);
         }
         if (nsbuff != NULL) free (nsbuff);
         if (dabuff != NULL) free (dabuff);
@@ -433,20 +433,20 @@ void nvs_dumper(const char *target)
         if ( bitmap == 2 ) {
           if (nsbuff->Entry[i].Ns == 0 && (target==NULL || strcmp(target, nsbuff->Entry[i].Key)==0)) {
             sprintf (outline, "--- Namespace = %s ---------------------------------", nsbuff->Entry[i].Key);
-            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               Serial.println (outline);
               sprintf (outline, "%4s | %3s | %-8s | %-15s | %s", "Page", "Key", "Type", "Name", "Value");
               Serial.println (outline);
-              xSemaphoreGive(displaySem);
+              xSemaphoreGive(consoleSem);
             }
             targetns = (uint8_t) (nsbuff->Entry[i].Data.sixFour & 0xFF);
             daoffset = 0;
             page = 0;
             while (daoffset < part->size) {
               if (esp_partition_read (part, daoffset, dabuff, sizeof(nvs_page)) != ESP_OK) {
-                if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                   Serial.println ("Error reading NVS data");
-                  xSemaphoreGive(displaySem);
+                  xSemaphoreGive(consoleSem);
                 }
                 if (nsbuff != NULL) free (nsbuff);
                 if (dabuff != NULL) free (dabuff);
@@ -517,9 +517,9 @@ void nvs_dumper(const char *target)
                        typePtr,                                                  // Print the data type
                        dabuff->Entry[j].Key,                                     // Print the key
                        dataPtr );                                                // Print the data
-                    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                       Serial.println (outline);
-                      xSemaphoreGive(displaySem);
+                      xSemaphoreGive(consoleSem);
                     }
                   }
                 j += dabuff->Entry[j].Span ;                                    // Next Data entry
@@ -538,9 +538,9 @@ void nvs_dumper(const char *target)
     }
   }
   else {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("NVS partition not found");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
   if (nsbuff != NULL) free (nsbuff);

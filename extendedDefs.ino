@@ -54,6 +54,7 @@ SOFTWARE.
     { "fontIndex",      INTEGER,    0,  wwwFontWidth,            1,          "", "Font ID" },
     { "backlightValue", INTEGER,  100,           255,          200,          "", "Screen Brightness" },
     { "warnSpeed",      INTEGER,   50,           101,           90,          "", "Warning Speed" },
+    { "allMenuItems",   INTEGER,    0,             1,            0,          "", "Display all menu items" },
     #ifdef SCREENSAVER
     { "screenSaver",    INTEGER,    0,           600,  SCREENSAVER,          "", "Screen Saver Timeout" },
     #endif

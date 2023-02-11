@@ -53,9 +53,9 @@ void setupFonts()
 {
   static uint8_t fontIndex = 1;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setupFonts()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   #ifdef SCREENROTATE
   #if SCREENROTATE == 2
@@ -111,9 +111,9 @@ void mkLocoMenu()
   uint8_t result = 255;
   uint8_t commandKey;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkLocoMenu()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   for (uint8_t n=0; n<locomotiveCount; n++) locoMenu[n] = locoRoster[n].name;
   locoMenu[locomotiveCount] = (char*) lastOpt;
@@ -167,9 +167,9 @@ void mkTurnoutMenu()
   uint8_t reqState = 255;
   uint8_t option = 0;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkTurnoutMenu()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (turnoutCount == 0 || turnoutStateCount == 0) {
     displayTempMessage ((char*)txtWarning, "No switches or switch states defined", true);
@@ -207,9 +207,9 @@ void mkRouteMenu()
   uint8_t result = 255;
   uint8_t option = 0;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkRouteMenu()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (routeCount == 0) {
     displayTempMessage ("Warning:", "No routes defined", true);
@@ -237,9 +237,9 @@ void mkPowerMenu()
   uint8_t result = 255;
   uint8_t option = 0;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkPowerMenu()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (trackPower) option = 0;
   else option = 1;
@@ -258,9 +258,9 @@ void mkConfigMenu()
   char paramName[9];
   int portNum;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkConfigMenu()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   #ifdef SERIALCTRL
   reference[4] = 200;  // protocol, serial => DCC-Ex direct connection
@@ -308,10 +308,10 @@ void mkConfigMenu()
             nvs_put_string (paramName, address);
           }
           else {
-            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               Serial.print ("reject malformed address: ");
               Serial.println (address);
-              xSemaphoreGive(displaySem);
+              xSemaphoreGive(consoleSem);
             }
           }
         }
@@ -343,9 +343,9 @@ void mkCVMenu()
   int16_t queryCV = 0;
   char message[64];
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkCVMenu()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (cmdProtocol == DCCEX) {
     while (result!=0
@@ -456,9 +456,9 @@ void mkFontMenu()
   char *mp[sizeof(fontWidth) + 1];
   uint8_t result;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkFontMenu()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   for (uint8_t n=0; n<sizeof(fontWidth); n++) sprintf (fontMenu[n], "%s (%dx%d chars)", fontLabel[n], (screenWidth/fontWidth[n]), (screenHeight/fontHeight[n]));
   sprintf (fontMenu[sizeof(fontWidth)], prevMenuOption);
@@ -479,9 +479,9 @@ void mkSpeedStepMenu()
   uint8_t result;
   uint8_t speedStep = nvs_get_int ("speedStep", 4);
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkSpeedStepMenu()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   for (uint8_t n=0; n<9 ;n++) sprintf (speedMenu[n], "%d/click",  n+1);
   sprintf (speedMenu[9], prevMenuOption);
@@ -498,9 +498,9 @@ void mkCpuSpeedMenu()
   const char *cpuMenu[] = {"80MHz", "160MHz", "240MHz", "Prev. Menu"};
   uint8_t result;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkCpuSpeedMenu()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   switch (nvs_get_int ("cpuspeed", 0)) {
     case 240:
@@ -530,9 +530,9 @@ void mkCpuSpeedMenu()
 
 void mkProtoPref()
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkProtoPref()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   const char *protoMenu[] = {"WiThrottle", "DCC-Ex", "Prev. Menu"};
   int defProto = cmdProtocol - 1;
@@ -554,9 +554,9 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
   uint8_t limit = locomotiveCount + MAXCONSISTSIZE;
   uint8_t reference[] = { 1,2,3,4,5 };
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkCabMenu()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (turnoutCount == 0) reference[2] = 200;
   if (routeCount == 0)   reference[3] = 200;
@@ -665,9 +665,9 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
 
 void mkRotateMenu()
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkRotateMenu()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   #ifndef SCREENROTATE
   displayTempMessage ("Warning:", "Screen rotation not supported on this screen type", true);
@@ -695,9 +695,9 @@ void displayInfo()
   uint8_t lineNr = 0;
   static uint8_t currentOpt = 0;
   
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s displayInfo()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   display.clear();
   if (currentOpt == 0) {
@@ -815,8 +815,10 @@ uint8_t displayMenu (const char **menuItems, uint8_t *menuIndex, uint8_t itemCou
   uint8_t newIndex[itemCount];
   uint8_t newSelection = 0;
   char *newItems[itemCount];
+  bool allMenuItems = false;
 
-  for (uint8_t n = 0; n<itemCount; n++) if (menuIndex[n]!=200) {
+  if (nvs_get_int ("allMenuItems", 0) == 1) allMenuItems = true;
+  for (uint8_t n = 0; n<itemCount; n++) if (allMenuItems || menuIndex[n]!=200) {
     newIndex[cnt]= menuIndex[n];
     newItems[cnt]= (char*) menuItems[n];
     if (n == selectedItem) newSelection = cnt;
@@ -840,9 +842,9 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
   bool hasChanged = true;
   bool lineChanged[itemCount];
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s displayMenu(%x, %d, %d)\r\n", getTimeStamp(), menuItems, itemCount, selectedItem);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   for (uint8_t n=0; n<itemCount; n++) lineChanged[n] = true;
   if (selectedItem > itemCount) selectedItem = 0;
@@ -867,9 +869,9 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
         if (inScreenSaver) {
           ledcWrite(0, backlightValue);
           inScreenSaver = false;
-          if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s SCREEN: Blanking ended\r\n", getTimeStamp());
-            xSemaphoreGive(displaySem);
+            xSemaphoreGive(consoleSem);
           }
         }
         screenActTime = esp_timer_get_time();
@@ -907,9 +909,9 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
         if ((!inScreenSaver) && blankingTime>0 && (esp_timer_get_time() - screenActTime) > blankingTime) {
           ledcWrite(0, 0);
           inScreenSaver = true;
-          if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s SCREEN: Blanking started\r\n", getTimeStamp());
-            xSemaphoreGive(displaySem);
+            xSemaphoreGive(consoleSem);
           }
           inScreenSaver = true;
         }
@@ -920,10 +922,10 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
     }
   }
   menuMode = false;
-  if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (exitCode==0) Serial.printf ("%s MENU: No selection / Back One Level\r\n", getTimeStamp());
     else Serial.printf ("%s MENU: Option %d: %s\r\n", getTimeStamp(), exitCode, menuItems[(exitCode-1)]);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   return (exitCode);
 }
@@ -933,9 +935,9 @@ void displayScreenLine (const char *menuItem, uint8_t lineNr, bool inverted)
 {
   char linedata[charsPerLine+1];
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s displayScreenLine(%s, %d, inverted)\r\n", getTimeStamp(), menuItem, lineNr);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (lineNr >= linesPerScreen) return;
   // create a right padded line with the data to be displayed
@@ -974,9 +976,9 @@ int16_t wait4cv()
 {
   int16_t retVal = -1;
   
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s wait4cv()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   display.clear();
   displayScreenLine ("Wait for data", 1, false);
@@ -994,11 +996,11 @@ uint8_t displayTempMessage (const char *header, const char *message, bool wait4r
   char lineData[charsPerLine+1];
   char *charPtr = (char *) message;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (header!=NULL && message!=NULL) Serial.printf ("%s displayTempMessage(%s, %s, wait)\r\n", getTimeStamp(), header, message);
     else if (header!=NULL)  Serial.printf ("%s displayTempMessage(%s, NULL, wait)\r\n", getTimeStamp(), header);
     else if (message!=NULL) Serial.printf ("%s displayTempMessage(NULL, %s, wait)\r\n", getTimeStamp(), message);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   display.clear();
   if (header!=NULL) displayScreenLine (header, lineNr++, true);
@@ -1030,9 +1032,9 @@ uint8_t displayTempMessage (const char *header, const char *message, bool wait4r
 
 bool displayYesNo (const char *question)
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s displayYesNo(%s)\r\n", getTimeStamp(), question);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   uint8_t baseLine = displayTempMessage (NULL, question, false) + 1;
@@ -1049,20 +1051,20 @@ bool displayYesNo (const char *question)
     }
   }
   menuMode = false;
-  if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s PROMPT: %s\r\n   YES/NO: ", getTimeStamp(), question);
     if (option) Serial.printf ("Yes\r\n");
     else Serial.printf ("No\r\n");
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   return (option);
 }
 
 int enterNumber(const char *prompt)
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s enterNumber(%s)\r\n", getTimeStamp(), prompt);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   #ifdef keynone
   displayTempMessage ("Warning:", "Cannot enter number without a keypad", true);
@@ -1100,11 +1102,11 @@ int enterNumber(const char *prompt)
   display.setColor (STDCOLOR);
   #endif
   if (inKey == 'E') retVal = -1;
-  if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s PROMPT: %s\r\n   NUMBER: ", getTimeStamp(), prompt);
     if (retVal<0) Serial.printf ("No selection / Back One Level\r\n");
     else Serial.printf ("Value %d\r\n", retVal);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   return (retVal);
   #endif
@@ -1120,9 +1122,9 @@ char* enterAddress(const char *prompt)
   uint8_t dotCount = 0;
   char inKey = 'Z';
   
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s enterAddress(%s)\r\n", getTimeStamp(), prompt);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   x = 0;
   display.clear();
@@ -1165,9 +1167,9 @@ char* enterAddress(const char *prompt)
   #endif
   if (inKey == 'E') retVal[0] = '\0';
   else retVal[tPtr] = '\0';
-  if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s PROMPT: %s\r\n   ADDRESS: %s\r\n", getTimeStamp(), prompt, retVal);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   return (retVal);
 }

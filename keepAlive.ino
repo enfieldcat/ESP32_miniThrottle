@@ -50,9 +50,9 @@ void keepAlive(void *pvParameters)
   uint8_t queueData;
   bool turnOff = true;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s keepAlive(NULL)\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (keepAliveQueue == NULL) {
     keepAliveQueue = xQueueCreate (1, sizeof(uint8_t));
@@ -61,21 +61,21 @@ void keepAlive(void *pvParameters)
     keepAliveTimer = xTimerCreate ("keepAliveTimer", pdMS_TO_TICKS(keepAliveTime * 1000), pdTRUE, (void *) NULL, keepAliveTimerHandler);
   }
   if (keepAliveQueue == NULL || keepAliveTimer == NULL) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Failed to create timer for keep alive packets\r\n", getTimeStamp());
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
   else {
     lastTime = keepAliveTime;
     if (lastTime > 0) xTimerStart (keepAliveTimer, pdMS_TO_TICKS(lastTime * 1000));
-    while (lastTime > 0) {
-      while (lastTime > 0 && (APrunning || WiFi.status() == WL_CONNECTED)) {
-        while (lastTime > 0 && client.connected()) {
+    while (lastTime > 0 && cmdProtocol != DCCEX) {
+      while (lastTime > 0 && (APrunning || WiFi.status() == WL_CONNECTED) && cmdProtocol != DCCEX) {
+        while (lastTime > 0 && client.connected() && cmdProtocol != DCCEX) {
           if (xQueueReceive(keepAliveQueue, &queueData, pdMS_TO_TICKS((lastTime*1000)+1000)) != pdPASS) {
-            if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               Serial.printf ("%s Missing keep-alive packet\r\n", getTimeStamp());
-              xSemaphoreGive(displaySem);
+              xSemaphoreGive(consoleSem);
             }
           }
           if (lastTime > 0 && !turnOff) sendKeepAlive ("*");    // send the heartbeat, if we have started the sequence
@@ -94,12 +94,12 @@ void keepAlive(void *pvParameters)
       delay (1000);   // wait for WiFi reconnect
     }
   }
-  if (client.connected()) {
+  if (client.connected() && cmdProtocol == WITHROT) {
     sendKeepAlive ("*-");
   }
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ("Keep alive manager exits");
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (keepAliveTimer != NULL) xTimerDelete (keepAliveTimer, pdMS_TO_TICKS(TIMEOUT));
   if (keepAliveQueue != NULL) vQueueDelete (keepAliveQueue);
@@ -112,9 +112,9 @@ void keepAlive(void *pvParameters)
  */
 void sendKeepAlive(const char *pktData)
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s sendKeepAlive(%s)\r\n", getTimeStamp(), pktData);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (pktData!= NULL) {
@@ -123,9 +123,9 @@ void sendKeepAlive(const char *pktData)
     }
     xSemaphoreGive(tcpipSem);
     if (showKeepAlive) {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         if (pktData!= NULL) Serial.printf ("--> %s\r\n", pktData);
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
     }
   }

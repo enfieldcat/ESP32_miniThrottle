@@ -33,9 +33,9 @@ static uint8_t tokenTally;
 
 void processWiThrotPacket (char *packet)
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s processWiThrotPacket(%s)\r\n", getTimeStamp(), packet);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (strncmp (packet, "PPA", 3) == 0) { // Track power
@@ -102,9 +102,9 @@ void processWiThrotPacket (char *packet)
     // Keep alive
     char *tptr;
     keepAliveTime = strtol ((const char*)&packet[1], &tptr, 10);
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Keep Alive interval set to %d seconds\r\n", getTimeStamp(), keepAliveTime);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
   else if (strncmp (packet, "PFT", 3) == 0 && strlen(packet) > 7) { // Update fast clock

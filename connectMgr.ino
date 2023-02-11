@@ -51,9 +51,9 @@ void connectionManager(void *pvParameters)
   uint8_t staPref   = 0;
   bool networkFound = false;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s connectionManager(NULL)\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   // Scan networks at startup just for the record
@@ -66,9 +66,9 @@ void connectionManager(void *pvParameters)
   if ((nvs_get_int("WiFiMode", WIFIBOTH) & 2) > 0) {
     nvs_get_string ("APname", apssid, tname,  sizeof(apssid));
     nvs_get_string ("APpass", appass, "none", sizeof(appass));
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s WiFi Access Point starting: %s\r\n", getTimeStamp(), apssid);
-      xSemaphoreGive (displaySem);
+      xSemaphoreGive (consoleSem);
     }
     if (strlen(appass)<8) 
       WiFi.softAP(apssid, NULL, nvs_get_int ("apChannel", APCHANNEL), 0, nvs_get_int("apClients", DEFAPCLIENTS));
@@ -113,9 +113,9 @@ void connectionManager(void *pvParameters)
           if (nextWifi >= WIFINETS) {
             nextWifi = 0;
             // nothing found
-            if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               Serial.printf ("%s ConnectionManager: No networks defined\r\n", getTimeStamp());
-              xSemaphoreGive(displaySem);
+              xSemaphoreGive(consoleSem);
             }
           }
           // find next candidate
@@ -187,9 +187,9 @@ void connectionManager(void *pvParameters)
         }
         // Connect to the network
         if (networkFound) {
-          if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s WiFi Station mode connecting to: %s\r\n", getTimeStamp(), stassid);
-            xSemaphoreGive (displaySem);
+            xSemaphoreGive (consoleSem);
           }
           if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
             strcpy (ssid, stassid);
@@ -205,9 +205,9 @@ void connectionManager(void *pvParameters)
         }
         // Warn if no candidates found
         else {
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s WiFi Station mode: no access point found.\r\n", getTimeStamp());
-            xSemaphoreGive (displaySem);
+            xSemaphoreGive (consoleSem);
           }
           if ((nvs_get_int("WiFiMode", WIFIBOTH) & 2) == 0) {
             #ifdef WEBLIFETIME
@@ -241,9 +241,9 @@ void connectionManager(void *pvParameters)
         xTaskCreate(relayListener, label, 6144, NULL, 4, NULL);
       }
       else {
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("%s Skipping relay startup, mode is No-Relay\r\n", getTimeStamp());
-          xSemaphoreGive (displaySem);
+          xSemaphoreGive (consoleSem);
         }
       }
       startRelay = false;
@@ -268,16 +268,16 @@ void connectionManager(void *pvParameters)
         server[0] = '\0';
         port = mdnsLookup ("_withrottle", server);
         if (port != 0 && strlen(server) > 0) {
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s MDNS look up service found: %s:%d\r\n", getTimeStamp(), server, port);
-            xSemaphoreGive (displaySem);
+            xSemaphoreGive (consoleSem);
           }
           connect2server (server, port);
           delay (TIMEOUT);
         }
-        else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("%s MDNS look up: no services found.\r\n", getTimeStamp());
-          xSemaphoreGive (displaySem);
+          xSemaphoreGive (consoleSem);
         }
       }
       // now work through server list until we connect or just give up
@@ -287,9 +287,9 @@ void connectionManager(void *pvParameters)
         if (strcmp (server, "none") != 0) {
           sprintf (paramName, "port_%d", index);
           port = nvs_get_int (paramName, PORT);
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s Attempting connection to: %s:%d\r\n", getTimeStamp(), server, port);
-            xSemaphoreGive (displaySem);
+            xSemaphoreGive (consoleSem);
           }
           connect2server (server, port);
           delay(TIMEOUT);
@@ -337,13 +337,13 @@ else wifi_scanNetworks (false);
 void wifi_scanNetworks(bool echo)
 {
   numberOfNetworks = WiFi.scanNetworks();
-  if (echo && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (echo && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf("Number of networks found: %d\r\n", numberOfNetworks);
     Serial.printf("%-16s %8s %-17s Channel Type\r\n", "Name", "Strength", "Address");
     for (int i = 0; i < numberOfNetworks; i++) {
       Serial.printf ("%-16s %8d %-17s %7d %s\r\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.channel(i), wifi_EncryptionType(WiFi.encryptionType(i)));
     }
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 }
 
@@ -351,9 +351,9 @@ void wifi_scanNetworks(bool echo)
 #ifndef SERIALCTRL
 void connect2server (char *server, int port)
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s connect2server(%s, %d)\r\n", getTimeStamp(), server, port);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (strcmp (server, "none") == 0) return;
@@ -368,9 +368,9 @@ void connect2server (char *server, int port)
     // Once connected, we can listen for returning packets
     xTaskCreate(receiveNetData, "Network_In", 4096, NULL, 4, NULL);
     // Print diagnostic
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf  ("\r\n%s Connected to server: %s:%d\r\n", getTimeStamp(), server, port);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     if (cmdProtocol==DCCEX) {
       strcpy (remServerType, "DCC-Ex");
@@ -391,15 +391,15 @@ void mdnsLookup (const char *service)
   mdns_ip_addr_t * a = NULL;
   int i = 1, t;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mdnsLookup(%s)\r\n", getTimeStamp(), service);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   // esp_err_t mdns_query_ptr(const char *service_type, const char *proto, uint32_t timeout, size_t max_results, mdns_result_t **results)
   esp_err_t err = mdns_query_ptr(service, "_tcp", 3000, 20,  &results);
 
-  if ((!err) && results != NULL && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if ((!err) && results != NULL && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     r = results;
     while (r){
       Serial.printf("%d: Interface: %s, Type: %s\r\n", i++, if_str[r->tcpip_if], ip_protocol_str[r->ip_protocol]);
@@ -427,7 +427,7 @@ void mdnsLookup (const char *service)
       }
       r = r->next;
     }
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (results!=NULL) {
@@ -440,9 +440,9 @@ int mdnsLookup (const char *service, char *addr)
 {
   int retVal = 0;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mdnsLookup(%s, %x)\r\n", getTimeStamp(), service, addr);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   mdns_result_t *results = NULL;
@@ -480,10 +480,10 @@ void txPacket (const char *header, const char *pktData)
 {
   if (!client.connected()) return;
   if (pktData == NULL) return;
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (header==NULL) Serial.printf ("%s txPacket(NULL, %s)\r\n", getTimeStamp(), pktData);
     else Serial.printf ("%s txPacket(%s, %s)\r\n", getTimeStamp(), header, pktData);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -492,18 +492,18 @@ void txPacket (const char *header, const char *pktData)
     client.flush();
     xSemaphoreGive(tcpipSem);
     if (showPackets) {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print ("--> ");
         if (header != NULL) Serial.print (header);
         Serial.println (pktData);
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
     }
   }
   else {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s ERROR: Could not get semaphore to transmit data\r\n", getTimeStamp());
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
 }
@@ -516,9 +516,9 @@ void txPacket (const char *header, const char *pktData)
 // Rn as a separate thread in case there are start up delays in running population or connection routines
 void serialConnectionManager(void *pvParameters)
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s serialConnectionManager(NULL)\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   // Connect to DCC-Ex over serial connection
@@ -540,10 +540,10 @@ void serialConnectionManager(void *pvParameters)
 void txPacket (const char *header, const char *pktData)
 {
   if (pktData == NULL) return;
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (header==NULL) Serial.printf ("%s txPacket(NULL, %s)\r\n", getTimeStamp(), pktData);
     else Serial.printf ("%s txPacket(%s, %s)", getTimeStamp(), header, pktData);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (xSemaphoreTake(serialSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (header!=NULL) serial_dev.write (header, strlen(header));
@@ -551,11 +551,11 @@ void txPacket (const char *header, const char *pktData)
     serial_dev.write ("\r\n", 2);
     xSemaphoreGive(serialSem);
     if (showPackets) {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print ("--> ");
         if (header != NULL) Serial.print (header);
         Serial.println (pktData);
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
     }
     #ifdef RELAYPORT

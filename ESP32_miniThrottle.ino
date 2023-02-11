@@ -54,30 +54,31 @@ DisplayILI9341_240x320x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL,
 
 #ifdef USEWIFI
 // WiFi Server Definitions
-WiFiClient client;
+WiFiClient client;                    // client to use for connection to CS
 #endif
 #ifdef SERIALCTRL
-static HardwareSerial serial_dev(1);
+static HardwareSerial serial_dev(1);  // serial port to use when connection directly to DCC-Ex
 #endif
-static SemaphoreHandle_t nvsSem       = xSemaphoreCreateMutex();
-static SemaphoreHandle_t serialSem    = xSemaphoreCreateMutex();
-static SemaphoreHandle_t displaySem   = xSemaphoreCreateMutex();
-static SemaphoreHandle_t velociSem    = xSemaphoreCreateMutex();
-static SemaphoreHandle_t functionSem  = xSemaphoreCreateMutex();
-static SemaphoreHandle_t turnoutSem   = xSemaphoreCreateMutex();
-static SemaphoreHandle_t routeSem     = xSemaphoreCreateMutex();
+static SemaphoreHandle_t nvsSem       = xSemaphoreCreateMutex();  // only one thread to access nvs at a time
+static SemaphoreHandle_t serialSem    = xSemaphoreCreateMutex();  // only one thread to access serial to dcc-ex at a time
+static SemaphoreHandle_t consoleSem   = xSemaphoreCreateMutex();  // only aalow one message to be written console at a time
+static SemaphoreHandle_t velociSem    = xSemaphoreCreateMutex();  // used for velocity / direction changes table lock of locomotives
+static SemaphoreHandle_t functionSem  = xSemaphoreCreateMutex();  // used for setting functions - table lock of all functions
+static SemaphoreHandle_t turnoutSem   = xSemaphoreCreateMutex();  // used for setting turnouts  - table lock of all turnouts
+static SemaphoreHandle_t routeSem     = xSemaphoreCreateMutex();  // used for setting routes    - table lock of all routes
 // Normal TCP/IP operations work OK in single threaded environment, but benefits from semaphore protection in multi-threaded envs
 // This does lead to kludges to keep operations such as available() outside if or while logic to maintain runtime stability.
 static SemaphoreHandle_t tcpipSem     = xSemaphoreCreateMutex();
 static SemaphoreHandle_t fastClockSem = xSemaphoreCreateMutex();  // for sending/receiving/displaying fc messages
+static SemaphoreHandle_t shmSem       = xSemaphoreCreateMutex();  // shared memory for used for moved blocks of data between tasks/threads
 #ifdef WEBLIFETIME
-static SemaphoreHandle_t webServerSem = xSemaphoreCreateMutex();
+static SemaphoreHandle_t webServerSem = xSemaphoreCreateMutex();  // used by different web server threads
 #endif
 #ifdef BACKLIGHTPIN
-static SemaphoreHandle_t screenSvrSem = xSemaphoreCreateMutex();
+static SemaphoreHandle_t screenSvrSem = xSemaphoreCreateMutex();  // used to coordinate screen/menu blanking
 #endif
 #ifdef RELAYPORT
-static SemaphoreHandle_t relaySvrSem  = xSemaphoreCreateMutex();
+static SemaphoreHandle_t relaySvrSem  = xSemaphoreCreateMutex();  // used by various relay threads to coordinate memory/dcc-ex access
 #endif
 static QueueHandle_t cvQueue          = xQueueCreate (2,  sizeof(int16_t));  // Queue for querying CV Values
 static QueueHandle_t keyboardQueue    = xQueueCreate (3,  sizeof(char));     // Queue for keyboard type of events
@@ -85,105 +86,104 @@ static QueueHandle_t keyReleaseQueue  = xQueueCreate (3,  sizeof(char));     // 
 static QueueHandle_t dccAckQueue      = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc updates, avoid flooding of WiFi
 static QueueHandle_t dccLocoRefQueue  = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc locomotive speed and direction changes
 static struct locomotive_s   *locoRoster   = (struct locomotive_s*) malloc (sizeof(struct locomotive_s) * MAXCONSISTSIZE);
-static struct turnoutState_s *turnoutState = NULL;
-static struct turnout_s      *turnoutList  = NULL;
-static struct routeState_s   *routeState   = NULL;
-static struct route_s        *routeList    = NULL;
+static struct turnoutState_s *turnoutState = NULL;  // table of turnout states
+static struct turnout_s      *turnoutList  = NULL;  // table of turnouts
+static struct routeState_s   *routeState   = NULL;  // table of route states
+static struct route_s        *routeList    = NULL;  // table of routes
+static char *sharedMemory = NULL;     // inter process communication shared memory buffer
 #ifdef BACKLIGHTPIN
 #ifdef SCREENSAVER
-static uint64_t screenActTime  = 0; // time stamp of last user activity
-static uint64_t blankingTime   = 0; // min time prior to blanking
+static uint64_t screenActTime  = 0;   // time stamp of last user activity
+static uint64_t blankingTime   = 0;   // min time prior to blanking
 #endif
-static uint16_t backlightValue = 200;
+static uint16_t backlightValue = 200; // backlight brightness 0-255
 #endif
 #ifndef NODISPLAY
-static int screenWidth      = 0;
+static int screenWidth      = 0;      // screen geometry in pixels
 static int screenHeight     = 0;
 #endif
-static int keepAliveTime    = 10;
+static int keepAliveTime    = 10;     // WiThrottle keepalive time
 #ifdef BRAKEPRESPIN
-static int brakePres        = 0;
+static int brakePres        = 0;      // brake pressure register
 #endif
-static uint32_t fc_time = 36;  // in jmri mode we can receive fast clock, in relay mode we can send it, 36s past midnight => not updated
-static uint32_t defaultLatchVal     = 0;
-static uint32_t defaultLeadVal      = 0;
-const  uint16_t routeDelay[]        = {0, 500, 1000, 2000, 3000, 4000};
-static uint16_t numberOfNetworks    = 0;
-static uint16_t initialLoco         = 3;
-static uint8_t locomotiveCount      = 0;
-static uint8_t turnoutCount         = 0;
-static uint8_t turnoutStateCount    = 0;
-static uint8_t routeCount           = 0;
-static uint8_t routeStateCount      = 0;
-static uint8_t lastMainMenuOption   = 0;
-static uint8_t lastLocoMenuOption   = 0;
-static uint8_t lastSwitchMenuOption = 0;
-static uint8_t lastRouteMenuOption  = 0;
+static uint32_t fc_time = 36;         // in jmri mode we can receive fast clock, in relay mode we can send it, 36s past midnight => not updated
+static uint32_t defaultLatchVal     = 0;  // bit map of which functions latch
+static uint32_t defaultLeadVal      = 0;  // bit map of which functions are for lead loco only
+const  uint16_t routeDelay[]        = {0, 500, 1000, 2000, 3000, 4000}; // selectable delay times when setting route in DCCEX mode
+static uint16_t numberOfNetworks    = 0;  // count of networks detected in scan of networks
+static uint16_t initialLoco         = 3;  // lead loco register for in-throttle consists
+static uint8_t locomotiveCount      = 0;  // count of defined locomotives
+static uint8_t turnoutCount         = 0;  // count of defined turnouts
+static uint8_t turnoutStateCount    = 0;  // count of defined turnout states
+static uint8_t routeCount           = 0;  // count of defined routes
+static uint8_t routeStateCount      = 0;  // count of defined route states
+static uint8_t lastMainMenuOption   = 0;  // track last selected option in main menu
+static uint8_t lastLocoMenuOption   = 0;  // track last selected option in locomotive menu
+static uint8_t lastSwitchMenuOption = 0;  // track last selected option in switch/turnout menu
+static uint8_t lastRouteMenuOption  = 0;  // track last selected option in route menu
 static uint8_t debuglevel           = DEBUGLEVEL;
-static uint8_t charsPerLine;
-static uint8_t linesPerScreen;
-static uint8_t debounceTime = DEBOUNCEMS;
-static uint8_t cmdProtocol  = UNDEFINED;
-static uint8_t nextThrottle = 'A';
-static uint8_t screenRotate = 0;
-static uint8_t dccPowerFunc = DCCPOWER;
-static uint8_t coreCount    = 2;
+static uint8_t charsPerLine;              // using selected font the number chars across display
+static uint8_t linesPerScreen;            // using selected font the number lines on display
+static uint8_t debounceTime = DEBOUNCEMS; // debounce time to allow on mechanical (electric) switches
+static uint8_t cmdProtocol  = UNDEFINED;  // protocol to use when running this unit
+static uint8_t nextThrottle = 'A';        // use as throttle "number" in WiThrottle protocol
+static uint8_t screenRotate = 0;          // local display orientation
+static uint8_t dccPowerFunc = DCCPOWER;   // variant of power on to use for DCC power on
+static uint8_t coreCount    = 2;          // cpu core count, used for some diagnostics
 #ifdef RELAYPORT
-static WiFiServer *relayServer;
-struct relayConnection_s *remoteSys = NULL;
+static WiFiServer *relayServer;                  // the relay server wifi service
+struct relayConnection_s *remoteSys = NULL;      // table of connected clients and assoc states
 static uint64_t maxRelayTimeOut = ((KEEPALIVETIMEOUT * 2) + 1 ) * uS_TO_S_FACTOR;
-static uint32_t localinPkts     = 0;
-static uint32_t localoutPkts    = 0;
-static uint16_t relayPort       = RELAYPORT;
-static uint8_t maxRelay         = MAXRELAY;
-static uint8_t relayMode        = WITHROTRELAY;
+static uint32_t localinPkts     = 0;             // packet count over serial connection
+static uint32_t localoutPkts    = 0;             // packet count over serial connection
+static uint16_t relayPort       = RELAYPORT;     // tcp/ip relay listening port number
+static uint8_t maxRelay         = MAXRELAY;      // max number of relay clients
+static uint8_t relayMode        = WITHROTRELAY;  // protocol to relay
 static uint8_t relayCount       = 0;
 static uint8_t relayClientCount = 0;
-static uint8_t maxRelayCount    = 0;
+static uint8_t maxRelayCount    = 0;             // high water mark
 // When relaying we can also supply fast clock time
-static float fc_multiplier      = 0.00;
-static bool fc_restart          = false;
-static bool startRelay          = true;
+static float fc_multiplier      = 0.00;          // multiplier of elapsed real time to scale time
+static bool fc_restart          = false;         // restart fast clock service?
+static bool startRelay          = true;          // restart relay service?
 #endif
 #ifdef WEBLIFETIME
-static WiFiServer *webServer;
-static uint16_t webPort         = WEBPORT;
-static int8_t webServerCount    = 0;
-static int8_t webClientCount    = 0;
-static int8_t maxWebClientCount = 0;
-static char webCredential[64] = { "" };
-static bool webIsRunning      = true;
-static bool startWeb          = true;
+static WiFiServer *webServer;                    // the web server wifi service
+static uint16_t webPort         = WEBPORT;       // tcp/ip web server port
+static int8_t webServerCount    = 0;             // sever serial number
+static int8_t webClientCount    = 0;             // count of open connection
+static int8_t maxWebClientCount = 0;             // high water mark
+static char webCredential[64] = { "" };          // http basic auth string
+static bool webIsRunning      = true;            // running state, used to set termination on inactivity
+static bool startWeb          = true;            // restart web server
 #endif
-static char ssid[SSIDLENGTH];
-static char tname[SSIDLENGTH];
+static char ssid[SSIDLENGTH];            // SSID connected to in STA mode
+static char tname[SSIDLENGTH];           // name of this throttle/relay
 static char remServerType[10] = { "" };  // eg: JMRI
 static char remServerDesc[64] = { "" };  // eg: JMRI My whizzbang server v 1.0.4
 static char remServerNode[32] = { "" };  // eg: 192.168.6.1
 static char lastMessage[40]   = { "" };  // eg: JMRI: address 'L23' not allowed as Long
 static char dccLCD[4][21];               // DCC-Ex LCD messages
 static bool configHasChanged  = false;
-static bool showPackets       = false;
-static bool showKeepAlive     = false;
-static bool showKeypad        = false;
-static bool showWebHeaders    = false;
-static bool trackPower        = false;
-static bool refreshDisplay    = true;
-static bool drivingLoco       = false;
-static bool initialDataSent   = false;
-static bool bidirectionalMode = false;
-static bool menuMode          = false;
-static bool funcChange        = true;
-static bool speedChange       = false;
+static bool showPackets       = false;   // debug setting: [no]showpackets
+static bool showKeepAlive     = false;   // debug setting: [no]showkeepalive
+static bool showKeypad        = false;   // debug setting: [no]showkeypad
+static bool showWebHeaders    = false;   // debug setting: [no]showweb
+static bool trackPower        = false;   // track power status on/off
+static bool refreshDisplay    = true;    // display requires refresh in loco driving mode
+static bool drivingLoco       = false;   // Are we driving anything
+static bool initialDataSent   = false;   // Has a request been sent to CS for initial data
+static bool bidirectionalMode = false;   // Are we running in bidirectional mode?
+static bool menuMode          = false;   // in menu mode - screen savable mode, differrent keypad maps
+static bool funcChange        = true;    // in locomotive driving mode, have functions changed?
+static bool speedChange       = false;   // in locomotive driving mode, has speed changed?
 static bool netReceiveOK      = false;
-static bool APrunning         = false;
-#ifdef RELAYPORT
-#endif
+static bool APrunning         = false;   // are we running as an access point?
 #ifdef POTTHROTPIN
-static bool enablePot         = true;
+static bool enablePot         = true;    // potentiometer enable/disable while driving
 #endif
 #ifdef SCREENSAVER
-static bool inScreenSaver     = false;
+static bool inScreenSaver     = false;   // Has backlight been turned off?
 #endif
 #ifdef FILESUPPORT
 static fs::File writeFile;
@@ -371,10 +371,10 @@ void setup()  {
   if (maxRelay>MAXRELAY)  maxRelay = MAXRELAY;  // MAXRELAY is the absolute max number of connections we want to support
   relayMode = nvs_get_int ("relayMode", WITHROTRELAY);
   maxRelayTimeOut =  ((nvs_get_int ("relayKeepAlive", KEEPALIVETIMEOUT) * 2) + 1) * uS_TO_S_FACTOR;
-  if (debuglevel>0 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     const char *relType[] = { "None", "WiThrottle", "DCC-Ex" };
     Serial.printf ("%s Relay type is: %s, port %d, max clients %d\r\n", getTimeStamp(), relType[relayMode], relayPort, maxRelay);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   #endif    //  RELAYPORT
   // Configure I/O pins
@@ -453,18 +453,18 @@ void setup()  {
   {
     uint16_t delayOnStart = nvs_get_int ("delayOnStart", DELAYONSTART);
     if (delayOnStart>120) delayOnStart = 120;
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Delay %ds before starting network services and initialising display\r\n", getTimeStamp(), delayOnStart);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     delayOnStart *= 1000;
     delay (delayOnStart);  // console started but no network services before the delay
   }
   #endif   // DELAYONSTART
   #ifdef USEWIFI
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Starting WiFi network services\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   xTaskCreate(connectionManager, "connectionMgr", 4096, NULL, 4, NULL);
   #ifndef SERIALCTRL
@@ -473,18 +473,19 @@ void setup()  {
   #endif   //  SERIALCTRL
   #endif   //  USEWIFI
   #ifdef SERIALCTRL
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Starting connection to serially connected DCC-Ex\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   xTaskCreate(serialConnectionManager, "serialCntMgr", 4096, NULL, 4, NULL);
   #ifdef RELAYPORT
   #ifdef USEWIFI
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Starting fast clock process\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
-  xTaskCreate(fastClock, "fastClock", 2048, NULL, 4, NULL);
+  cmdProtocol = nvs_get_int ("defaultProto", WITHROT);
+  if (cmdProtocol == WITHROT) xTaskCreate(fastClock, "fastClock", 2048, NULL, 4, NULL);
   #endif  //  USEWIFI
   #endif  //  SERIALPORT
   #endif  //  SERIALCTRL
@@ -494,17 +495,17 @@ void setup()  {
     blankingTime  = nvs_get_int ("screenSaver", SCREENSAVER) * 60 * uS_TO_S_FACTOR;
     screenActTime = esp_timer_get_time();
     xSemaphoreGive(screenSvrSem);
-    if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("SCREEN: Blanking time %d S\r\n", (nvs_get_int ("screenSaver", SCREENSAVER) * 60));
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
   else semFailed ("screenSvrSem", __FILE__, __LINE__);
   #endif   // SCREENSAVER
   #ifdef keynone
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s No keypad defined\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   #else
   xTaskCreate(keypadMonitor, "keypadMonitor", 2048, NULL, 4, NULL);
@@ -531,18 +532,18 @@ void loop()
   const char txtNoPower[] = { "Track power off. Turn power on to enable function." };
   #endif   // NODISPLAY
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s loop()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   delay (250);
   #ifdef NODISPLAY
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s No display device\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   #else
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Start device display (", getTimeStamp());
     #ifdef DISPLAYNAME
     Serial.print (DISPLAYNAME);
@@ -560,7 +561,7 @@ void loop()
     #else
     Serial.println ("monochrome)");
     #endif
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   display.begin();
   setupFonts();
@@ -694,9 +695,9 @@ void loop()
     delay (debounceTime);
   }
   #endif   //  NODISPLAY
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Terminate loop()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   vTaskDelete( NULL );
 }

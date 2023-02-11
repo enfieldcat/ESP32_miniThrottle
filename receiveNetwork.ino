@@ -37,18 +37,18 @@ void receiveNetData(void *pvParameters)
   uint8_t bufferPtr = 0;
   bool quit = false;
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s receiveNetData(NULL)\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     quit = netReceiveOK;
     netReceiveOK = true;
     xSemaphoreGive(tcpipSem);
     if (quit) {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf ("%s Network connection closed (duplicate thread)\r\n", getTimeStamp());
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
       vTaskDelete( NULL );
       return;
@@ -104,9 +104,9 @@ void receiveNetData(void *pvParameters)
   cmdProtocol = UNDEFINED;
   initialDataSent = false;
   #endif
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Network connection closed (disconnect)\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     netReceiveOK = false;
@@ -139,15 +139,15 @@ bool netConnState (uint8_t chkmode)
 void processPacket (char *packet)
 {
   if (packet == NULL || packet[0]=='\0') return;
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s processPacket(%s)\r\n", getTimeStamp(), packet);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (showPackets) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("<-- ");
       Serial.println (packet);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
   #ifdef RELAYPORT
@@ -171,11 +171,11 @@ void processPacket (char *packet)
       setInitialData();
     }
     if (strncmp (packet, "VN", 2) == 0 && strcmp (packet, "VN2.0") != 0) {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf  ("%s Warning: Unexpected WiThrottle protocol version not supported.\r\n", getTimeStamp());
         Serial.print   ("         Expected VN2.0, found ");
         Serial.println (packet);
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
     }
   }
@@ -188,9 +188,9 @@ void processPacket (char *packet)
         processDccPacket (packet);
         break;
       default:
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("%s Warning: Received packet for unknown protocol.\r\n", getTimeStamp());
-          xSemaphoreGive(displaySem);
+          xSemaphoreGive(consoleSem);
         }
         break;
     }

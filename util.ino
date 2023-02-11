@@ -140,9 +140,9 @@ void timeFormat (char *tString, uint32_t tint)
  */
 void semFailed (const char *semName, const char *fileName, const int line)
 {
-  if (debuglevel>1 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Failed to acquire %s at %s %d\r\n", getTimeStamp(), semName, fileName, line);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 }
 
@@ -167,9 +167,9 @@ void sortLoco()
   uint8_t limit = locomotiveCount - 1;
 
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s sortLoco()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (locomotiveCount > 1) {
@@ -195,9 +195,9 @@ void sortTurnout()
   uint8_t limit = turnoutCount - 1;
 
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s sortTurnout()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (turnoutCount > 1) {
@@ -220,9 +220,9 @@ void sortTurnout()
 void sortRoute()
 {
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s sortRoute()\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (routeCount > 1) {
@@ -247,69 +247,69 @@ void sortRoute()
 // cf: https://github.com/espressif/arduino-esp32/blob/master/libraries/SPIFFS/examples/SPIFFS_Test/SPIFFS_Test.ino
 void util_listDir(fs::FS &fs, const char * dirname, uint8_t levels){
   char msgBuffer[80];
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf("Listing directory: %s\r\n", dirname);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   File root = fs.open(dirname);
   if(!root){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("- failed to open directory");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return;
   }
   if(!root.isDirectory()){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println(" - not a directory");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return;
   }
 
   File file = root.openNextFile();
   while(file){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       for (uint8_t space=0; space<levels; space++) Serial.print ("  ");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     if(file.isDirectory()){
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print  ("  DIR : ");
         Serial.println((char*)file.name());
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
       util_listDir(fs, file.name(), levels +1);
     } 
     else {
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print  ("  FILE: ");
         Serial.print  ((char*)file.name());
         sprintf (msgBuffer, "%d", (uint)file.size());
         Serial.print  ("\tSIZE: ");
         Serial.println(msgBuffer);
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
     }
     file = root.openNextFile();
   }
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     sprintf (msgBuffer, "%d bytes used of %d available (%d%% used)", SPIFFS.usedBytes(), SPIFFS.totalBytes(), (SPIFFS.usedBytes()*100)/SPIFFS.totalBytes());
     Serial.println (msgBuffer);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 }
 
 void util_deleteFile(fs::FS &fs, const char * path){
   if (!fs.exists(path)) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("  - File does not exist");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return;
   }
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Deleting file: ");
     Serial.println ((char*) path);
     if(fs.remove(path)){
@@ -317,7 +317,7 @@ void util_deleteFile(fs::FS &fs, const char * path){
     } else {
       Serial.println("  - delete failed");
     }
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 }
 
@@ -335,24 +335,24 @@ char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
 
   if (sizeOfFile!=NULL) *sizeOfFile = 0;
   if (!fs.exists(path)) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("  - File does not exist");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return (retval);
   }
   File file = fs.open(path);
   if(!file){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println("  - failed to open file for reading");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return (retval);
   }
   if(file.isDirectory()){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println("  - Cannot open directory for reading");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return (retval);
   }
@@ -376,36 +376,36 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
   uint8_t bufPtr = 0;
   uint8_t cmdBuffer[BUFFSIZE];
   
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Reading file: ");
     Serial.println ((char*) path);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (!fs.exists(path)) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("  - File does not exist");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return;
   }
   File file = fs.open(path);
   if(!file){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println("  - failed to open file for reading");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return;
   }
   if(file.isDirectory()){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println("  - Cannot open directory for reading");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     return;
   }
 
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {  
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {  
     Serial.println ("--- read from file -----------------------");
     Serial.println ("");
     while(file.available()){
@@ -427,25 +427,25 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
     file.close();
     Serial.println ("");
     Serial.println ("--- end of file --------------------------");
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 }
 
 void util_writeFile (fs::FS &fs, const char * path)
 {
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Writing file: ");
     Serial.print   ((char*) path);
     Serial.println ("  -  Use \".\" on a line of its own to stop writing.");
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   if (fs.exists(path)) fs.remove(path);
   writeFile = fs.open(path, FILE_WRITE);
   if(!writeFile){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println("  - failed to open file for writing");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
   else writingFile = true;
@@ -477,15 +477,15 @@ void getHttp2File (fs::FS &fs, char *url, char *fileName)
 
   if (url == NULL || fileName == NULL) return;
   if (strncmp (url, "http://", 7) != 0 && strncmp (url, "https://", 8) != 0) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("URL should start with \"http://\" or \"https://\"");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
   if (fileName[0] != '/') {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println ("Filename should start with \"/\"");
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
   nvs_get_string ((char*) "web_certFile", http_certFile, CERTFILE, sizeof(http_certFile));
@@ -496,10 +496,10 @@ void getHttp2File (fs::FS &fs, char *url, char *fileName)
     if (fs.exists(fileName)) fs.remove(fileName);
     writeFile = fs.open(fileName, FILE_WRITE);
     if(!writeFile){
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print  (fileName);
         Serial.println(" - failed to open file for writing");
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
     }
     else {
@@ -514,10 +514,10 @@ void getHttp2File (fs::FS &fs, char *url, char *fileName)
       writeFile.close();
     }
   }
-  else if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Failed to open URL: ");
     Serial.println (url);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (httpClient != NULL) closeHttpStream (httpClient);
 }
@@ -543,9 +543,9 @@ WiFiClient* getHttpStream (char *url, const char *cert, HTTPClient *http)
     retVal = http->getStreamPtr();
   }
   else if (httpCode<0) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("Error connecting to web server: %d on %s", httpCode, url);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
 return (retVal);
@@ -568,16 +568,16 @@ void defaultCertExists(fs::FS &fs)
 {
   #ifdef USEWIFI
   if(!fs.exists(CERTFILE)){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Missing default certificate file, creating ");
       Serial.println (CERTFILE);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     File defCertFile = fs.open( CERTFILE, FILE_WRITE);
     if(!defCertFile){
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println("  - failed to open file for writing");
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
     }
     else {
@@ -591,16 +591,16 @@ void defaultCertExists(fs::FS &fs)
 void sampleConfigExists(fs::FS &fs)
 {
   if(!fs.exists(DEFAULTCONF)){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Missing sample configuration file, creating ");
       Serial.println (DEFAULTCONF);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     File defCertFile = fs.open(DEFAULTCONF, FILE_WRITE);
     if(!defCertFile){
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println("  - failed to open file for writing");
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
     }
     else {
@@ -615,18 +615,18 @@ void sampleConfigExists(fs::FS &fs)
 void defaultCssFileExists(fs::FS &fs)
 {
   if(!fs.exists(CSSFILE)){
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print   ("Missing default css file, creating ");
       Serial.println (CSSFILE);
-      xSemaphoreGive (displaySem);
+      xSemaphoreGive (consoleSem);
     }
     // file.close();
     File defCssFile = fs.open( CSSFILE, FILE_WRITE);
     if(!defCssFile){
-      if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print   ("Failed to open file for writing: ");
         Serial.println (CSSFILE);
-        xSemaphoreGive (displaySem);
+        xSemaphoreGive (consoleSem);
       }
     }
     else {

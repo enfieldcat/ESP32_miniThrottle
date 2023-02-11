@@ -36,9 +36,9 @@ void relayListener(void *pvParameters)
   uint8_t j = 0;
   char relayName[16];
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s relayListener(NULL)\r\n", getTimeStamp());
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   // Want only one web server thread at a time
@@ -59,18 +59,18 @@ void relayListener(void *pvParameters)
   if (j == 120) {
     // we have waited 120 seconds for old relay server to stop, it has not
     // therefore we will terminate this instance
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s New instance of relay server stopped after waiting for previous one to complete\r\n", getTimeStamp());
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     vTaskDelete( NULL );
   }
 
   remoteSys = (relayConnection_s*) malloc (sizeof (relayConnection_s) * maxRelay);
   if (remoteSys != NULL) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Starting relay, port %d\r\n", getTimeStamp(), relayPort); 
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     for (uint8_t n=0; n<maxRelay; n++) {
       remoteSys[n].client = &(relayClient[n]);
@@ -102,9 +102,9 @@ void relayListener(void *pvParameters)
               sprintf (relayName, "RelayHandler%d", i);
               // xTaskCreate(relayHandler, relayName, 6144, &remoteSys[i], 4, NULL);
               xTaskCreate(relayHandler, relayName, 7168, &remoteSys[i], 4, NULL);
-              if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 Serial.printf ("%s Starting relay client as %s\r\n", getTimeStamp(), relayName); 
-                xSemaphoreGive(displaySem);
+                xSemaphoreGive(consoleSem);
               }
               notAssigned = false;
             }
@@ -112,9 +112,9 @@ void relayListener(void *pvParameters)
         }
         if (i == maxRelay) {
           relayServer->available().stop();  // no worker threads available
-          if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s Rejecting new relay client, all available client slots connected.\r\n", getTimeStamp()); 
-            xSemaphoreGive(displaySem);
+            xSemaphoreGive(consoleSem);
           }
         }
         delay (10); // pause to use fewer CPU cycles while waiting for connecton
@@ -128,14 +128,14 @@ void relayListener(void *pvParameters)
     }
   }
   else {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Unable to allocate %d bytes for relay\r\n", getTimeStamp(), (sizeof (relayConnection_s) * maxRelay)); 
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
-  if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Stopping relay\r\n", getTimeStamp()); 
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   relayServer->close();
   relayServer->stop();
@@ -152,9 +152,9 @@ void relayListener(void *pvParameters)
 // Rutine to find LocoId in a WiThrottle command string
 uint16_t getWiThrotLocoID (char *inBuffer)
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s getWiThrotLocoID(%s)\r\n", getTimeStamp(), inBuffer);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   uint16_t retVal = 0;
@@ -179,9 +179,9 @@ void relayHandler(void *pvParameters)
   bool keepAlive = true;
   bool trackKeepAlive = false;
   
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s relayHandler(%x)\r\n", getTimeStamp(), thisRelay);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
 
   // Initialise the data structure for use
@@ -200,9 +200,9 @@ void relayHandler(void *pvParameters)
   else semFailed ("relaySvrSem", __FILE__, __LINE__);
   // Start up message
   if (debuglevel>0 && xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Relay client at %d.%d.%d.%d connecting\r\n", getTimeStamp(), thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     xSemaphoreGive(relaySvrSem);
   }
@@ -234,9 +234,9 @@ void relayHandler(void *pvParameters)
           }
           else semFailed ("relaySvrSem", __FILE__, __LINE__);
           // Display packets if required
-          if (showPackets && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (showPackets && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("<%cR %s\r\n", indicator, inBuffer);
-            xSemaphoreGive(displaySem);
+            xSemaphoreGive(consoleSem);
           }
           // Use the appropriate relay function
           // - but treat JMRI keep alives as a lower level feature dealt with here
@@ -260,9 +260,9 @@ void relayHandler(void *pvParameters)
     if (trackKeepAlive && (esp_timer_get_time() - thisRelay->keepAlive) > maxRelayTimeOut) {
       keepAlive = false;
       if (debuglevel>0 && xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("%s Relay client at %d.%d.%d.%d keep-alive time-out\r\n", getTimeStamp(), thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
-          xSemaphoreGive(displaySem);
+          xSemaphoreGive(consoleSem);
         }
         xSemaphoreGive(relaySvrSem);
       }
@@ -272,9 +272,9 @@ void relayHandler(void *pvParameters)
   }
   // Tear down message
   if ( debuglevel>0 && xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Relay client at %d.%d.%d.%d stopping\r\n", getTimeStamp(), thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     xSemaphoreGive(relaySvrSem);
   }
@@ -332,16 +332,16 @@ bool relayConnState (struct relayConnection_s *thisRelay, uint8_t chkmode)
 // Forward to serial port and add up tally
 void forward2serial (char *packet)
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s forward2serial(%s)\r\n", getTimeStamp(), packet);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (xSemaphoreTake(serialSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     serial_dev.write (packet, strlen(packet));  // Forward to serial
     xSemaphoreGive(serialSem);
-    if (showPackets && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (showPackets && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("F-> %s", packet);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
     if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       localoutPkts++;
@@ -356,10 +356,10 @@ void forward2serial (char *packet)
 // Respond back to relayed node and add up tally
 void reply2relayNode (struct relayConnection_s *thisRelay, const char *outPacket)
 { 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (outPacket==NULL) Serial.printf ("%s reply2relayNode(%x, NULL)\r\n", getTimeStamp(), thisRelay);
     else Serial.printf ("%s reply2relayNode(%x, %s", getTimeStamp(), thisRelay, outPacket);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (thisRelay != NULL && thisRelay->client!=NULL && thisRelay->client->connected()) {
     if (outPacket != NULL && strlen(outPacket)>0 && xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -370,9 +370,9 @@ void reply2relayNode (struct relayConnection_s *thisRelay, const char *outPacket
         xSemaphoreGive(relaySvrSem);
       }
       else semFailed ("relaySvrSem", __FILE__, __LINE__);
-      if (showPackets && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (showPackets && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf ("R-> %s", outPacket);
-        xSemaphoreGive(displaySem);
+        xSemaphoreGive(consoleSem);
       }
     }
     else semFailed ("tcpipSem", __FILE__, __LINE__);
@@ -385,9 +385,9 @@ void wiThrotRelayPkt (struct relayConnection_s *thisRelay, char *inPacket, char 
   uint16_t buffLen = strlen(inPacket);
   char outBuffer[420];   // need to cater for long function descriptor packets
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s wiThrotRelayPkt(%x, %s, %c)\r\n", getTimeStamp(), thisRelay, inPacket, indicator);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   outBuffer[0] = '\0';
   // remote system name & ID
@@ -714,9 +714,9 @@ void wiThrotRelayPkt (struct relayConnection_s *thisRelay, char *inPacket, char 
         }
         if (j==limit) { // reached end without any allocation made - and the semaphore will not have been released.
           xSemaphoreGive(velociSem);
-          if (showPackets && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (showPackets && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s Unable to allocate roster table space to new request for loco %d\r\n", getTimeStamp(), locoID);
-            xSemaphoreGive(displaySem);
+            xSemaphoreGive(consoleSem);
           }
         }
       }
@@ -738,9 +738,9 @@ void wiThrotRelayPkt (struct relayConnection_s *thisRelay, char *inPacket, char 
 */
 void dcc_relay (char *packet, char indicator)
 {
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dcc_relay(%s, %c)\r\n", getTimeStamp(), packet, indicator);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (packet[0]=='<') {
     if (xSemaphoreTake(serialSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -754,18 +754,18 @@ void dcc_relay (char *packet, char indicator)
       }
       else semFailed ("relaySvrSem", __FILE__, __LINE__);
       if (showPackets) {
-        if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("F%c-> %s\r\n", indicator, packet);
-          xSemaphoreGive(displaySem);
+          xSemaphoreGive(consoleSem);
         }
       }
     }
     else semFailed ("serialSem", __FILE__, __LINE__);
   }
   else {
-    if (xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Reject packet not in DCC-Ex format:\r\n    %s\r\n", getTimeStamp(), packet);
-      xSemaphoreGive(displaySem);
+      xSemaphoreGive(consoleSem);
     }
   }
 }
@@ -775,9 +775,9 @@ void dcc_relay (char *packet, char indicator)
 void relay2WiThrot (char *outBuffer)
 {
   if (outBuffer == NULL) return;
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s relay2WiThrot(%s", getTimeStamp(), outBuffer);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     uint8_t chk = relayCount;
@@ -800,9 +800,9 @@ void sendWiThrotHeader(struct relayConnection_s *thisRelay, char *inBuffer)
   uint32_t tint = 0;
   char tBuffer[80];
 
-  if (debuglevel>2 && xSemaphoreTake(displaySem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s sendWiThrotHeader(%x, %x)\r\n", getTimeStamp(), thisRelay, inBuffer);
-    xSemaphoreGive(displaySem);
+    xSemaphoreGive(consoleSem);
   }
   if (trackPower) tint = 1;
   else tint = 0;

@@ -1824,7 +1824,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
     myClient->printf ((const char*)"</table>");
   }
   if (routeCount>0 && routeCount<255 && routeList!=NULL && routeState!=NULL) {
-    myClient->printf ((const char*)"<h2>Routes</h2><table><tr><th>ID</th><th>Description</th><th>State</th><th>Operate</th></tr>");
+    myClient->printf ((const char*)"<h2>Routes</h2><p>Max steps per route = %d</p><table><tr><th>ID</th><th>Description</th><th>State</th><th>Operate</th></tr>", MAXRTSTEPS);
     for (uint8_t n=0; n<routeCount; n++) {
       tPtr = NULL;
       for (uint8_t z=0; z<routeStateCount && tPtr==NULL; z++) if (routeList[n].state == routeState[z].state) tPtr = routeState[z].name;

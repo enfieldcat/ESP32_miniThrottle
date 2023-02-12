@@ -85,6 +85,7 @@ static QueueHandle_t keyboardQueue    = xQueueCreate (3,  sizeof(char));     // 
 static QueueHandle_t keyReleaseQueue  = xQueueCreate (3,  sizeof(char));     // Queue for keyboard release type of events
 static QueueHandle_t dccAckQueue      = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc updates, avoid flooding of WiFi
 static QueueHandle_t dccLocoRefQueue  = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc locomotive speed and direction changes
+static QueueHandle_t dccTurnoutQueue  = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc turnout data
 static struct locomotive_s   *locoRoster   = (struct locomotive_s*) malloc (sizeof(struct locomotive_s) * MAXCONSISTSIZE);
 static struct turnoutState_s *turnoutState = NULL;  // table of turnout states
 static struct turnout_s      *turnoutList  = NULL;  // table of turnouts
@@ -484,7 +485,11 @@ void setup()  {
     Serial.printf ("%s Starting fast clock process\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
+  #ifdef SERIALPORT
+  cmdProtocol = DCCEX;
+  #else
   cmdProtocol = nvs_get_int ("defaultProto", WITHROT);
+  #endif
   if (cmdProtocol == WITHROT) xTaskCreate(fastClock, "fastClock", 2048, NULL, 4, NULL);
   #endif  //  USEWIFI
   #endif  //  SERIALPORT

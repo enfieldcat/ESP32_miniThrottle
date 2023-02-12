@@ -42,6 +42,7 @@ void processDccPacket (char *packet)
   else if (strncmp (packet, "<i",  2) == 0) dccInfo (&packet[2]);
   else if (strncmp (packet, "<H ", 3) == 0) dccAckTurnout (&packet[3]);
   else if (strncmp (packet, "<O>", 3) == 0) dccAckTurnout ();
+  else if (strncmp (packet, "<jT", 3) == 0) dccConfTurnout (&packet[4]);
 }
 
 /*
@@ -248,6 +249,33 @@ void dccSpeedChange (char* speedSet)
   else semFailed ("velociSem", __FILE__, __LINE__);
 }
 
+
+void dccConfTurnout (char *data)
+{
+  char *fld = NULL;
+  uint16_t tptr = 0;
+  uint16_t limit = strlen (data);
+  uint16_t toID = 65500;
+  uint8_t result = 255;
+  uint8_t fldCnt = 0;
+
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s dccConfTurnout(%s)\r\n", getTimeStamp(), data);
+    xSemaphoreGive(consoleSem);
+  }
+  if (limit < 3) return; // empty packet?
+  for (uint16_t n=0; n<limit; n++) if (data[n]==' ' || data[n]=='>') {
+    data[n] = '\0';
+    if (fldCnt==0 && util_str_isa_int(data)) toID = util_str2int(data);
+    if (fldCnt==1) {
+      if (fld[0] == 'C' || fld[0] == 'T' || fld[0] == 'X') result = fld[0];
+    }
+    fld = &data[n+1];
+    fldCnt++;
+  }
+  xQueueSend (dccTurnoutQueue, &result, 0);
+}
+
 /*
  * Ack turnout packet
  */
@@ -441,7 +469,7 @@ void dccPopulateLoco()
       else locoData[n].type = 'S';
       strcpy (locoData[n].name, curData);
       if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.printf ("Loading locomotive %s\r\n", curData);
+        Serial.printf ("%s Loading locomotive %s\r\n", getTimeStamp(), curData);
         xSemaphoreGive(consoleSem);
       }
       curData = curData + NAMELENGTH;
@@ -480,6 +508,7 @@ void dccPopulateTurnout()
 {
   int numEntries = nvs_count ("turnout", "String");
   uint8_t reqState;
+  bool mustDefine = false;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s dccPopulateTurnout()\r\n", getTimeStamp());
@@ -514,28 +543,67 @@ void dccPopulateTurnout()
     strcpy (turnoutState[3].name, "Failed");
     turnoutStateCount = 4;
 
+    if (rawData == NULL) return;  // no work possible
     curData = rawData;
-    while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS) {} // clear ack Queue
     for (int n=0; n<numEntries; n++) {
       turnoutData[n].state = '1';
       sprintf (turnoutData[n].sysName, "%d", (offset+n));
       strcpy (turnoutData[n].userName, curData);
       if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.printf ("Loading turnout %s\r\n", curData);
+        Serial.printf ("%s Loading turnout %s\r\n", getTimeStamp(), curData);
         xSemaphoreGive(consoleSem);
       }
       curData = curData + 16;
-      sprintf (commandBuffer, "<T %s %s>", turnoutData[n].sysName, curData);
       curData = curData + (2*NAMELENGTH);
+      }
+    // Sort and renumber - keep all miniThrottles consistent for same set of data even if stored differently
+    sortTurnout(turnoutData, numEntries);
+    for (int n=0; n<numEntries; n++) {
+      sprintf (turnoutData[n].sysName, "%d", (offset+n));
+    }
+    // Now test for existence, and define if not already there
+    curData = rawData;
+    for (int n=0; n<numEntries; n++) {
+      sprintf (commandBuffer, "<JT %s>", turnoutData[n].sysName);
+      while (xQueueReceive(dccTurnoutQueue, &reqState, 0) == pdPASS) {} // clear ack Queue
       txPacket (commandBuffer);
-      if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(TIMEOUT*3)) != pdPASS) { // wait for ack - wait longer than usual
+      mustDefine = false;
+      if (xQueueReceive(dccTurnoutQueue, &reqState, pdMS_TO_TICKS(TIMEOUT*3)) != pdPASS) { // wait for ack - wait longer than usual
         // wait for ack
-        turnoutData[n].state = '8';
+        mustDefine = true;
         if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          Serial.println ("Warning: No response for defining turnout, status = Failed");
+          Serial.printf ("%s Warning: No response for testing turnout existence\r\n", getTimeStamp());
           xSemaphoreGive(consoleSem);
         }
       }
+      else {
+        if (reqState == 'C') turnoutData[n].state = '2';
+        else if (reqState == 'T') turnoutData[n].state = '4';
+        else mustDefine = true;
+        if (debuglevel>0 && (reqState=='C' || reqState=='T') && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s Turnout T%d exists, state reported as %c\r\n", getTimeStamp(), (offset+n), reqState);
+          xSemaphoreGive(consoleSem);
+        }
+      }
+      curData = curData + 16;
+      sprintf (commandBuffer, "<T %s %s>", turnoutData[n].sysName, curData);
+      if (mustDefine) {
+        if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s Define turnout T%d as %s\r\n", getTimeStamp(), (offset+n), curData);
+          xSemaphoreGive(consoleSem);
+        }
+        while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS) {} // clear ack Queue
+        txPacket (commandBuffer);
+        if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(TIMEOUT*3)) != pdPASS) { // wait for ack - wait longer than usual
+          // wait for ack
+          turnoutData[n].state = '8';
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("%s Warning: No response for defining turnout, status = Failed\r\n",  getTimeStamp());
+            xSemaphoreGive(consoleSem);
+          }
+        }
+      }
+      curData = curData + (2*NAMELENGTH);
     }
     if (rawData != NULL) {
       free (rawData);
@@ -594,7 +662,7 @@ void dccPopulateRoutes()
       ptr = 0;
       tCnt = 0;
       if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.printf ("Loading route %s\r\n", curData);
+        Serial.printf ("%s Loading route %s\r\n", getTimeStamp(), curData);
         xSemaphoreGive(consoleSem);
       }
       limit = strlen (turnoutData);
@@ -649,3 +717,4 @@ void dccPopulateRoutes()
     }
   }
 }
+

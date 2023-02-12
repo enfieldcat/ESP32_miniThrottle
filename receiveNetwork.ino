@@ -155,10 +155,15 @@ void processPacket (char *packet)
     localinPkts++;
     xSemaphoreGive(relaySvrSem);
   }
-  if (packet != NULL && packet[0] == '<') { // Stuff that is worth forwarding
+  // if (packet != NULL && packet[0] == '<') { // Stuff that is worth forwarding
+  if (packet != NULL) { // Stuff that is worth forwarding
     if (relayMode == DCCRELAY) { // if relaying DCC-Ex, just forward to any connected connections
+      uint16_t packetLength = strlen(packet) + 2;
+      char relayPacket[packetLength];
+      strcpy (relayPacket, packet);
+      strcat (relayPacket, "\r\n");
       for (uint8_t n=0; n<maxRelay; n++) if (remoteSys != NULL && remoteSys[n].client != NULL && remoteSys[n].client->connected()) {
-        reply2relayNode (&remoteSys[n], packet);
+        reply2relayNode (&remoteSys[n], relayPacket);
       }
     }
   }

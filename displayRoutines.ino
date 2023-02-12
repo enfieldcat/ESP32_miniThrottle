@@ -1146,7 +1146,7 @@ char* enterAddress(const char *prompt)
           tVal = 0;
         }
       }
-      else if ((inKey == 'P' || inKey == '*') && tPtr > 0 && retVal[tPtr-1] != '.' && dotCount < 3) {
+      else if ((inKey == '*' || inKey == 'P' || inKey == 'X' || inKey == 'Y') && tPtr > 0 && retVal[tPtr-1] != '.' && dotCount < 3) {
         // NB: if running in potthrot mode the * key may present as P, either way make this a dot 
         retVal[tPtr++] = '.';
         dotCount++;

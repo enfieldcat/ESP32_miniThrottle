@@ -189,14 +189,25 @@ void sortLoco()
 /*
  * Simple bubble sort for turnouts, not most efficient sort but simple to debug
  */
+// Generic sort
 void sortTurnout()
+{
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s sortTurnout()\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
+  sortTurnout (turnoutList, turnoutCount);
+}
+
+// allow sort in temporary structures too
+void sortTurnout(struct turnout_s *turnoutList, uint8_t turnoutCount)
 {
   bool hasSwapped = true;
   uint8_t limit = turnoutCount - 1;
 
-
+  if (turnoutList == NULL) return;
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s sortTurnout()\r\n", getTimeStamp());
+    Serial.printf ("%s sortTurnout(%x, %d)\r\n", getTimeStamp(), turnoutList, turnoutCount);
     xSemaphoreGive(consoleSem);
   }
 

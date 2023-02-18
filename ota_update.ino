@@ -79,6 +79,11 @@ class ota_control {
       int32_t inByte;
       char inPtr;
       char inBuffer[80];
+
+      if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("%s get_meta_data(%s, %x)\r\n", getTimeStamp(), url, cert);
+        xSemaphoreGive(consoleSem);
+      }
       WiFiClient *inStream = getHttpStream(url, cert, http);
       ota_label[0] = '\0';
       if (inStream != NULL) {
@@ -96,13 +101,17 @@ class ota_control {
             strcpy (message, "Line too long: ");
             if ((strlen(message)+strlen(url)) < sizeof(message)) strcat (message, url);
           }
-          if ((inPtr%20) == 0) delay (20); //play nice in multithreading environment
+          if ((inPtr%20) == 0) delay (10); //play nice in multithreading environment
         }
         inBuffer[inPtr] = '\0';
         processParam (inBuffer);
         closeHttpStream(http);
         // Test for things to be set which should be set
+        if (strlen (ota_label) == 0) {
+          sprintf (ota_label, "Sequence %d", newSequence);
+        }
         retVal = true;
+        sprintf (message, "An update is available: %s", ota_label);
         if (image_size == 0) {
           strcpy (message, "No image size specified in metadata");
           retVal = false;
@@ -123,15 +132,13 @@ class ota_control {
           strcpy (message, "Missing SHA256 checksum in metadata");
           retVal = false;
         }
-        if (strlen (ota_label) == 0) {
-          sprintf (ota_label, "Sequence %d", newSequence);
-        }
       }
+      else strcpy(message, "Could not open metadata file");
       return (retVal);
     }
 
     /*
-     * A faily crude parser for earch line of the metadata file
+     * A faily crude parser for each line of the metadata file
      */
     void processParam (char* inBuffer)
     {
@@ -158,18 +165,38 @@ class ota_control {
       if (paramValue == NULL || paramName[0] == '#' || strlen(paramName) == 0 || strcmp(paramName, "---") == 0 || strcmp(paramName, "...") == 0) {}  // Ignore comments and empty lines
       else if (strcmp (paramName, "size:") == 0) {
         image_size = atol (paramValue);
+        if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s %s\r\n", paramName, paramValue);
+          xSemaphoreGive(consoleSem);
+        }
       }
       else if (strcmp (paramName, "sequence:") == 0) {
         newSequence = atol (paramValue);
+        if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s %s\r\n", paramName, paramValue);
+          xSemaphoreGive(consoleSem);
+        }
       }
       else if (strcmp (paramName, "sha256:") == 0) {
         if (strlen(paramValue) < sizeof(chksum)) strcpy (chksum, paramValue);
+        if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s %s\r\n", paramName, paramValue);
+          xSemaphoreGive(consoleSem);
+        }
       }
       else if (strcmp (paramName, "name:") == 0) {
         if (strlen(paramValue) < sizeof(image_name)) strcpy (image_name, paramValue);
+        if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s %s\r\n", paramName, paramValue);
+          xSemaphoreGive(consoleSem);
+        }
       }
       else if (strcmp (paramName, "label:") == 0) {
         if (strlen(paramValue) < sizeof(ota_label)) strcpy (ota_label, paramValue);
+        if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s %s\r\n", paramName, paramValue);
+          xSemaphoreGive(consoleSem);
+        }
       }
       else sprintf (message, "Parameter %s not recognised", paramName);
     }
@@ -188,6 +215,10 @@ class ota_control {
       mbedtls_sha256_context sha256ctx;
       int sha256status, retryCount;
 
+      if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("%s get_ota_image(%s, %x)\r\n", getTimeStamp(), url, cert);
+        xSemaphoreGive(consoleSem);
+      }
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("Loading new over the air image");
         xSemaphoreGive(consoleSem);
@@ -292,13 +323,22 @@ class ota_control {
      */
     bool update(const char *baseurl, const char *cert, const char *metadata)
     {
+      update(baseurl, cert, metadata, true);
+    }
+
+    bool update(const char *baseurl, const char *cert, const char *metadata, bool forceUpdate)
+    {
       bool retVal = false;
       char url[132];
 
+      if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("%s update(%s, %x, %s)\r\n", getTimeStamp(), baseurl, cert, metadata);
+        xSemaphoreGive(consoleSem);
+      }
       strcpy (url, baseurl);
       strcat (url, metadata);
       if (sequence == 0) get_sequence_id();
-      if (get_meta_data(url, cert)) {
+      if (get_meta_data(url, cert) && forceUpdate) {
         strcpy (url, baseurl);
         strcat (url, image_name);
         if (get_ota_image(url, cert)) retVal = true;
@@ -310,10 +350,14 @@ class ota_control {
      * Newer ESP IDE may support rollback options
      * We'll assume we have 2 OTA type partitions and if update has been
      * run previously then roll back can toggle boot partition between the two.
-     * Id last sequence is zero then return with an error
+     * If last sequence is zero then return with an error
      */
     bool revert()
     {
+      if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("%s revert()\r\n", getTimeStamp());
+        xSemaphoreGive(consoleSem);
+      }
       bool retVal = false;
       if (sequence == 0) get_sequence_id();
       // if (esp_ota_check_rollback_is_possible()) {
@@ -379,67 +423,111 @@ class ota_control {
 
 bool OTAcheck4update(char* retVal)
 {
+  OTAcheck4update(retVal, true);
+}
+
+bool OTAcheck4update(char* retVal, bool forceUpdate)
+{
   ota_control theOtaControl;
+  const char *theCert = defaultCertificate;
   char ota_url[120];
   char web_certFile[42];
   bool status = false;
 
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s OTAcheck4update(%x)\r\n", getTimeStamp(), retVal);
+    xSemaphoreGive(consoleSem);
+  }
   if ((!APrunning) && (!WiFi.status() == WL_CONNECTED)) return(status);
-  nvs_get_string ("ota_url", ota_url, OTAUPDATE, sizeof(ota_url));
-  nvs_get_string ("web_certFile", web_certFile, CERTFILE, sizeof(web_certFile));
-  if (rootCACertificate==NULL && strncmp (ota_url, "https://", 8) == 0) {
-    rootCACertificate = util_loadFile(SPIFFS, web_certFile);
-    if (rootCACertificate == NULL) {
-      rootCACertificate = defaultCertificate;
-      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.print ("When using https for OTA, place root certificate in file ");
-        Serial.println (CERTFILE);
-        xSemaphoreGive(consoleSem);
+  if (xSemaphoreTake(otaSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    nvs_get_string ("ota_url", ota_url, OTAUPDATE, sizeof(ota_url));
+    nvs_get_string ("web_certFile", web_certFile, CERTFILE, sizeof(web_certFile));
+    if (rootCACertificate==NULL && strncmp (ota_url, "https://", 8) == 0) {
+      theCert = (const char*) util_loadFile(SPIFFS, web_certFile);
+      if (rootCACertificate == NULL) {
+        if (theCert != NULL) rootCACertificate = theCert;
+        else {
+          rootCACertificate = defaultCertificate;
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("When using https for OTA, place root certificate in file %s\r\nUsing default certificate\r\n", web_certFile);
+            xSemaphoreGive(consoleSem);
+          }
+        }
+        if (rootCACertificate == NULL) {
+          rootCACertificate = defaultCertificate;
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("Could not set root certificate for web site\r\n");
+            xSemaphoreGive(consoleSem);
+          }
+        }
       }
     }
+    else if (strncmp (ota_url, "http://", 7) == 0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.println ("WARNING: using unencrypted link for OTA update. https:// is preferred.");
+      xSemaphoreGive(consoleSem);
+    }
+    if (theOtaControl.update (ota_url, rootCACertificate, "metadata.php", forceUpdate)) {
+      nvs_put_int ("ota_initial", 1);
+      status = true;
+    }
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.println (theOtaControl.get_status_message());
+      xSemaphoreGive(consoleSem);
+    }
+    if (retVal != NULL) strcpy (retVal, theOtaControl.get_status_message());
+    xSemaphoreGive(otaSem);
   }
-  else if (strncmp (ota_url, "http://", 7) == 0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.println ("WARNING: using unencrypted link for OTA update. https:// is preferred.");
-    xSemaphoreGive(consoleSem);
-  }
-  if (theOtaControl.update (ota_url, rootCACertificate, "metadata.php")) {
-    nvs_put_int ("ota_initial", 1);
-    status = true;
-  }
-  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.println (theOtaControl.get_status_message());
-    xSemaphoreGive(consoleSem);
-  }
-  if (retVal != NULL) strcpy (retVal, theOtaControl.get_status_message());
+  else strcpy (retVal, "Another over the air update operation is in progress.");
   return (status);
 }
 
 bool OTAcheck4rollback (char* retVal)
 {
   bool status = false;
-  ota_control theOtaControl;
-  if (theOtaControl.revert ()) status = true;;
-  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.println (theOtaControl.get_status_message());
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s OTAcheck4rollback(%x)\r\n", getTimeStamp(), retVal);
     xSemaphoreGive(consoleSem);
   }
-  if (retVal != NULL) strcpy (retVal, theOtaControl.get_status_message());
+  if (xSemaphoreTake(otaSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    ota_control theOtaControl;
+    if (theOtaControl.revert ()) status = true;;
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.println (theOtaControl.get_status_message());
+      xSemaphoreGive(consoleSem);
+    }
+    if (retVal != NULL) strcpy (retVal, theOtaControl.get_status_message());
+    xSemaphoreGive(otaSem);
+  }
+  else strcpy (retVal, "Another over the air update operation is in progress.");
   return (status);
 }
 
 const char* OTAstatus()
 {
-  static char message[200];
+  static char message[300];
   char msgBuffer[80];
-  char web_certFile[42];
+  char web_certFile[80];
   
-  ota_control theOtaControl;
-  nvs_get_string ("ota_url", msgBuffer, OTAUPDATE, sizeof(msgBuffer));
-  nvs_get_string ("web_certFile", web_certFile, CERTFILE, sizeof(web_certFile));
-  sprintf (message, " * boot partition: %s, next partition: %s, partition size: %d\r\n   ota URL: ", theOtaControl.get_boot_partition_label(), theOtaControl.get_next_partition_label(), theOtaControl.get_next_partition_size());
-  strcat  (message, msgBuffer);
-  strcat  (message, "\r\n   ota cert file: ");
-  strcat  (message, web_certFile);
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s OTAstatus()\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
+  if (xSemaphoreTake(otaSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    {
+      ota_control theOtaControl;
+      nvs_get_string ("ota_url", msgBuffer, OTAUPDATE, sizeof(msgBuffer));
+      nvs_get_string ("web_certFile", web_certFile, CERTFILE, sizeof(web_certFile));
+      sprintf (message, " * boot partition: %s, next partition: %s, partition size: %d\r\n   ota URL: ", theOtaControl.get_boot_partition_label(), theOtaControl.get_next_partition_label(), theOtaControl.get_next_partition_size());
+      strcat  (message, msgBuffer);
+      strcat  (message, "\r\n   ota cert file: ");
+      strcat  (message, web_certFile);
+    }
+    xSemaphoreGive(otaSem);
+    OTAcheck4update(msgBuffer, false);
+    strcat  (message, "\r\n   update check: ");
+    strcat  (message, msgBuffer);
+  }
+  else strcpy (message, "Another over the air update operation is in progress.");
   return (message);
 }
 

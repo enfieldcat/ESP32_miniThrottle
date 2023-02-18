@@ -1137,9 +1137,12 @@ void set_mdns(int nparam, char **param)
 void mt_ota (int nparam, char **param)
 {
 
-  if ((nparam==1 || strcmp(param[1], "status") == 0) && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.println ((char *) OTAstatus());
-    xSemaphoreGive(consoleSem);
+  if (nparam==1 || strcmp(param[1], "status") == 0) {
+    char *tPtr =  (char*) OTAstatus();
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.println (tPtr);
+      xSemaphoreGive(consoleSem);
+    }
   }
   else if (nparam==2) {
     if (strcmp(param[1], "update") == 0) if (OTAcheck4update(NULL))  mt_sys_restart ("Restarting to boot updated code.");

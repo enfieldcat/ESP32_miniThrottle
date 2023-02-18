@@ -630,6 +630,9 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
         else if (cmdProtocol==DCCEX) {
           locoRoster[option].steal = 'N';
           locoRoster[option].owned = true;
+          #ifdef RELAYPORT
+          locoRoster[option].relayIdx = 240;
+          #endif
         }
       }
     }
@@ -649,6 +652,9 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
         if (locoRoster[n].owned && strcmp (locoRoster[n].name, removeOpts[result]) == 0) {
           setLocoOwnership (n, false);
           locoRoster[n].owned = false;
+          #ifdef RELAYPORT
+          locoRoster[n].relayIdx = 255;
+          #endif
         }
       }
     }

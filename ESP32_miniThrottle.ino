@@ -80,6 +80,9 @@ static SemaphoreHandle_t screenSvrSem = xSemaphoreCreateMutex();  // used to coo
 #ifdef RELAYPORT
 static SemaphoreHandle_t relaySvrSem  = xSemaphoreCreateMutex();  // used by various relay threads to coordinate memory/dcc-ex access
 #endif
+#ifdef OTAUPDATE
+static SemaphoreHandle_t otaSem       = xSemaphoreCreateMutex();  // used to ensure only one ota activity at a time
+#endif
 static QueueHandle_t cvQueue          = xQueueCreate (2,  sizeof(int16_t));  // Queue for querying CV Values
 static QueueHandle_t keyboardQueue    = xQueueCreate (3,  sizeof(char));     // Queue for keyboard type of events
 static QueueHandle_t keyReleaseQueue  = xQueueCreate (3,  sizeof(char));     // Queue for keyboard release type of events

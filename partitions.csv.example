@@ -1,3 +1,6 @@
+# COPY example to partitions.csv
+# EDIT to include appropriate section
+#
 # the partitions below assume a 4M flash memory
 # Ref: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/partition-tables.html
 #
@@ -20,7 +23,7 @@ spiffs,   data, spiffs,  0x220000,0x1E0000,
 # comment out the entries above, and uncomment the
 # entries from otadata onwards below.
 #  * 56K Bootstrap space (36K reserved, 20K Unused)
-#  * 8K OTA
+#  * 8K OTA data
 #  * 2 x 1.875M Program - OTA updates non-active program partition
 #  * 64K NVS
 #  * 128K File-System

@@ -334,10 +334,12 @@ void util_deleteFile(fs::FS &fs, const char * path){
 
 char* util_loadFile(fs::FS &fs, const char* path)
 {
-  util_loadFile (fs, path, NULL);
+  return util_loadFile (fs, path, NULL);
 }
 
-
+// read a file into memory
+// return value is memory location of loaded file
+// return size of file in sizeOfFile if not NULL
 char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
 {
   char *retval = NULL;
@@ -347,7 +349,7 @@ char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
   if (sizeOfFile!=NULL) *sizeOfFile = 0;
   if (!fs.exists(path)) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println ("  - File does not exist");
+      Serial.printf ("  - File does not exist\r\n");
       xSemaphoreGive(consoleSem);
     }
     return (retval);
@@ -355,15 +357,16 @@ char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
   File file = fs.open(path);
   if(!file){
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println("  - failed to open file for reading");
+      Serial.printf ("  - failed to open file for reading\r\n");
       xSemaphoreGive(consoleSem);
     }
     return (retval);
   }
   if(file.isDirectory()){
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println("  - Cannot open directory for reading");
+      Serial.printf ("  - Cannot open directory for reading\r\n");
       xSemaphoreGive(consoleSem);
+      file.close();
     }
     return (retval);
   }
@@ -375,6 +378,12 @@ char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
     }
     file.close();
     retval[fileSize-1] = '\0';  // Ensure data ends with a null terminator character
+  }
+  else {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("  - Cannot allocate %d bytes to load %s\r\n", fileSize, path);
+      xSemaphoreGive(consoleSem);
+    }
   }
   if (retval!=NULL && sizeOfFile!=NULL) *sizeOfFile = fileSize;
 

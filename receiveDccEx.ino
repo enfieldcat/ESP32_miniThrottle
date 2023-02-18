@@ -214,6 +214,7 @@ void dccSpeedChange (char* speedSet)
     locoRoster[locoIndex].speed = (int16_t) dccSpeed;
     if (dccDirection == 1) locoRoster[locoIndex].direction = FORWARD;
     else locoRoster[locoIndex].direction = REVERSE;
+    if (locoRoster[locoIndex].owned) speedChange = true;
     #ifdef RELAYPORT
     if (relayMode == WITHROTRELAY) {
       if (locoRoster[locoIndex].direction == REVERSE) t_direction = 0;
@@ -227,23 +228,16 @@ void dccSpeedChange (char* speedSet)
     #endif
     xSemaphoreGive(velociSem);
     #ifdef RELAYPORT
-    if (t_owned) {
-      speedChange = true;
-    }
-    else {
-      if (relayMode == WITHROTRELAY && t_relayIdx<maxRelay) {
-        if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          uint8_t chk = relayCount;
-          xSemaphoreGive(relaySvrSem);
-          if (chk > 1) { // only send message if relay service running and initialised
-            sprintf (outBuffer, "M%cA%c%d<;>V%d\r\nM%cA%c%d<;>R%d\r\n", t_throttleNr, t_type, t_id, dccSpeed, t_throttleNr, t_type, t_id, t_direction);
-            reply2relayNode (&(remoteSys[t_relayIdx]), outBuffer);
-          }
+    if (relayMode == WITHROTRELAY && t_relayIdx<maxRelay) {
+      if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        uint8_t chk = relayCount;
+        xSemaphoreGive(relaySvrSem);
+        if (chk > 1) { // only send message if relay service running and initialised
+          sprintf (outBuffer, "M%cA%c%d<;>V%d\r\nM%cA%c%d<;>R%d\r\n", t_throttleNr, t_type, t_id, dccSpeed, t_throttleNr, t_type, t_id, t_direction);
+          reply2relayNode (&(remoteSys[t_relayIdx]), outBuffer);
         }
       }
     }
-    #else
-    speedChange = true;
     #endif
   }
   else semFailed ("velociSem", __FILE__, __LINE__);

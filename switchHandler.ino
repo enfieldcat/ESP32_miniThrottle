@@ -190,9 +190,9 @@ void switchMonitor(void *pvParameters)
       potReading += analogRead(POTTHROTPIN);
       if (++potLoopCount >= potLoopLimit) {
         if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          static int voo = potReading / potLoopCount;
-          static int vim = voo >> 2;
-          Serial.printf (" - Pot Reading: (%d / %d) = %d Adjust: %d\r\n", potReading, potLoopCount, voo, vim);
+          int divLoops = potReading / potLoopCount;
+          int divFour  = divLoops >> 2;
+          Serial.printf (" - Pot Reading: (%d / %d) = %d Adjust: %d\r\n", potReading, potLoopCount, divLoops, divFour);
           xSemaphoreGive(consoleSem);
         }
         potReading = (potReading / potLoopCount) >> 2; // oversample and over scale adjustment to DCC sized values
@@ -264,12 +264,24 @@ void sendPotThrot (int8_t dir, int8_t speed)
   int16_t lastSpeed;
   #endif
   int8_t actDirec;
+  static int8_t lastDir = STOP;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s sendPotThrot(%d, %d)\r\n", getTimeStamp(), dir, speed);
     xSemaphoreGive(consoleSem);
   }
 
+  // Especially if in bidirectional mode, desensitize stop zone
+  // and in standard mode also remember the last non-STOP direction
+  if (speed<5 && dir!=STOP) {
+    speed = 1;
+    dir = STOP;
+  }
+  else if (speed>4 && dir==STOP) {
+    if (lastDir == STOP) dir = FORWARD;
+    else dir = lastDir;
+  }
+  else if (dir != STOP) lastDir = dir;
   for (int8_t n=0; n<limit; n++) if (locoRoster[n].owned) {
     if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       actSpeed = locoRoster[n].speed;

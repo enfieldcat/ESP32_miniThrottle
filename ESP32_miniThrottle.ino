@@ -82,6 +82,7 @@ static SemaphoreHandle_t relaySvrSem  = xSemaphoreCreateMutex();  // used by var
 #endif
 #ifdef OTAUPDATE
 static SemaphoreHandle_t otaSem       = xSemaphoreCreateMutex();  // used to ensure only one ota activity at a time
+static HTTPClient *otaHttp            = new HTTPClient();         // Client used for update
 #endif
 static QueueHandle_t cvQueue          = xQueueCreate (2,  sizeof(int16_t));  // Queue for querying CV Values
 static QueueHandle_t keyboardQueue    = xQueueCreate (3,  sizeof(char));     // Queue for keyboard type of events

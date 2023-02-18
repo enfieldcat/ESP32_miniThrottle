@@ -44,7 +44,7 @@ class ota_control {
     char chksum[65];
     char ota_label[50];
     uint32_t image_size;
-    HTTPClient *http = NULL;
+    // static HTTPClient *otaHttp = new HTTPClient();
     
     /*
      * Get and put sequence of last OTA update
@@ -84,11 +84,11 @@ class ota_control {
         Serial.printf ("%s get_meta_data(%s, %x)\r\n", getTimeStamp(), url, cert);
         xSemaphoreGive(consoleSem);
       }
-      WiFiClient *inStream = getHttpStream(url, cert, http);
+      WiFiClient *inStream = getHttpStream(url, cert, otaHttp);
       ota_label[0] = '\0';
       if (inStream != NULL) {
         inPtr = 0;
-         // process the character stream from the http/s source
+        // process the character stream from the http/s source
         while ((inByte = inStream->read()) >= 0) {
           if (inPtr < sizeof(inBuffer)){
             if (inByte=='\n' || inByte=='\r') {
@@ -103,9 +103,11 @@ class ota_control {
           }
           if ((inPtr%20) == 0) delay (10); //play nice in multithreading environment
         }
+        inStream->stop();
         inBuffer[inPtr] = '\0';
         processParam (inBuffer);
-        closeHttpStream(http);
+        closeHttpStream(otaHttp);
+        delay (1000);
         // Test for things to be set which should be set
         if (strlen (ota_label) == 0) {
           sprintf (ota_label, "Sequence %d", newSequence);
@@ -228,7 +230,7 @@ class ota_control {
         sprintf (message, "Cannot identify target partition for update");
         return (false);
       }
-      WiFiClient *inStream = getHttpStream(url, cert, http);
+      WiFiClient *inStream = getHttpStream(url, cert, otaHttp);
       if (inStream != NULL) {
         if (esp_ota_begin(targetPart, image_size, &targetHandle) == ESP_OK) {
           inBuffer = (uint8_t*) malloc (WEB_BUFFER_SIZE);
@@ -291,8 +293,9 @@ class ota_control {
           else strcpy (message, "Warning: SHA256 checksum not calculated");
           free (inBuffer);
         }
+        inStream->stop();
       }
-      closeHttpStream (http);
+      closeHttpStream (otaHttp);
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("\r\nOver the air image - load complete");
         xSemaphoreGive(consoleSem);

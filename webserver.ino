@@ -1307,7 +1307,9 @@ void mkWebHtmlHeader (WiFiClient *myClient, const char *header, uint8_t refreshT
   myClient->printf ((const char*)"</head><body><center><h1>%s: %s</h1></center><hr><table><tr><td valign=\"top\"><table><tr><td><a href=\"/\">Status&nbsp;Page</a></td></tr>", tname, header);  
   myClient->printf ((const char*)"<tr><td><a href=\"/config\">Main&nbsp;config</a></td></tr><tr><td><a href=\"/functions\">Function&nbsp;Map</a></td></tr><tr><td><a href=\"/files\">Local&nbsp;Files</a></td></tr>");
   #ifdef RELAYPORT
-  myClient->printf ((const char*)"<tr><td><a href=\"/fastclock\">Fast&nbsp;Clock</a></td></tr>");
+  if (relayMode == WITHROTRELAY) {
+    myClient->printf ((const char*)"<tr><td><a href=\"/fastclock\">Fast&nbsp;Clock</a></td></tr>");
+  }
   #endif
   myClient->printf ((const char*)"<tr><td><a href=\"/wifi\">WiFi&nbsp;Networks</a></td></tr><tr><td><a href=\"/password\">Web&nbsp;Password</a></td></tr></table></td><td>&nbsp;&nbsp;</td><td valign=\"top\">");
   // Actual data goes in to the 3rd column, page must close outer table

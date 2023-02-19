@@ -490,13 +490,13 @@ void setup()  {
   #else
   cmdProtocol = nvs_get_int ("defaultProto", WITHROT);
   #endif  //  SERIALPORT
-  if (relayMode == WITHROTRELAY) {
+  // if (relayMode == WITHROTRELAY) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Starting fast clock server\r\n", getTimeStamp());
       xSemaphoreGive(consoleSem);
     }
     xTaskCreate(fastClock, "fastClock", 2048, NULL, 4, NULL);
-  }
+  // }
   #endif  //  USEWIFI
   #endif  //  RELAYPORT
   #endif  //  SERIALCTRL

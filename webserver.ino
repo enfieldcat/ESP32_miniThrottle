@@ -1307,9 +1307,7 @@ void mkWebHtmlHeader (WiFiClient *myClient, const char *header, uint8_t refreshT
   myClient->printf ((const char*)"</head><body><center><h1>%s: %s</h1></center><hr><table><tr><td valign=\"top\"><table><tr><td><a href=\"/\">Status&nbsp;Page</a></td></tr>", tname, header);  
   myClient->printf ((const char*)"<tr><td><a href=\"/config\">Main&nbsp;config</a></td></tr><tr><td><a href=\"/functions\">Function&nbsp;Map</a></td></tr><tr><td><a href=\"/files\">Local&nbsp;Files</a></td></tr>");
   #ifdef RELAYPORT
-  if (relayMode == WITHROTRELAY) {
-    myClient->printf ((const char*)"<tr><td><a href=\"/fastclock\">Fast&nbsp;Clock</a></td></tr>");
-  }
+  myClient->printf ((const char*)"<tr><td><a href=\"/fastclock\">Fast&nbsp;Clock</a></td></tr>");
   #endif
   myClient->printf ((const char*)"<tr><td><a href=\"/wifi\">WiFi&nbsp;Networks</a></td></tr><tr><td><a href=\"/password\">Web&nbsp;Password</a></td></tr></table></td><td>&nbsp;&nbsp;</td><td valign=\"top\">");
   // Actual data goes in to the 3rd column, page must close outer table
@@ -1329,6 +1327,7 @@ void mkFastClock(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepA
   uint32_t mins = 0;
   uint32_t hours = 0;
   uint8_t n = 0;
+  uint8_t send2dcc = 0;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkFastClock(%x, %x, %d, keepAlive)\r\n", getTimeStamp(), myClient, data, dataSize);
@@ -1337,6 +1336,9 @@ void mkFastClock(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepA
   // Check if we have any updates to time
   time = webScanData (data, "fctime", dataSize);
   if (time != NULL) {
+    strMultiplier =  webScanData (data, "fastclock2dcc", dataSize);
+    if (strMultiplier[0]=='1') send2dcc = 1;
+    nvs_put_int ("fastclock2dcc", send2dcc);
     strMultiplier =  webScanData (data, "fcmultiplier", dataSize);
     if (strMultiplier != NULL) {
       multiplier = util_str2float (strMultiplier);
@@ -1374,13 +1376,21 @@ void mkFastClock(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepA
   }
   else semFailed ("fastClockSem", __FILE__, __LINE__);
   // presnt web update form
+  send2dcc = nvs_get_int ("fastclock2dcc", 0);
   mkWebHeader(myClient, 200, 0, keepAlive);
   mkWebHtmlHeader (myClient, "Fast Clock", nvs_get_int("webRefresh", WEBREFRESH));
-  myClient->printf ((const char*) "<form action=\"/fastclock\" method=\"post\"><table>");
+  myClient->printf ((const char*) "<form action=\"/fastclock\" method=\"post\"><h3>Clock Settings</h3><table>");
   myClient->printf ((const char*) "<tr><td align=\"right\">Time (HH:MM)</td><td><input type=\"time\" name=\"fctime\" value=\"%02d:%02d\"></td></tr>", hours, mins);
   myClient->printf ((const char*) "<tr><td align=\"right\">Multiplier</td><td><input type=\"number\" name=\"fcmultiplier\" value=\"%3.2f\" min=\"0\" max=\"12\" size=\"5\" step=\"0.05\"></td></tr>", multiplier);
   myClient->printf ((const char*) "<tr><td>&nbsp;</td><td>Multiplier=0.00, clock stopped</td></tr><tr><td>&nbsp;</td><td>Multiplier=1.00, normal pace of time</td></tr><tr><td>&nbsp;</td><td>Multiplier=3.00, 1 min wall clock time is 3 mins scale time</td></tr>");
   myClient->printf ((const char*) "<tr><td align=\"right\">Retain</td><td><input type=\"checkbox\" name=\"retain\" id=\"retain\" value=\"low\"><label for=\"retain\">Use above settings as startup default</label></td></tr>");
+  myClient->printf ((const char*) "</table><br><h3>Ex-RAIL Integration</h3><table>");
+  myClient->printf ((const char*) "<tr><td>Send Time to<br> Ex-CommandStation</td><td><input type=\"radio\" id=\"no2dcc\" name=\"fastclock2dcc\" value=\"0\"");
+  if (send2dcc==0) myClient->printf ((const char*) " checked=\"true\"");
+  myClient->printf ((const char*) "><label for=\"no2dcc\">Normal, do not sent time to DCC-Ex</label><br><input type=\"radio\" id=\"yes2dcc\" name=\"fastclock2dcc\" value=\"1\"");
+  if (send2dcc!=0) myClient->printf ((const char*) " checked=\"true\"");
+  myClient->printf ((const char*) "><label for=\"yes2dcc\">Send time to DCC-EX for Ex-RAIL integration</label></td></tr>");
+  myClient->printf ((const char*) "<tr><td align=\"right\">Notes</td><td>Do not use fractional multipliers if using Ex-RAIL integration<br>If relaying DCC-Ex fast clock is not sent to DCC-Ex clients</td></tr>");
   myClient->printf ((const char*) "</table><input type=\"submit\" value=\"Set Time\"></form></td></tr></table><hr></body></html>\r\n");
 }
 #endif

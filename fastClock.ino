@@ -115,17 +115,37 @@ void fc_sendUpdate()
     xSemaphoreGive(consoleSem);
   }
 
-  if (remoteSys!=NULL && xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    sprintf (outPacket, "PFT%d<;>%4.2f\r\n", fc_time, fc_multiplier);
-    xSemaphoreGive(fastClockSem);
-    for (uint8_t n=0; n<maxRelay ; n++) {
-      if (remoteSys[n].client->connected()) {
-        reply2relayNode (&remoteSys[n], outPacket);
+  if (relayMode == WITHROTRELAY && remoteSys!=NULL) {
+    if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      sprintf (outPacket, "PFT%d<;>%4.2f\r\n", fc_time, fc_multiplier);
+      xSemaphoreGive(fastClockSem);
+      for (uint8_t n=0; n<maxRelay ; n++) {
+        if (remoteSys[n].client->connected()) {
+          reply2relayNode (&remoteSys[n], outPacket);
+        }
       }
     }
+    else semFailed ("fastClockSem", __FILE__, __LINE__);
   }
-  else semFailed ("fastClockSem", __FILE__, __LINE__);
-
+  if (fc_multiplier > 0.03 && nvs_get_int ("fastclock2dcc", 0) == 1) {
+    int itime = 0;
+    int speed = 0;
+    char buffer[20];
+    if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      itime = (fc_time / 60);
+      speed = fc_multiplier;
+      xSemaphoreGive(fastClockSem);
+    }
+    sprintf(buffer, "<JC %d %d>", itime, speed);
+    txPacket (buffer);
+    //if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
+    //  // wait for ack
+    //  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    //    Serial.printf ("%s Warning: No response for DCC-Ex clock update\r\n", getTimeStamp());
+    //    xSemaphoreGive(consoleSem);
+    //  }
+    //}
+  }
 }
 
 #endif

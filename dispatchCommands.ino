@@ -637,7 +637,7 @@ void invalidateRoutes (int8_t turnoutNr, char state)
       if (active) {
         for (uint8_t i=0; i<MAXRTSTEPS && routeList[n].turnoutNr[i] != 255; i++) {
           if (routeList[n].turnoutNr[i] == turnoutNr && routeList[n].desiredSt[i] != state) {
-            routeDeactivate	 (i); 
+            routeDeactivate (n); 
             i = MAXRTSTEPS;
           }
         }

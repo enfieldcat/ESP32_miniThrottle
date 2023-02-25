@@ -323,9 +323,9 @@ void setup()  {
   // load initial settings from Non Volatile Storage (NVS)
   nvs_init();
   nvs_get_string ("tname", tname, NAME, sizeof(tname));
-  coreCount = chip_info.cores;
   // Print a diagnostic to the console, Prior to starting tasks no semaphore required
   esp_chip_info(&chip_info);
+  coreCount = chip_info.cores;
   Serial.printf  ("\r\n----------------------------------------\r\n");
   Serial.printf  ("Hardware Vers: %d core ESP32 revision %d, Speed %dMHz, Xtal Freq: %dMHz, %d MB %s flash\r\n", \
      chip_info.cores, \
@@ -436,7 +436,7 @@ void setup()  {
 
   // Check filesystem for config, cert and icon storage
   #ifdef FILESUPPORT
-  Serial.printf ("%s Attaching SPIFFS filesystem - may take several seconds if formatting is required.\r\n", getTimeStamp());
+  Serial.printf ("%s Attaching SPIFFS filesystem - may take several minutes if formatting is required.\r\n", getTimeStamp());
   if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)){
     Serial.printf ("%s SPIFFS filesystem required formatted.\r\n", getTimeStamp());
     delay (1500);
@@ -670,8 +670,8 @@ void loop()
         }
         else {
           menuResponse[0] = 200;
-          menuResponse[1] = 200;
-          menuResponse[2] = 200;
+          if (nvs_get_int("noPwrTurnouts", 0) == 0) menuResponse[1] = 200;
+          if (nvs_get_int("noPwrTurnouts", 0) == 0) menuResponse[2] = 200;
           menuResponse[4] = 200;
           if (lastMainMenuOption != 3 && lastMainMenuOption != 5) lastMainMenuOption = 3;
         }
@@ -683,11 +683,11 @@ void loop()
             else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
             break;
           case 2:
-            if (trackPower) mkTurnoutMenu ();
+            if (trackPower || nvs_get_int("noPwrTurnouts", 0) == 1) mkTurnoutMenu ();
             else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
             break;
           case 3:
-            if (trackPower) mkRouteMenu();
+            if (trackPower || nvs_get_int("noPwrTurnouts", 0) == 1) mkRouteMenu();
             else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
             break;
           case 4:

@@ -570,6 +570,7 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
     if (result != 0 && result < option) {
       if (result < option -1) {
         option = 255;
+        result--;
         for (uint8_t n = 0; option == 255 && n < limit; n++) {
           if ((!locoRoster[n].owned) && strcmp (locoRoster[n].name, addOpts[result])==0) option = n;
         }
@@ -844,6 +845,7 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
   uint8_t currentItem = selectedItem;
   uint8_t displayLine;
   uint8_t exitCode = 255;
+  uint8_t menuWrap = nvs_get_int ("menuWrap", 0);
   char commandKey;
   bool hasChanged = true;
   bool lineChanged[itemCount];
@@ -898,11 +900,23 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
           lineChanged[currentItem] = true;
           hasChanged = true;
         }
+        else if (menuWrap == 1) {
+          lineChanged[currentItem] = true;
+          currentItem = itemCount - 1;
+          lineChanged[currentItem] = true;
+          hasChanged = true;
+        }
       }
       else if (commandKey == 'U') {
         if (currentItem < (itemCount-1)) {
           lineChanged[currentItem] = true;
           currentItem++;
+          lineChanged[currentItem] = true;
+          hasChanged = true;
+        }
+        else if (menuWrap == 1) {
+          lineChanged[currentItem] = true;
+          currentItem = 0;
           lineChanged[currentItem] = true;
           hasChanged = true;
         }

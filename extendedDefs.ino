@@ -36,6 +36,15 @@ SOFTWARE.
   /* **********************************************************************\
    *
    * Define variables stored in NVS
+   * struct nvsVar_s {
+   *   char *varName;
+   *   uint8_t varType;
+   *   int16_t varMin;
+   *   uint16_t varMax;
+   *   int16_t numDefault;
+   *   char *strDefault;
+   *   char *varDesc;
+   * };
    *
   \********************************************************************** */
   #ifdef NODISPLAY
@@ -55,6 +64,8 @@ SOFTWARE.
     { "backlightValue", INTEGER,  100,           255,          200,          "", "Screen Brightness" },
     { "warnSpeed",      INTEGER,   50,           101,           90,          "", "Warning Speed" },
     { "allMenuItems",   INTEGER,    0,             1,            0,          "", "Display all menu items" },
+    { "menuWrap",       INTEGER,    0,             1,            0,          "", "Menus wrap around" },
+    { "noPwrTurnouts",  INTEGER,    0,             1,            0,          "", "turnouts work without track power" },
     #ifdef SCREENSAVER
     { "screenSaver",    INTEGER,    0,           600,  SCREENSAVER,          "", "Screen Saver Timeout" },
     #endif
@@ -81,6 +92,16 @@ SOFTWARE.
     { "maxRelay",       INTEGER,    0,      MAXRELAY,   MAXRELAY/2,          "", "Max nodes to relay" },
     { "relayMode",      INTEGER,    0,             2,            1,          "", "Relay mode" },
     { "relayPort",      INTEGER,    1,         65534,    RELAYPORT,          "", "Relay port" },
+    { "fastclock2dcc",  INTEGER,    0,             1,            0,          "", "send fastclock to dcc-ex" },
+    #ifdef FC_HOUR
+    { "fc_hour",        INTEGER,    0,            23,      FC_HOUR,          "", "fastclock hour" },
+    #endif
+    #ifdef FC_MIN
+    { "fc_min",         INTEGER,    0,            59,       FC_MIN,          "", "fastclock minute" },
+    #endif
+    #ifdef FC_RATE
+    { "fc_rate",        INTEGER,    0,          1000,      FC_RATE,          "", "fastclock speed-up rate" },
+    #endif
     #endif
     #ifdef WEBLIFETIME
     { "webPort",        INTEGER,    1,         65534,      WEBPORT,          "", "Web server port"},

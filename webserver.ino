@@ -763,8 +763,8 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   mkWebHeader (myClient, 200, 0, keepAlive);
   mkWebHtmlHeader (myClient, "Update Configuration", 0);
   myClient->printf ((const char*)"<form action=\"/save\" method=\"post\"><h2>Device &amp; Display</h2><table>");
-  myClient->printf ((const char*)"<tr><td align=\"right\">Name </td><td><input type=\"text\" id=\"tname\" name=\"tname\" value=\"%s\" minlength=\"4\" maxlength=\"%d\"></td></tr>", tname, sizeof(tname)-1);
-  myClient->printf ((const char*)"<tr><td align=\"right\">CPU Speed </td><td>");
+  myClient->printf ((const char*)"<tr><td>Name </td><td><input type=\"text\" id=\"tname\" name=\"tname\" value=\"%s\" minlength=\"4\" maxlength=\"%d\"></td></tr>", tname, sizeof(tname)-1);
+  myClient->printf ((const char*)"<tr><td>CPU Speed </td><td>");
   cpuSpeed = nvs_get_int ("cpuspeed", 0);
   for (uint8_t n=0 ; n<sizeof(speedOpts); n++) {
     if (n>0) myClient->printf ("<br>");
@@ -776,7 +776,7 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
     myClient->printf ((const char*)"><label for=\"%s\">%s</label>", labelName, labelDesc);
   }
   #ifdef SCREENROTATE
-  myClient->printf ((const char*)"</td></tr><tr><td align=\"right\">Screen Orientation </td><td>");
+  myClient->printf ((const char*)"</td></tr><tr><td>Screen Orientation </td><td>");
   compInt = nvs_get_int ("screenRotate", 0);
   if (compInt >= rotateCount) compInt = 0;
   for (uint8_t n=0 ; n<rotateCount; n++) {
@@ -788,7 +788,7 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   }
   #endif  //SCREEN ROTATE
   #ifndef NODISPLAY
-  myClient->printf ((const char*)"</td></tr><tr><td align=\"right\">Font </td><td>");
+  myClient->printf ((const char*)"</td></tr><tr><td>Font </td><td>");
   compInt = nvs_get_int ("fontIndex", 1);
   if (compInt >= sizeof(fontWidth)) compInt = 0;
   for (uint8_t n=0 ; n<sizeof(fontWidth); n++) {
@@ -818,6 +818,20 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   myClient->printf ((const char*)"<input type=\"radio\" id=\"allMenuEvery\" name=\"allMenuItems\" value=\"1\"");
   if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"allMenuEvery\">Show all menu options</label></td></tr>");
+  compInt = nvs_get_int ("menuWrap", 0);
+  myClient->printf ((const char*)"<tr><td>Menu Wrap around</td><td><input type=\"radio\" id=\"menuWrapNo\" name=\"menuWrap\" value=\"0\"");
+  if (compInt == 0) myClient->printf((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"menuWrapNo\">Hard stop at menu top and bottom</label><br>");
+  myClient->printf ((const char*)"<input type=\"radio\" id=\"menuWrapYes\" name=\"menuWrap\" value=\"1\"");
+  if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"menuWrapYes\">Menus wrap around</label></td></tr>");
+  compInt = nvs_get_int ("noPwrTurnouts", 0);
+  myClient->printf ((const char*)"<tr><td>Turnout/Route Options</td><td><input type=\"radio\" id=\"noPwrTurnout\" name=\"noPwrTurnouts\" value=\"0\"");
+  if (compInt == 0) myClient->printf((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"noPwrTurnout\">Track power required to operate turnouts</label><br>");
+  myClient->printf ((const char*)"<input type=\"radio\" id=\"yesPwrTurnout\" name=\"noPwrTurnouts\" value=\"1\"");
+  if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"yesPwrTurnout\">Turnouts work without track power</label></td></tr>");
   #endif   // NODISPLAY
   #ifdef DELAYONSTART
   compInt = nvs_get_int ("delayOnStart", DELAYONSTART);

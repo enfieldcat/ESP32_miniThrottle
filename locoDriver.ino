@@ -35,6 +35,8 @@ void locomotiveDriver()
   const char *dirString[] = {">>", "||", "<<", "??"};
   const char *trainModeString[] = {"Std", "<->"};
   uint32_t throt_time = 36;
+  int16_t t_speed = 0;
+  int16_t t_steps = 128;
   uint8_t locoCount = 1;
   uint8_t lineNr = 0;
   uint8_t speedLine = 0;
@@ -48,8 +50,7 @@ void locomotiveDriver()
   int16_t calcSpeed = 0;
   uint8_t calcDirection = STOP;
   uint8_t t_direction = STOP;
-  int16_t t_speed = 0;
-  int16_t t_steps = 128;
+  int8_t speedPosition = 0;
   char commandChar = 'Z';
   char releaseChar = 'Z';
   char displayLine[65];
@@ -207,7 +208,8 @@ void locomotiveDriver()
           if (functPrefix > 19) strcpy (funVal, "F2");
           else strcpy (funVal, "F1");
         }
-        else funVal[0] = '\0';
+        else strcpy (funVal, "  ");
+        // else funVal[0] = '\0';
         if (charsPerLine > 5) {
           if (charsPerLine < 12) {
             sprintf (dispTemplate, "%%-5s%%%ds", charsPerLine-5);
@@ -238,12 +240,18 @@ void locomotiveDriver()
         //#ifdef WARNCOLOR
         //if (calcSpeed >= warnSpeed) display.setColor (WARNCOLOR);
         //#endif
+        speedPosition = strlen(displayLine);
         #ifdef SCALEFONT
-        uint8_t speedPosition = ((charsPerLine>>1) - strlen(displayLine)) * selFontWidth;
-        display.printFixedN(speedPosition, ((speedLine+1)*selFontHeight), displayLine, STYLE_NORMAL, 1);
-        #else
-        uint8_t speedPosition = (((charsPerLine - strlen(displayLine)) * selFontWidth) >> 1);
+        if (speedPosition < (charsPerLine>>1)) {
+          speedPosition = ((charsPerLine>>1) - speedPosition) * selFontWidth;
+          display.printFixedN(speedPosition, ((speedLine+1)*selFontHeight), displayLine, STYLE_NORMAL, 1);
+        }
+        else {
+        #endif
+        speedPosition = (((charsPerLine - speedPosition) * selFontWidth) >> 1);
         display.printFixed(speedPosition, ((speedLine+1)*selFontHeight), displayLine, STYLE_NORMAL);
+        #ifdef SCALEFONT
+        }
         #endif
         #ifdef WARNCOLOR
         if (calcSpeed >= warnSpeed) display.setColor (STDCOLOR);
@@ -481,6 +489,7 @@ void locomotiveDriver()
         }
       if (commandChar >= '0' && commandChar <= '9') {
         if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          // refreshDisplay = true;  // force change to top lines of display
           funcChange = true;
           functPrefix += (commandChar - '0');
           uint16_t mask = 1 << functPrefix;
@@ -509,7 +518,7 @@ void locomotiveDriver()
     }
     if (inFunct && xQueueReceive(keyReleaseQueue, &releaseChar, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
       if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        funcChange = true;
+        speedChange = true;  // force change to top lines of display
         inFunct = false;
         for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) setLocoFunction (n, functPrefix, false);
         functPrefix = 0;

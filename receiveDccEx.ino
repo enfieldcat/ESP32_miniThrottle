@@ -228,7 +228,7 @@ void dccSpeedChange (char* speedSet)
     #endif
     xSemaphoreGive(velociSem);
     #ifdef RELAYPORT
-    if (relayMode == WITHROTRELAY && t_relayIdx<maxRelay) {
+    if ((!t_owned) && relayMode == WITHROTRELAY && t_relayIdx<maxRelay) {
       if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         uint8_t chk = relayCount;
         xSemaphoreGive(relaySvrSem);

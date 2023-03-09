@@ -825,13 +825,6 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   myClient->printf ((const char*)"<input type=\"radio\" id=\"menuWrapYes\" name=\"menuWrap\" value=\"1\"");
   if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"menuWrapYes\">Menus wrap around</label></td></tr>");
-  compInt = nvs_get_int ("noPwrTurnouts", 0);
-  myClient->printf ((const char*)"<tr><td>Turnout/Route Options</td><td><input type=\"radio\" id=\"noPwrTurnout\" name=\"noPwrTurnouts\" value=\"0\"");
-  if (compInt == 0) myClient->printf((const char*)" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"noPwrTurnout\">Track power required to operate turnouts</label><br>");
-  myClient->printf ((const char*)"<input type=\"radio\" id=\"yesPwrTurnout\" name=\"noPwrTurnouts\" value=\"1\"");
-  if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"yesPwrTurnout\">Turnouts work without track power</label></td></tr>");
   #endif   // NODISPLAY
   #ifdef DELAYONSTART
   compInt = nvs_get_int ("delayOnStart", DELAYONSTART);
@@ -1004,6 +997,13 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   if (compInt == 1)  myClient->printf (" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"buttonStopYes\">Push stops train or loco menu if stopped in driving mode<label></td></tr>");
   #endif  // NODISPLAY
+  compInt = nvs_get_int ("noPwrTurnouts", 0);
+  myClient->printf ((const char*)"<tr><td>Turnout/Route Options</td><td><input type=\"radio\" id=\"noPwrTurnout\" name=\"noPwrTurnouts\" value=\"0\"");
+  if (compInt == 0) myClient->printf((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"noPwrTurnout\">Track power required to operate turnouts</label><br>");
+  myClient->printf ((const char*)"<input type=\"radio\" id=\"yesPwrTurnout\" name=\"noPwrTurnouts\" value=\"1\"");
+  if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"yesPwrTurnout\">Turnouts work without track power</label></td></tr>");
   myClient->printf ((const char*)"<tr><td>Restart</td><td>");
   myClient->printf ((const char*)"<input type=\"radio\" name=\"rebootOnUpdate\" id=\"rebootOnUpdateNo\" value=\"N\"><label for=\"rebootOnUpdateNo\">No restart</label><br>");
   myClient->printf ((const char*)"<input type=\"radio\" name=\"rebootOnUpdate\" id=\"rebootOnUpdateCond\" value=\"C\" checked=\"true\"><label for=\"rebootOnUpdateCond\">Restart if updated</label><br>");
@@ -1658,6 +1658,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
   const char *dirName[] = { "Forward", "Stop", "Reverse", "Unchanged", "Em. Stop" };
   char *tPtr = NULL;
   uint8_t showDescript;
+  uint8_t noPwrTurnouts = nvs_get_int ("noPwrTurnouts", 0);
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkWebSysStat(%x, keepAlive, authenicated, %x, %d)\r\n", getTimeStamp(), myClient, postData, dataSize);
@@ -1842,8 +1843,11 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
         }
         myClient->printf ((const char*)"%s</td><td align=\"left\">%s</td>", turnoutList[n].sysName, turnoutList[n].userName);
         xSemaphoreGive(turnoutSem);
-        myClient->printf ((const char*)"<td class=\"%s\">%s</td><td><form action=\"/status\" method=\"post\">", tPtr, tPtr);
-        myClient->printf ((const char*)"<input type=\"hidden\" name=\"op\" value=\"turn\"><input type=\"hidden\" name=\"unit\" value=\"%d\"><input type=\"submit\" value=\"Change\"></form></td></tr>", n);
+        myClient->printf ((const char*)"<td class=\"%s\">%s</td><td>", tPtr, tPtr);
+        if (noPwrTurnouts==1 || trackPower) {
+          myClient->printf ((const char*)"<form action=\"/status\" method=\"post\"><input type=\"hidden\" name=\"op\" value=\"turn\"><input type=\"hidden\" name=\"unit\" value=\"%d\"><input type=\"submit\" value=\"Change\"></form>", n);
+        }
+        myClient->printf ((const char*)"</td></tr>");
       }
       else semFailed ("turnoutSem", __FILE__, __LINE__);
     }
@@ -1857,7 +1861,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
       if (tPtr == NULL) tPtr = (char*)"unknown";
       if (xSemaphoreTake(routeSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         myClient->printf ((const char*)"<tr><td align=\"left\">%s</td><td align=\"left\">%s</td><td class=\"%s\">%s</td><td>", routeList[n].sysName, routeList[n].userName, tPtr, tPtr);
-        if (routeList[n].state == '4') {
+        if (routeList[n].state == '4' && (noPwrTurnouts==1 || trackPower)) {
           myClient->printf ((const char*)"<form action=\"/status\" method=\"post\"><input type=\"hidden\" name=\"op\" value=\"route\"><input type=\"hidden\" name=\"unit\" value=\"%d\"><input type=\"submit\" value=\"Activate\"></form>", n);
         }
         myClient->printf ((const char*)"</td></tr>");

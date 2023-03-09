@@ -454,6 +454,11 @@ void setup()  {
   // Use tasks to process various input and output streams
   // micro controller has enough memory, that stack sizes can be generously allocated to avoid stack overflows
   xTaskCreate(serialConsole, "serialConsole", 8192, NULL, 4, NULL);
+  #ifdef SERIALPORT
+  cmdProtocol = DCCEX;    // expect it always to be this!
+  #else
+  cmdProtocol = nvs_get_int ("defaultProto", WITHROT);
+  #endif  //  SERIALPORT
   #ifdef DELAYONSTART
   {
     uint16_t delayOnStart = nvs_get_int ("delayOnStart", DELAYONSTART);
@@ -485,11 +490,6 @@ void setup()  {
   xTaskCreate(serialConnectionManager, "serialCntMgr", 4096, NULL, 4, NULL);
   #ifdef RELAYPORT
   #ifdef USEWIFI
-  #ifdef SERIALPORT
-  cmdProtocol = DCCEX;    // expect it always to be this!
-  #else
-  cmdProtocol = nvs_get_int ("defaultProto", WITHROT);
-  #endif  //  SERIALPORT
   // if (relayMode == WITHROTRELAY) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Starting fast clock server\r\n", getTimeStamp());

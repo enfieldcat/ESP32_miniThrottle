@@ -406,7 +406,7 @@ void wiThrotRelayPkt (struct relayConnection_s *thisRelay, char *inPacket, char 
     else setTrackPower (2);
   }
   // Turnouts - strip packet and forward
-  else if (buffLen>4 && strncmp(inPacket, "PTA", 3) == 0) {
+  else if (buffLen>4 && strncmp(inPacket, "PTA", 3) == 0 && (trackPower || nvs_get_int("noPwrTurnouts", 0) == 1)) {
     char *turnName = &inPacket[4];
     uint8_t func = 0;                  // Close
     if (inPacket[3] == 'T') func = 1;  // Throw
@@ -426,7 +426,7 @@ void wiThrotRelayPkt (struct relayConnection_s *thisRelay, char *inPacket, char 
     }
   }
   // Routes - Find route and set as a background task
-  else if (buffLen>4 && strncmp(inPacket, "PRA2", 4) == 0) {
+  else if (buffLen>4 && strncmp(inPacket, "PRA2", 4) == 0 && (trackPower || nvs_get_int("noPwrTurnouts", 0) == 1)) {
     char *param = &inPacket[4];
     uint8_t id = 255;
     for (uint8_t n=0; n<routeCount && id==255;n++) if (strcmp (routeList[n].sysName, param)==0) id = n;
@@ -500,7 +500,10 @@ void wiThrotRelayPkt (struct relayConnection_s *thisRelay, char *inPacket, char 
       uint8_t j=0, limit=locomotiveCount+MAXCONSISTSIZE;
       int8_t  speed = 1;
       for (j=strlen(inPacket)-1; inPacket[j]!='V' && j>0; j--);
-      if (inPacket[j]=='V') speed = util_str2int(&inPacket[j+1]);
+      if (inPacket[j]=='V') {
+        if (trackPower) speed = util_str2int(&inPacket[j+1]);
+        else speed = 0;
+      }
       if (inPacket[3] == '*' || locoID >= 0) {
         for (j=0; j<limit; j++) {
           // Gather data that may be temporal by gaining semphore access
@@ -545,7 +548,7 @@ void wiThrotRelayPkt (struct relayConnection_s *thisRelay, char *inPacket, char 
       }
     }
     // Forward functions
-    else if (action == 'A' && command == 'F') {
+    else if (action == 'A' && command == 'F' && trackPower) {
       if (param!=NULL && strlen(param)>1) {
         uint8_t j=0, limit=locomotiveCount+MAXCONSISTSIZE;
         if (inPacket[3] == '*' || locoID >= 0) {

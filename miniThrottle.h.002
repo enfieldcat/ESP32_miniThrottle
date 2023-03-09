@@ -37,7 +37,7 @@
 #ifdef USEWIFI
 // default location for over the air update, comment out if not required
 // only works if WiFi enabled
-//#define OTAUPDATE   "https://conferre.cf/projects/miniThrottle/"
+#define OTAUPDATE   "https://conferre.cf/projects/miniThrottleRelay/"
 #endif
 
 /* ***********************************************************************\
@@ -214,8 +214,8 @@
 /* ***********************************************************************\
  * ENCODERS AND SWITCHES
 \*********************************************************************** */
-#define ENCODE_UP      36   // encoder up bounce
-#define ENCODE_DN      39   // encoder down bounce
+#define ENCODE_UP      39   // encoder up bounce
+#define ENCODE_DN      36   // encoder down bounce
 #define ENCODE_SW      34   // encoder switch
 //#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
 //#define DIRREVPIN      33   // Direction sw spdt center off LOW active

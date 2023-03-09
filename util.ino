@@ -127,7 +127,7 @@ void timeFormat (char *tString, uint32_t tint)
     case 1 : sprintf (tString, "%02dh%02d", time/60, time%60);
              break;
     case 3 : if (time<60) time+=720; 
-             sprintf (tString, "%d:%02d %s", time/60, time%60, indicator[indexer]);
+             sprintf (tString, "%2d:%02d %s", time/60, time%60, indicator[indexer]);
              break;
     default : if (time<60) time+=720; 
              sprintf (tString, "%2d:%02d", time/60, time%60);

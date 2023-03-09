@@ -76,6 +76,7 @@ SOFTWARE.
     { "speedStep",      INTEGER,    1,            20,            4,          "", "Speed Change Step" },
     { "sortData",       INTEGER,    0,             1,            1,          "", "Enable Sorting" },
     { "clockFormat",    INTEGER,    0,             2,            0,          "", "Fast Clock Format" },
+    { "bidirectional",  INTEGER,    0,             1,            0,          "", "standard/bidirectional mode" },
     #ifdef BRAKEPRESPIN
     { "brakeup",        INTEGER,    1,            10,            1,          "", "Brake Up Rate" },
     { "brakedown",      INTEGER,    1,           100,           20,          "", "Brake Down Rate" },

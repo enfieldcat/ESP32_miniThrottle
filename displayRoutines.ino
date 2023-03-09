@@ -274,8 +274,14 @@ void mkConfigMenu()
     result = displayMenu (configMenu, reference, 11, (result-1));
     switch (result) {
       case 1:
-        if (displayYesNo ("Bidirectional mode?")) bidirectionalMode = true;
-        else bidirectionalMode = false;
+        if (displayYesNo ("Bidirectional mode?")) {
+          bidirectionalMode = true;
+          nvs_put_int ("bidirectional", 1);
+        }
+        else {
+          bidirectionalMode = false;
+          nvs_put_int ("bidirectional", 0);
+        }
         break;
       case 2:
         mkCpuSpeedMenu();

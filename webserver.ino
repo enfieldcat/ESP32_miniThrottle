@@ -642,13 +642,13 @@ void mkWebWiFi(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     char passName[16];
     char myssid[33];
     char mypass[33];
-    uint8_t WiFiMode   = nvs_get_int ("WiFiMode", WIFIBOTH);
+    uint8_t WiFiMode   = nvs_get_int ("WiFiMode", defaultWifiMode);
     uint8_t apChannel  = nvs_get_int ("apChannel", APCHANNEL);
     uint8_t staConnect = nvs_get_int ("staConnect", 0);
     
     myClient->printf ((const char*)"<form action=\"/save\" method=\"post\">");
     myClient->printf ((const char*)"<h2>Access Point Mode</h2><table><tr><th>Setting</th><th>Value</th></tr>");
-    myClient->printf ((const char*)"<tr><td>Access Point Mode</td><td><input type=\"radio\" id=\"APEnableYes\" name=\"APEnable\" value=\"yes\"");
+    myClient->printf ((const char*)"<tr><td>Access Point Mode<br>AKA &quot;Hot Spot&quot;</td><td><input type=\"radio\" id=\"APEnableYes\" name=\"APEnable\" value=\"yes\"");
     if ((WiFiMode & 2) > 0) myClient->printf ((const char*)" checked=\"true\"");
     myClient->printf ((const char*)"><label for=\"APEnableYes\">Enable</label><br><input type=\"radio\" id=\"APEnableNo\" name=\"APEnable\" value=\"no\"");
     if ((WiFiMode & 2) == 0) myClient->printf ((const char*)" checked=\"true\"");
@@ -1110,7 +1110,7 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   if (resultPtr != NULL && strcmp (resultPtr, "yes") == 0) inputNum += 2;
   resultPtr = webScanData (data, "STAEnable", dataSize);
   if (resultPtr != NULL && strcmp (resultPtr, "yes") == 0) inputNum += 1;
-  checkNum = nvs_get_int ("WiFiMode", WIFIBOTH);
+  checkNum = nvs_get_int ("WiFiMode", defaultWifiMode);
   if (inputNum != 0 && inputNum != checkNum) {
     nvs_put_int ("WiFiMode", inputNum);
     myClient->printf ("<li>WiFi Mode = %d</li>", inputNum);

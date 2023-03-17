@@ -62,7 +62,7 @@ SOFTWARE.
 // Comment out "#define USEWIFI" to use direct serial connection to DCC-Ex
 #ifdef USEWIFI
 #include <WiFi.h>
-#include <WiFiMulti.h>
+// #include <WiFiMulti.h>
 #include <ESPmDNS.h>
 #endif
 

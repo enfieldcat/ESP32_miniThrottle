@@ -1246,7 +1246,7 @@ void mt_set_wifimode(int nparam, char **param)
   uint8_t mode;
 
   if (nparam==1) {
-    mode = nvs_get_int ("WiFiMode", WIFIBOTH);
+    mode = nvs_get_int ("WiFiMode", defaultWifiMode);
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Default WiFi mode is ");
       if (mode == WIFIAP) Serial.println ("AP");

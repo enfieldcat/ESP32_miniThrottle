@@ -151,6 +151,9 @@ static uint8_t maxRelayCount    = 0;             // high water mark
 static float fc_multiplier      = 0.00;          // multiplier of elapsed real time to scale time
 static bool fc_restart          = false;         // restart fast clock service?
 static bool startRelay          = true;          // restart relay service?
+static uint8_t defaultWifiMode  = WIFIBOTH;      // default wifi mode
+#else
+static uint8_t defaultWifiMode  = WIFIBOTH;      // default wifi mode - Optionally change to WIFISTA as non-relay default
 #endif
 #ifdef WEBLIFETIME
 static WiFiServer *webServer;                    // the web server wifi service

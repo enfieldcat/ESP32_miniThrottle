@@ -37,7 +37,7 @@ SOFTWARE.
  * 
  */
 #ifdef USEWIFI
-static WiFiMulti wifiMulti;
+// static WiFiMulti wifiMulti;
 
 void connectionManager(void *pvParameters)
 {
@@ -63,7 +63,7 @@ void connectionManager(void *pvParameters)
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
   // Start AP if required
-  if ((nvs_get_int("WiFiMode", WIFIBOTH) & 2) > 0) {
+  if ((nvs_get_int("WiFiMode", defaultWifiMode) & 2) > 0) {
     nvs_get_string ("APname", apssid, tname,  sizeof(apssid));
     nvs_get_string ("APpass", appass, "none", sizeof(appass));
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -79,7 +79,7 @@ void connectionManager(void *pvParameters)
   }
   while (true) {
     // Check if WiFi station mode needs to be connected and is connected
-    if ((nvs_get_int("WiFiMode", WIFIBOTH) & 1) > 0) {
+    if ((nvs_get_int("WiFiMode", defaultWifiMode) & 1) > 0) {
       if (WiFi.status() != WL_CONNECTED) {
         if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
           wifi_scanNetworks();
@@ -209,7 +209,7 @@ void connectionManager(void *pvParameters)
             Serial.printf ("%s WiFi Station mode: no access point found.\r\n", getTimeStamp());
             xSemaphoreGive (consoleSem);
           }
-          if ((nvs_get_int("WiFiMode", WIFIBOTH) & 2) == 0) {
+          if ((nvs_get_int("WiFiMode", defaultWifiMode) & 2) == 0) {
             #ifdef WEBLIFETIME
             startWeb = true;
             #endif

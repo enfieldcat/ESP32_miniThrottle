@@ -296,7 +296,7 @@ void sendPotThrot (int8_t dir, int8_t speed)
       #ifdef BRAKEPRESPIN
       lastSpeed = actSpeed;
       #endif
-      if      (tSpeed <= 0)    setLocoSpeed (n, tSpeed, STOP);
+      if      (tSpeed <= 0)    setLocoSpeed (n, tSpeed, actDirec);
       else if (dir!=UNCHANGED) setLocoSpeed (n, tSpeed, dir);
       else                     setLocoSpeed (n, tSpeed, actDirec);
       #ifdef BRAKEPRESPIN

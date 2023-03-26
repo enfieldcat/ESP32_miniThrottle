@@ -1070,10 +1070,10 @@ bool displayYesNo (const char *question)
   menuMode = true;
   while (command != 'S' && command != 'R' && command != 'L') {  // Select or left right to accept answer
     if (command == 255 || xQueueReceive(keyboardQueue, &command, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
-      displayScreenLine (" Yes", baseLine,    option);
-      displayScreenLine (" No",  baseLine+1, !option);
       if (command == 255) command = 254;
       else if (command == 'U' || command == 'D') option = !option; // up down to move between answers
+      displayScreenLine (" Yes", baseLine,    option);
+      displayScreenLine (" No",  baseLine+1, !option);
     }
   }
   menuMode = false;

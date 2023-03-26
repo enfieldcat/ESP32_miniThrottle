@@ -1130,6 +1130,7 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
             nvs_put_int (nvsVars[n].varName, inputNum);
             myClient->printf ("<li>%s = %d</li>", nvsVars[n].varDesc, inputNum);
             hasChanged = true;
+            if (strcmp (nvsVars[n].varName, "bidirectional") == 0) { if (inputNum==1) bidirectionalMode = true; else bidirectionalMode = 0; }
             #ifdef SCREENSAVER
             if (strcmp (nvsVars[n].varName, "backlightValue") == 0) { backlightValue = inputNum; ledcWrite(0, backlightValue); }
             if (strcmp (nvsVars[n].varName, "screenSaver") == 0) {

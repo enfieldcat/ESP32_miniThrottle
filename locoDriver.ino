@@ -327,14 +327,16 @@ void locomotiveDriver()
                 brakedown(speedStep);
                 #endif
               }
-              else if (t_direction == REVERSE) {                  // stoped already change direction
+              else if (t_direction == REVERSE && t_speed != -1) { // stoped already change direction
                 if (cmdProtocol == DCCEX) t_direction = STOP;     // move from REVERSE to STOP
                 else t_direction = FORWARD;                       //   or from REVERSE to FORWARD
                 dirChange = true;
+                t_speed = -1;
               }
               else {
                 t_direction = FORWARD;                            // move from STOP to FORWARD
                 dirChange = true;
+                t_speed = 1;                                      // put into forward motion.
               }
               speedChange = true;
             }
@@ -371,6 +373,7 @@ void locomotiveDriver()
               // if in bidirectional and direction is not FORWARD, then special handling is required
               if (t_direction == STOP) {              // If in STOP, then "down" places us in reverse
                 t_direction = REVERSE;
+                t_speed = -1;
                 speedChange = true;
                 dirChange = true;
               }
@@ -390,13 +393,19 @@ void locomotiveDriver()
               brakedown(speedStep);
               #endif
             }
-            if (t_speed == 0) {                       // Down to zero speed, direction state may change
-              if (cmdProtocol == DCCEX && t_direction != STOP) {
-                t_direction = STOP;     // move to STOP
+            else {
+              t_speed = -1;
+              // if (cmdProtocol == DCCEX) t_direction = STOP;
+            }
+            if (t_speed <= 0) {                       // Down to zero speed, direction state may change
+              if (cmdProtocol == DCCEX && t_direction != STOP && t_speed != -1) {
+                // t_direction = STOP;     // move to STOP
+                t_speed = -1;
                 dirChange = true;
               }
               else if (bidirectionalMode && t_direction != REVERSE) {
                 t_direction = REVERSE;
+                t_speed = 1;
                 dirChange = true;
               }
             }

@@ -90,6 +90,8 @@ static QueueHandle_t keyReleaseQueue  = xQueueCreate (3,  sizeof(char));     // 
 static QueueHandle_t dccAckQueue      = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc updates, avoid flooding of WiFi
 static QueueHandle_t dccLocoRefQueue  = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc locomotive speed and direction changes
 static QueueHandle_t dccTurnoutQueue  = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc turnout data
+static QueueHandle_t dccRouteQueue    = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc route data
+static QueueHandle_t dccOffsetQueue   = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc array offsets for setup of data
 static struct locomotive_s   *locoRoster   = (struct locomotive_s*) malloc (sizeof(struct locomotive_s) * MAXCONSISTSIZE);
 static struct turnoutState_s *turnoutState = NULL;  // table of turnout states
 static struct turnout_s      *turnoutList  = NULL;  // table of turnouts
@@ -117,6 +119,8 @@ static uint32_t defaultLeadVal      = 0;  // bit map of which functions are for 
 const  uint16_t routeDelay[]        = {0, 500, 1000, 2000, 3000, 4000}; // selectable delay times when setting route in DCCEX mode
 static uint16_t numberOfNetworks    = 0;  // count of networks detected in scan of networks
 static uint16_t initialLoco         = 3;  // lead loco register for in-throttle consists
+static uint16_t *dccExNumList       = NULL;// List of numeric IDs returned by DCC-Ex when querying Ex-Rail
+static uint8_t dccExNumListSize     = 0;  // size of the above array
 static uint8_t locomotiveCount      = 0;  // count of defined locomotives
 static uint8_t turnoutCount         = 0;  // count of defined turnouts
 static uint8_t turnoutStateCount    = 0;  // count of defined turnout states
@@ -135,6 +139,9 @@ static uint8_t nextThrottle = 'A';        // use as throttle "number" in WiThrot
 static uint8_t screenRotate = 0;          // local display orientation
 static uint8_t dccPowerFunc = DCCPOWER;   // variant of power on to use for DCC power on
 static uint8_t coreCount    = 2;          // cpu core count, used for some diagnostics
+static uint8_t inventoryLoco = LOCALINV;  // default to local inventory for locos
+static uint8_t inventoryTurn = LOCALINV;  // default tp local inventory for turnouts
+static uint8_t inventoryRout = LOCALINV;  // default to local inventory for routes / automations
 #ifdef RELAYPORT
 static WiFiServer *relayServer;                  // the relay server wifi service
 struct relayConnection_s *remoteSys = NULL;      // table of connected clients and assoc states
@@ -237,7 +244,7 @@ const char *cssTemplate = {"* { font-family: system-ui; }\n" \
 "hr { border-top: 1px dashed blue; }\n" \
 "pre { background-color: #000000; color: #88FF88; }\n" \
 "table { border 0; }\n" \
-"tr:nth-child(even) { background-color: #EEEEEE; }\n" \
+"tr:nth-child(even) { background-color: #DDDDDD; }\n" \
 "h1 { color: #0000DD; }\n" \
 "h2, h3, h4, th { background-color: #0000DD; color: #FFFFFF; }\n" \
 "textarea { font-family: \"Lucida Console\", \"Courier New\", monospace; }\n" \
@@ -371,6 +378,9 @@ void setup()  {
   dccPowerFunc    = nvs_get_int ("dccPower",      DCCPOWER);
   defaultLatchVal = nvs_get_int ("FLatchDefault", FUNCTLATCH);
   defaultLeadVal  = nvs_get_int ("FLeadDefault",  FUNCTLEADONLY);
+  inventoryLoco   = nvs_get_int ("inventoryLoco", LOCALINV);
+  inventoryTurn   = nvs_get_int ("inventoryTurn", LOCALINV);
+  inventoryRout   = nvs_get_int ("inventoryRout", LOCALINV);
   for (uint8_t n=0;n<4;n++) dccLCD[n][0] = '\0'; // store empty string in dccLCD array
   #ifdef RELAYPORT
   relayPort = nvs_get_int ("relayPort", RELAYPORT);

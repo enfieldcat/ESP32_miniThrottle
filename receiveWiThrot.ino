@@ -313,6 +313,7 @@ void processWiThrotPacket (char *packet)
         locoData[tokenPtr].throttleNr= 255;
         locoData[tokenPtr].relayIdx  = 255;
         locoData[tokenPtr].functionLatch = 65535;  // should not use in JMRI, but set it to all on => use default.
+        locoData[tokenPtr].functionString = NULL;
       }
       uint8_t maxLoco = tokenTally + MAXCONSISTSIZE;
       uint8_t n = 0;
@@ -320,6 +321,8 @@ void processWiThrotPacket (char *packet)
         sprintf (locoData[tokenPtr].name, "ad-hoc-%d", ++n);
         locoData[tokenPtr].owned    = false;
         locoData[tokenPtr].relayIdx = 255;
+        locoData[tokenPtr].functionLatch = 65535;  // should not use in JMRI, but set it to all on => use default.
+        locoData[tokenPtr].functionString = NULL;
       }
       if (locoRoster != NULL) free(locoRoster);   // free space if we had previously allocated it
       locoRoster      = locoData;

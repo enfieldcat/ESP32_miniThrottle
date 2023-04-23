@@ -886,7 +886,32 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
     myClient->printf ((const char*)"><label for=\"dccRtError1\">Abort setting up route</label>");
 
     compInt = nvs_get_int ("toOffset", 100);
-    myClient->printf ((const char*)"</td></tr><tr><td>Turnout numbering starts at</td><td><input type=\"number\" name=\"toOffset\" value=\"%d\" min=\"1\" max=\"1000\" size=\"6\"></td></tr></table>", compInt);
+    myClient->printf ((const char*)"</td></tr><tr><td>Turnout numbering starts at<br>(Should be higher than DCC-Ex turnout/route numbers)</td><td><input type=\"number\" name=\"toOffset\" value=\"%d\" min=\"1\" max=\"1000\" size=\"6\"></td></tr>", compInt);
+    compInt = inventoryLoco;
+    myClient->printf ((const char*)"<tr><td>Locomotive Roster</td><td><input type=\"radio\" id=\"invenloco1\" name=\"inventoryLoco\" value=\"%d\"", LOCALINV);
+    if (compInt == LOCALINV) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"invenloco1\">In Throttle Only</label><br><input type=\"radio\" id=\"invenloco2\" name=\"inventoryLoco\" value=\"%d\"", DCCINV);
+    if (compInt == DCCINV) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"invenloco2\">DCC-Ex Only</label><br><input type=\"radio\" id=\"invenloco3\" name=\"inventoryLoco\" value=\"%d\"", BOTHINV);
+    if (compInt == BOTHINV) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"invenloco3\">Combine Both</label></td></tr>");
+    compInt = inventoryTurn;
+    myClient->printf ((const char*)"<tr><td>Turnout Inventory</td><td><input type=\"radio\" id=\"inventurn1\" name=\"inventoryTurn\" value=\"%d\"", LOCALINV);
+    if (compInt == LOCALINV) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"inventurn1\">In Throttle Only</label><br><input type=\"radio\" id=\"inventurn2\" name=\"inventoryTurn\" value=\"%d\"", DCCINV);
+    if (compInt == DCCINV) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"inventurn2\">DCC-Ex Only</label><br><input type=\"radio\" id=\"inventurn3\" name=\"inventoryTurn\" value=\"%d\"", BOTHINV);
+    if (compInt == BOTHINV) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"inventurn3\">Combine Both</label></td></tr>");
+    compInt = inventoryRout;
+    myClient->printf ((const char*)"<tr><td>Route/Automation Inventory</td><td><input type=\"radio\" id=\"invenrout1\" name=\"inventoryRout\" value=\"%d\"", LOCALINV);
+    if (compInt == LOCALINV) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"invenrout1\">In Throttle Only</label><br><input type=\"radio\" id=\"invenrout2\" name=\"inventoryRout\" value=\"%d\"", DCCINV);
+    if (compInt == DCCINV) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"invenrout2\">DCC-Ex Only</label><br><input type=\"radio\" id=\"invenrout3\" name=\"inventoryRout\" value=\"%d\"", BOTHINV);
+    if (compInt == BOTHINV) myClient->printf ((const char*)" checked=\"true\"");
+    myClient->printf ((const char*)"><label for=\"invenrout3\">Combine Both</label></td></tr>");
+    myClient->printf ((const char*)"</table>");
   }
   #ifdef BRAKEPRESPIN
   compInt = nvs_get_int ( "brakeup", 1);
@@ -1746,6 +1771,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
     }
   }
   if (locomotiveCount>0 || tCount>0) {
+    char *funcStringDCC = NULL;
     int16_t speedPercent;
     uint8_t locoDir;
     uint8_t locoSteps;
@@ -1780,6 +1806,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
           locoDir = locoRoster[n].direction;
           locoSteps = locoRoster[n].steps-2;
           speedPercent = locoRoster[n].speed;
+          funcStringDCC = locoRoster[n].functionString;
           #ifdef RELAYPORT
           relayIdx = locoRoster[n].relayIdx;
           throttleNr = locoRoster[n].throttleNr;
@@ -1819,7 +1846,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
           }
           myClient->printf ((const char*)"</td><td width=\"%dpx\" class=\"speed\"></td><td width=\"%dpx\" class=\"space\"></td></tr></table></td>", speedPercent, 100-speedPercent);
           if (cmdProtocol==DCCEX) {
-            if (n<locomotiveCount)
+            if (n<locomotiveCount && funcStringDCC == NULL)
               myClient->printf ((const char*)"<td><form action=\"/functions\" method=\"post\"><input type=\"hidden\" name=\"locoIdx\" value=\"%d\"><input type=\"submit\" value=\"Functions\"></form></td>", n);
             else myClient->printf ((const char*)"<td>&nbsp;</td>");
           }

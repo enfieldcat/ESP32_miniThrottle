@@ -669,11 +669,25 @@ void wiThrotRelayPkt (struct relayConnection_s *thisRelay, char *inPacket, char 
                   char labelName[16];
                   char *token;
                   char *rest = NULL;
+                  char *funcStringDCC = NULL;
                   uint8_t idx = 0;
-                  functLabel[0]='\0';
-                  sprintf (labelName, "FLabel%d", t_id);    // try to get custom labels, then default labels.
-                  nvs_get_string (labelName, functLabel, (char*)"", sizeof(functLabel));
+                  
+                  // if imported from DCC look for labels in working storage section, else in NV RAM
+                  if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                    funcStringDCC = locoRoster[j].functionString;
+                    xSemaphoreGive(velociSem);  // Release the semaphore for loco speed and velocity once we have set our vital data
+                  }
+                  if (funcStringDCC == NULL) {
+                    functLabel[0]='\0';
+                    sprintf (labelName, "FLabel%d", t_id);    // try to get custom labels, then default labels.
+                    nvs_get_string (labelName, functLabel, (char*)"", sizeof(functLabel));
+                  }
+                  else {
+                    if (strlen(funcStringDCC) > sizeof(functLabel)) funcStringDCC[sizeof(functLabel)] = '\0';
+                    strcpy (functLabel, funcStringDCC);
+                  }
                   if (functLabel[0] == '\0') nvs_get_string ("FLabelDefault", functLabel, FUNCTNAMES, sizeof(functLabel));
+                  // split function labels to send to client
                   if (functLabel[0] != '\0') {
                     sprintf (outBuffer, "M%cL%c%d<;>", t_throttleNr, t_type, t_id); 
                     for (idx=0, token=strtok_r(functLabel, "~", &rest); token!=NULL && idx<29; token=strtok_r(NULL, "~", &rest), idx++) {

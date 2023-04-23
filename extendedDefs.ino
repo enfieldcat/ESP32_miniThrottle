@@ -55,6 +55,9 @@ SOFTWARE.
   struct nvsVar_s nvsVars[] = {
     { "tname",          STRING,     4, sizeof(tname),            0,        NAME, "Device Name" },
     { "cpuspeed",       INTEGER,    0,           240,            0,          "", "CPU Speed" },
+    { "inventoryLoco",  INTEGER,    0,             2,            0,          "", "DCC_Ex loco inventory"},
+    { "inventoryTurn",  INTEGER,    0,             2,            0,          "", "DCC_Ex turnouts inventory"},
+    { "inventoryRout",  INTEGER,    0,             2,            0,          "", "DCC_Ex routes inventory"},
     #ifdef DELAYONSTART
     { "delayOnStart",   INTEGER,    0,           120, DELAYONSTART,          "", "Start up delay in seconds" },
     #endif

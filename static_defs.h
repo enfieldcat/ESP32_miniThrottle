@@ -55,7 +55,7 @@ SOFTWARE.
 #undef VERSION
 #endif
 #define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.6"          // Version string
+#define VERSION     "0.7"          // Version string
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.
@@ -166,6 +166,7 @@ enum directionInd { FORWARD = 0,   STOP = 1,     REVERSE = 2, UNCHANGED = 3 };
 enum ctrlProtocol { UNDEFINED = 0, WITHROT = 1,  DCCEX = 2 };
 enum varTypes     { STRING = 0,    PASSWORD = 1, INTEGER = 2 };
 enum dccPower     { BOTH = 0,      MAINONLY = 1, PROGONLY = 2, JOIN = 3 };
+enum dccIntegrate { LOCALINV = 0,  DCCINV = 1,   BOTHINV = 2 };
 enum wifiModes    { WIFISTA = 1,   WIFIAP = 2,   WIFIBOTH = 3 };
 #ifdef RELAYPORT
 enum relayTypes   { NORELAY = 0,  WITHROTRELAY = 1, DCCRELAY = 2 };
@@ -176,6 +177,7 @@ enum relayTypes   { NORELAY = 0,  WITHROTRELAY = 1, DCCRELAY = 2 };
  */
 // Structures
 struct locomotive_s {
+  char *functionString;           // function description string for imported loco from DCC-Ex
   uint32_t function;              // Bit Array of enabled functions
   uint32_t functionLatch;         // set if latching function
   uint16_t id;                    // DCC address

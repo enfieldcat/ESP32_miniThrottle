@@ -506,6 +506,7 @@ bool routeSetup (int8_t routeNr, bool displayable)
     xSemaphoreGive(consoleSem);
   }
   for (uint8_t n=0; n<MAXRTSTEPS && routeList[routeNr].turnoutNr[n] < 255; n++) {
+    // control the route according to predefined steps
     if (routeList[routeNr].turnoutNr[n] < 200 && routeList[routeNr].desiredSt[n] < 200) {
       #ifndef NODISPLAY
       if (displayable) {
@@ -523,6 +524,37 @@ bool routeSetup (int8_t routeNr, bool displayable)
         }
       }
     }
+    // invoke DCC-Ex automation
+    else if (routeList[routeNr].desiredSt[n]==220) {
+      int targetLoco = -1;
+      routeDeactivate (routeNr);
+      // if displayable, check we have one and only one owned loco, that can be DCC-Ex parameter
+      #ifndef NODISPLAY
+      if (displayable) {
+        uint8_t cnt = 0;
+        uint8_t limit = locomotiveCount;
+        if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          for (uint8_t n=0; n<limit; n++) {
+            if (locoRoster[n].owned) cnt++;
+          }
+          xSemaphoreGive(velociSem);
+          if (cnt == 1) {
+            if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              for (uint8_t n=0; n<limit && targetLoco==-1; n++) {
+                if (locoRoster[n].owned) targetLoco = locoRoster[n].id;
+              }
+              xSemaphoreGive(velociSem);
+            }
+          }
+        }
+      }
+      #endif
+      // build and send DCC-Ex command
+      if (targetLoco == -1) sprintf (message, "</ START %s>", routeList[routeNr].sysName);
+      else sprintf (message, "</ START %d %s>", targetLoco, routeList[routeNr].sysName);
+      txPacket (message);
+    }
+    // something not right in our route
     else {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf ("%s Error in route %s step %d.\r\n", getTimeStamp(), routeList[routeNr].userName, (n+1));

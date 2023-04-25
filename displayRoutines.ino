@@ -40,12 +40,12 @@ SOFTWARE.
 #ifndef NODISPLAY
 #ifdef CUSTOM_FONT
 const char *fontLabel[] = {"Small", "Std", "Large", "Wide", "Huge"};
-const uint8_t fontWidth[]  = { 6,8,10,18,12 };
-const uint8_t fontHeight[] = { 8,16,20,18,24 };
+const uint8_t fontWidth[]  = { 6,8,10,14,12 };
+const uint8_t fontHeight[] = { 8,16,20,16,24 };
 #else
 const char *fontLabel[] = {"Small", "Std", "Large", "Wide"};
-const uint8_t fontWidth[]  = { 6,8,10,18 };
-const uint8_t fontHeight[] = { 8,16,20,18 };
+const uint8_t fontWidth[]  = { 6,8,10,14 };
+const uint8_t fontHeight[] = { 8,16,20,16 };
 #endif
 
 
@@ -83,7 +83,7 @@ void setupFonts()
       display.setFixedFont(font_10x20);
       break;
     case 3:
-      display.setFixedFont(font_18x18);
+      display.setFixedFont(font_14x16);
       break;
     #ifdef CUSTOM_FONT
     case 4:

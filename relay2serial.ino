@@ -31,7 +31,6 @@ void relayListener(void *pvParameters)
 {
   static WiFiClient relayClient[MAXRELAY];
   bool relayIsRunning = true;
-  bool notAssigned = true;
   uint8_t i = 1;
   uint8_t j = 0;
   char relayName[16];
@@ -67,6 +66,10 @@ void relayListener(void *pvParameters)
   }
 
   remoteSys = (relayConnection_s*) malloc (sizeof (relayConnection_s) * maxRelay);
+  {
+    char* tptr = (char*) remoteSys;
+    for (uint16_t n=0; n<0; n++) tptr[n] = 0;
+  }
   if (remoteSys != NULL) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Starting relay, port %d\r\n", getTimeStamp(), relayPort); 
@@ -90,8 +93,7 @@ void relayListener(void *pvParameters)
     while (relayIsRunning) {
       if (APrunning || WiFi.status() == WL_CONNECTED) {
         if (relayServer->hasClient()) {
-          notAssigned = true;
-          for(i = 0; notAssigned && i < maxRelay; i++){
+          for(i = 0; i < maxRelay; i++) {
             if (!relayClient[i].connected()){
               relayClient[i] = relayServer->available();
               if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -106,18 +108,18 @@ void relayListener(void *pvParameters)
                 Serial.printf ("%s Starting relay client as %s\r\n", getTimeStamp(), relayName); 
                 xSemaphoreGive(consoleSem);
               }
-              notAssigned = false;
+              i = maxRelay + 1;
+            }
+          }
+          if (i == maxRelay) {
+            relayServer->available().stop();  // no worker threads available
+            if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              Serial.printf ("%s Rejecting new relay client, all available client slots connected.\r\n", getTimeStamp()); 
+              xSemaphoreGive(consoleSem);
             }
           }
         }
-        if (i == maxRelay) {
-          relayServer->available().stop();  // no worker threads available
-          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            Serial.printf ("%s Rejecting new relay client, all available client slots connected.\r\n", getTimeStamp()); 
-            xSemaphoreGive(consoleSem);
-          }
-        }
-        delay (10); // pause to use fewer CPU cycles while waiting for connecton
+        delay (20); // pause to use fewer CPU cycles while waiting for connecton
       }
       else relayIsRunning = false;
     }

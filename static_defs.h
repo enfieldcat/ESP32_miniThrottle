@@ -102,6 +102,7 @@ extern "C" {
 // Local filesystem can potentially be used to store https certificates, command sequences or icons/images
 #ifdef FILESUPPORT
 #define DEFAULTCONF "/sampleConfig.cfg"
+#define DEFAULTCOMMAND "/sampleCommand.cfg"
 #ifdef USEWIFI
 #define CERTFILE "/rootCACertificate"
 #include <HTTPClient.h>
@@ -143,6 +144,7 @@ extern "C" {
 #define APCHANNEL       6   // Default WiFi Channel for AP mode
 #define MAXAPCLIENTS    8   // Max number of access point clients
 #define DEFAPCLIENTS    4   // Default number of access point clients allowed
+#define MAXDIAGCONNECT  2   // Maximum number of concurrent diagnotic clients
 
 // Divisor for converting uSeconds to Seconds
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */

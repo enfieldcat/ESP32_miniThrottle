@@ -39,7 +39,6 @@ void webListener(void *pvParameters)
   uint8_t j = 0;
   uint64_t lastActTime = esp_timer_get_time();
   uint64_t exitTime = (uS_TO_S_FACTOR * 60.0) * nvs_get_int ("webTimeOut", WEBLIFETIME);
-  bool notAssigned = true;
  
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s webListener(NULL)\r\n", getTimeStamp());
@@ -115,20 +114,24 @@ void webListener(void *pvParameters)
   while (webIsRunning) {
     if (APrunning || WiFi.status() == WL_CONNECTED) {
       if (webServer->hasClient()) {
-        notAssigned = true;
-        for(i = 0; notAssigned && i < MAXWEBCONNECT; i++){
+        for(i = 0; i < MAXWEBCONNECT; i++) {
           if (!webServerClient[i] || !webServerClient[i].connected()){
             if(webServerClient[i]) webServerClient[i].stop();
             webServerClient[i] = webServer->available();
             xTaskCreate(webHandler, "webHandler", 7168, &webServerClient[i], 4, NULL);
             i = MAXWEBCONNECT + 1;
             lastActTime = esp_timer_get_time();
-            notAssigned = false;
+          }
+        }
+        if (i == MAXWEBCONNECT) {
+          webServer->available().stop();  // no worker threads available
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("%s Rejecting new web client, all available worker slots connected.\r\n", getTimeStamp());
+            xSemaphoreGive(consoleSem);
           }
         }
       }
-      if (i == MAXWEBCONNECT) webServer->available().stop();  // no worker threads available
-      delay (100); // pause to use fewer CPU cycles while waiting for connecton
+      delay (20); // pause to use fewer CPU cycles while waiting for connecton
     }
     else webIsRunning = false;
     if (exitTime > 0 && (esp_timer_get_time() - lastActTime) > exitTime) {

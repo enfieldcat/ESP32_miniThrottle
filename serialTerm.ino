@@ -136,6 +136,7 @@ void processSerialCmd (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "debug") == 0)         mt_set_debug        (nparam, param);
   else if (nparam==3 && (strcmp (param[0], "del") == 0 || strcmp (param[0], "delete") == 0)) mt_del_gadget (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "detentcount") == 0)   mt_set_detentCount  (nparam, param);
+  else if (nparam==1 && strcmp (param[0], "diag") == 0)          startDiagPort();
   else if (nparam<=2 && strcmp (param[0], "dump") == 0)          mt_dump_data        (nparam, (const char**) param);
   else if (nparam==1 && strcmp (param[0], "export") == 0)        mt_export           ();
   #ifdef FILESUPPORT
@@ -1270,6 +1271,11 @@ void mt_set_wifimode(int nparam, char **param)
 
 #endif
 
+void startDiagPort()
+{
+   xTaskCreate(diagPortMonitor, "diagPortMonitor", 4096, NULL, 4, NULL);
+}
+
 void displayLocos()  // display locomotive data
 {
   const static char dirIndic[3][5] = { "Fwd", "Stop", "Rev" };
@@ -1404,9 +1410,16 @@ void mt_setbidirectional (bool setting)
 
 void mt_dump_data (int nparam, const char **param)  // set details about remote servers
 {
+  char message[80];
+
   if (nparam == 1) {
+    #ifdef RELAYPORT
+    const char *newParams[] = {"void", "loco", "turnout", "turnoutstate", "route", "routestate", "relay"};
+    for (uint8_t n=0; n<6; n++) {
+    #else
     const char *newParams[] = {"void", "loco", "turnout", "turnoutstate", "route", "routestate"};
     for (uint8_t n=0; n<5; n++) {
+    #endif
       mt_dump_data (2, &newParams[n]);
     }
   }
@@ -1418,9 +1431,10 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
       blk_size = sizeof(struct locomotive_s);
       blk_count = locomotiveCount + MAXCONSISTSIZE;
       blk_start = (char*) locoRoster;
+      sprintf (message, "%d additional slots allocated for ad-hoc loco IDs", MAXCONSISTSIZE);
+      if (diagIsRunning) diagEnqueue ('m', (char*) message, true);
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.print (MAXCONSISTSIZE);
-        Serial.println (" additional slots allocated for ad-hoc loco IDs");
+        Serial.println (message);
         xSemaphoreGive(consoleSem);
       }
     }
@@ -1461,19 +1475,18 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
       return;
     }
     if (blk_start == NULL || blk_count == 0) {
+      sprintf (message, "%s: No data available to dump", param[1]);
+      if (diagIsRunning) diagEnqueue ('m', (char*) message, true);
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.print   (param[1]);
-        Serial.println (": No data available to dump");
+        Serial.println (message);
         xSemaphoreGive(consoleSem);
       }
       return;
     }
+    sprintf (message, "--- %s (n=%d) ---", param[1], blk_count);
+    if (diagIsRunning) diagEnqueue ('m', (char*) message, true);
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.print   ("--- ");
-      Serial.print   (param[1]);
-      Serial.print   ("(n=");
-      Serial.print   (blk_count);
-      Serial.println (") ---");
+      Serial.println (message);
       for (uint16_t n=0; n<blk_count; n++) {
         mt_dump (blk_start, blk_size);
         blk_start += blk_size;
@@ -1482,8 +1495,12 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
       Serial.println ("---");
       xSemaphoreGive(consoleSem);
     }
+    if (diagIsRunning) {
+      strcpy (message, "---");
+      for (uint8_t n = 0; n<15; n++) strcat (message, "-----");
+      diagEnqueue ('m', (char*) message, true);
+    }
   }
-  
 }
 
 
@@ -1498,14 +1515,14 @@ void mt_dump (char* memblk, int memsize)
   int memoffset;
   int rowoffset;
 
-  // Leave the calling routine to grab the serial display semaphore
-  // if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     sprintf (message, "--- Address 0x%08x, Size %d bytes ", (uint32_t) memblk, memsize);
     for (rowoffset=strlen(message); rowoffset<77; rowoffset++) strcat (message, "-");
     Serial.println (message);
+    if (diagIsRunning) diagEnqueue ('m', (char*) message, true);
     for (memoffset=0; memoffset<memsize; ) {
       sprintf (message, "0x%04x ", memoffset);
       Serial.print (message);
+      if (diagIsRunning) diagEnqueue ('m', (char*) message, false);
       message[0] = '\0';
       for (rowoffset=0; rowoffset<16 && memoffset<memsize; rowoffset++) {
         if (memblk[memoffset]>=' ' && memblk[memoffset]<='z') postfix[rowoffset] = memblk[memoffset];
@@ -1521,9 +1538,12 @@ void mt_dump (char* memblk, int memsize)
       Serial.print   (message);
       Serial.print   ("   ");
       Serial.println (postfix);
+      if (diagIsRunning) {
+        diagEnqueue ('m', (char*) message, false);
+        diagEnqueue ('m', (char*) "   ",   false);
+        diagEnqueue ('m', (char*) postfix, true);
+      }
     }
-  //  xSemaphoreGive(consoleSem);
-  //}
 }
 
 
@@ -1809,6 +1829,13 @@ void help(int nparam, char **param)  // show help data
       if (!summary) {
         Serial.println ((const char*) "    Set the number or rotary encoder clicks per up/down movement");
         Serial.println ((const char*) "    permanent setting");
+      }
+    }
+    if (all || strcmp(param[1], "diag")==0) {
+      Serial.println ((const char*) "diag");
+      if (!summary) {
+        Serial.println ((const char*) "    Start diagnostic port if not already started");
+        Serial.println ((const char*) "    temporary setting");
       }
     }
     if (all || strcmp(param[1], "dump")==0) {

@@ -610,6 +610,24 @@ void defaultCertExists(fs::FS &fs)
 
 void sampleConfigExists(fs::FS &fs)
 {
+  if(!fs.exists(DEFAULTCOMMAND)){
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.print ("Missing sample command file, creating ");
+      Serial.println (DEFAULTCOMMAND);
+      xSemaphoreGive(consoleSem);
+    }
+    File defCertFile = fs.open(DEFAULTCOMMAND, FILE_WRITE);
+    if(!defCertFile){
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.println("  - failed to open sample command file for writing");
+        xSemaphoreGive(consoleSem);
+      }
+    }
+    else {
+      defCertFile.print (sampleCommand);
+      defCertFile.close();
+    }
+  }
   if(!fs.exists(DEFAULTCONF)){
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.print ("Missing sample configuration file, creating ");
@@ -619,7 +637,7 @@ void sampleConfigExists(fs::FS &fs)
     File defCertFile = fs.open(DEFAULTCONF, FILE_WRITE);
     if(!defCertFile){
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.println("  - failed to open file for writing");
+        Serial.println("  - failed to open sample configuration file for writing");
         xSemaphoreGive(consoleSem);
       }
     }

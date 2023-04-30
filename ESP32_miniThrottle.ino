@@ -92,6 +92,7 @@ static QueueHandle_t dccLocoRefQueue  = xQueueCreate (10, sizeof(uint8_t));  // 
 static QueueHandle_t dccTurnoutQueue  = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc turnout data
 static QueueHandle_t dccRouteQueue    = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc route data
 static QueueHandle_t dccOffsetQueue   = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc array offsets for setup of data
+static QueueHandle_t diagQueue        = xQueueCreate (256, sizeof(char));    // diagnostic data queue.
 static struct locomotive_s   *locoRoster   = (struct locomotive_s*) malloc (sizeof(struct locomotive_s) * MAXCONSISTSIZE);
 static struct turnoutState_s *turnoutState = NULL;  // table of turnout states
 static struct turnout_s      *turnoutList  = NULL;  // table of turnouts
@@ -179,6 +180,7 @@ static char remServerDesc[64] = { "" };  // eg: JMRI My whizzbang server v 1.0.4
 static char remServerNode[32] = { "" };  // eg: 192.168.6.1
 static char lastMessage[40]   = { "" };  // eg: JMRI: address 'L23' not allowed as Long
 static char dccLCD[4][21];               // DCC-Ex LCD messages
+static char diagMonitorMode   = ' ';     // mode of diag monitor
 static bool configHasChanged  = false;
 static bool showPackets       = false;   // debug setting: [no]showpackets
 static bool showKeepAlive     = false;   // debug setting: [no]showkeepalive
@@ -193,7 +195,10 @@ static bool menuMode          = false;   // in menu mode - screen savable mode, 
 static bool funcChange        = true;    // in locomotive driving mode, have functions changed?
 static bool speedChange       = false;   // in locomotive driving mode, has speed changed?
 static bool netReceiveOK      = false;
+static bool diagReceiveOK     = false;   // flag to ensure only one cpy is running
+static bool diagIsRunning     = false;   // run state indicator
 static bool APrunning         = false;   // are we running as an access point?
+static WiFiServer *diagServer = NULL;    // the diagnostic server wifi service
 #ifdef POTTHROTPIN
 static bool enablePot         = true;    // potentiometer enable/disable while driving
 #endif
@@ -296,6 +301,9 @@ const char *sampleConfig = {"# Sample file for adding definitions to miniThrottl
 "name trainCtrl\n" \
 "wifi 3 BrocolliSoup PepperCorns123\n" \
 "restart\n" \
+};
+const char *sampleCommand = { "# Sample file showing running of a command to start diag port\n" \
+"diag\n\n" \
 };
 #endif  //  FILESUPPORT
 
@@ -536,6 +544,9 @@ void setup()  {
   #endif   // keynone
   xTaskCreate(switchMonitor, "switchMonitor", 2048, NULL, 4, NULL);
   #endif   // NODISPLAY
+  if (nvs_get_int("diagPortEnable", 0) == 1) {
+    startDiagPort();
+  }
 }
 
 /*

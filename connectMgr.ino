@@ -487,10 +487,19 @@ void txPacket (const char *header, const char *pktData)
   }
 
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    if (header != NULL) client.print (header);
+    if (header != NULL) {
+      client.print (header);
+    }
     client.println (pktData);
     client.flush();
     xSemaphoreGive(tcpipSem);
+    if (diagIsRunning) {
+      diagEnqueue ('p', "--> ", false);
+      if (header != NULL) {
+        diagEnqueue ('p', (char*) header, false);
+      }
+      diagEnqueue ('p', (char*) pktData, true);
+    }
     if (showPackets) {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print ("--> ");
@@ -546,10 +555,19 @@ void txPacket (const char *header, const char *pktData)
     xSemaphoreGive(consoleSem);
   }
   if (xSemaphoreTake(serialSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    if (header!=NULL) serial_dev.write (header, strlen(header));
+    if (header!=NULL) {
+      serial_dev.write (header, strlen(header));
+    }
     serial_dev.write (pktData, strlen(pktData));
     serial_dev.write ("\r\n", 2);
     xSemaphoreGive(serialSem);
+    if (diagIsRunning) {
+      diagEnqueue ('p', "--> ", false);
+      if (header!=NULL) {
+        diagEnqueue ('p', (char*) header, false);
+      }
+      diagEnqueue ('p', (char*) pktData, true);
+    }
     if (showPackets) {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print ("--> ");

@@ -68,7 +68,7 @@ void relayListener(void *pvParameters)
   remoteSys = (relayConnection_s*) malloc (sizeof (relayConnection_s) * maxRelay);
   {
     char* tptr = (char*) remoteSys;
-    for (uint16_t n=0; n<0; n++) tptr[n] = 0;
+    for (uint16_t n=0; n<(sizeof (relayConnection_s) * maxRelay); n++) tptr[n] = 0;
   }
   if (remoteSys != NULL) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

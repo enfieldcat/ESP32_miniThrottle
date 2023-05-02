@@ -59,7 +59,7 @@ SOFTWARE.
     { "inventoryTurn",  INTEGER,    0,             2,            0,          "", "DCC_Ex turnouts inventory"},
     { "inventoryRout",  INTEGER,    0,             2,            0,          "", "DCC_Ex routes inventory"},
     { "diagPort",       INTEGER,   10,         65500,           23,          "", "Diagnostic port"},
-    { "diagPortEnable", INTEGER,    0,             1,            0,          "", "Diagnostic port enabled"},
+    // { "diagPortEnable", INTEGER,    0,             1,            0,          "", "Diagnostic port enabled"},
     #ifdef DELAYONSTART
     { "delayOnStart",   INTEGER,    0,           120, DELAYONSTART,          "", "Start up delay in seconds" },
     #endif

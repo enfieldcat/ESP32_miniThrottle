@@ -544,9 +544,9 @@ void setup()  {
   #endif   // keynone
   xTaskCreate(switchMonitor, "switchMonitor", 2048, NULL, 4, NULL);
   #endif   // NODISPLAY
-  if (nvs_get_int("diagPortEnable", 0) == 1) {
-    startDiagPort();
-  }
+  //if (nvs_get_int("diagPortEnable", 0) == 1) {
+  //  startDiagPort();
+  //}
 }
 
 /*
@@ -757,7 +757,7 @@ void print_reset_reason(uint8_t n, RESET_REASON reason)
       case 11 : Serial.printf ("Time Group reset CPU");break;
       case 12 : Serial.printf ("Software reset CPU");break;
       case 13 : Serial.printf ("RTC Watch dog Reset CPU");break;
-      case 14 : Serial.printf ("for APP CPU, reseted by PRO CPU");break;
+      case 14 : Serial.printf ("for APP CPU, reset by PRO CPU");break;
       case 15 : Serial.printf ("Reset when the vdd voltage is not stable");break;
       case 16 : Serial.printf ("RTC Watch dog reset digital core and rtc module");break;
       default : Serial.printf ("NO_MEAN");

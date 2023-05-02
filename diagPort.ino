@@ -185,10 +185,16 @@ void diagPortMonitor (void *pvParameters)
   else semFailed ("shmSem", __FILE__, __LINE__);
   // shutdown diagserver
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    for(i = 0; i < MAXDIAGCONNECT; i++) {
-      if (diagServerClient[i] && diagServerClient[i].connected()){
-        diagServerClient[i].write("----  Close Connection  ----\r\n");
+    {
+      bool changed = false;
+      for(i = 0; i < MAXDIAGCONNECT; i++) {
+        if (diagServerClient[i] && diagServerClient[i].connected()){
+          diagServerClient[i].write("----  Close Connection  ----\r\n");
+          diagServerClient[i].stop();
+          changed = true;
+        }
       }
+      if (changed) delay(1000);   // small close-wait before terminating service.
     }
     diagServer->close();
     diagServer->stop();

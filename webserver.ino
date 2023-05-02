@@ -791,7 +791,7 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   }
   #endif  //SCREEN ROTATE
   #ifndef NODISPLAY
-  myClient->printf ((const char*)"</td></tr><tr><td>Font </td><td>");
+  myClient->printf ((const char*)"</td></tr><tr><td>Font (X by Y)</td><td>");
   compInt = nvs_get_int ("fontIndex", 1);
   if (compInt >= sizeof(fontWidth)) compInt = 0;
   for (uint8_t n=0 ; n<sizeof(fontWidth); n++) {
@@ -1032,6 +1032,10 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   myClient->printf ((const char*)"<input type=\"radio\" id=\"yesPwrTurnout\" name=\"noPwrTurnouts\" value=\"1\"");
   if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"yesPwrTurnout\">Turnouts work without track power</label></td></tr>");
+  myClient->printf ((const char*)"<tr><td>Diagnotics Port</td><td>");
+  compInt = nvs_get_int ("diagPort", 23);
+  myClient->printf ((const char*)"<input type=\"checkbox\" name=\"diagEnable\" value=\"1\"> enable temporary diagnostics port<br>Port <input name=\"diagPort\" value=\"%d\" type=\"number\" min=\"1\" max=\"65534\" size=\"7\"> (telnet/raw)", compInt);
+  myClient->printf ((const char*)"</td></tr>");
   myClient->printf ((const char*)"<tr><td>Restart</td><td>");
   myClient->printf ((const char*)"<input type=\"radio\" name=\"rebootOnUpdate\" id=\"rebootOnUpdateNo\" value=\"N\"><label for=\"rebootOnUpdateNo\">No restart</label><br>");
   myClient->printf ((const char*)"<input type=\"radio\" name=\"rebootOnUpdate\" id=\"rebootOnUpdateCond\" value=\"C\" checked=\"true\"><label for=\"rebootOnUpdateCond\">Restart if updated</label><br>");
@@ -1238,6 +1242,10 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   }
   if (!hasChanged) {
      myClient->printf ((const char*)"<li>No changes saved.</li>");
+  }
+  resultPtr = webScanData (data, "diagEnable", dataSize);
+  if (resultPtr!=NULL && resultPtr[0]=='1') {
+    startDiagPort();
   }
   #ifdef OTAUPDATE
   resultPtr = webScanData (data, "ota_action", dataSize);

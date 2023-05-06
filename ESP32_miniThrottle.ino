@@ -367,6 +367,7 @@ void setup()  {
   showPackets = true;
   #endif    //  SHOWPACKETSONSTART
   // Also change CPU speed before starting wireless comms
+  #ifndef NOCPUSPEED
   int cpuSpeed = nvs_get_int ("cpuspeed", 0);
   if (cpuSpeed > 0) {
     #ifdef USEWIFI   //  USEWIFI
@@ -375,6 +376,7 @@ void setup()  {
     Serial.printf ("%s Setting CPU speed to %d MHz\r\n", getTimeStamp(), cpuSpeed);
     setCpuFrequencyMhz (cpuSpeed);
   }
+  #endif
   if (showPinConfig()) Serial.printf ("%s Basic hardware check passed\r\n", getTimeStamp());
   else {
     Serial.printf ("%s Basic hardware check failed\r\n", getTimeStamp());

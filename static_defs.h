@@ -243,7 +243,7 @@ struct nvsVar_s {
 
 // structure for holding pin assignments
 struct pinVar_s {
-  uint8_t pinNr;
+  int8_t pinNr;
   char *pinDesc;
 };
 
@@ -282,4 +282,3 @@ struct nvs_page                                     // For nvs entries
 
 uint8_t nvs_index_ref[] = { 0x01,      0x02,       0x04,       0x08,       0x11,     0x12,      0x14,      0x18,      0x21,     0x41,   0x42,       0x48,      0xff};
 const char *nvs_descrip[]     = { "uint8_t", "uint16_t", "uint32_t", "uint64_t", "int8_t", "int16_t", "int32_t", "int64_t", "String", "Blob", "BlobData", "BlobIdx", "Unused" };
-

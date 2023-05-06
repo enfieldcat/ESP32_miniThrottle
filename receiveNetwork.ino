@@ -78,7 +78,7 @@ void receiveNetData(void *pvParameters)
           if (cmdProtocol==DCCEX && inChar=='>') inBuffer[bufferPtr++] = '>';
           inBuffer[bufferPtr] = '\0';
           if (diagIsRunning) {
-            diagEnqueue ('p', "<-- ", false);
+            diagEnqueue ('p', (char *) "<-- ", false);
             diagEnqueue ('p', inBuffer, true);
           }
           processPacket (inBuffer);

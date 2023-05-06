@@ -53,84 +53,84 @@ SOFTWARE.
   uint16_t wwwFontWidth = sizeof(fontWidth);
   #endif
   struct nvsVar_s nvsVars[] = {
-    { "tname",          STRING,     4, sizeof(tname),            0,        NAME, "Device Name" },
-    { "cpuspeed",       INTEGER,    0,           240,            0,          "", "CPU Speed" },
-    { "inventoryLoco",  INTEGER,    0,             2,            0,          "", "DCC_Ex loco inventory"},
-    { "inventoryTurn",  INTEGER,    0,             2,            0,          "", "DCC_Ex turnouts inventory"},
-    { "inventoryRout",  INTEGER,    0,             2,            0,          "", "DCC_Ex routes inventory"},
-    { "diagPort",       INTEGER,   10,         65500,           23,          "", "Diagnostic port"},
-    // { "diagPortEnable", INTEGER,    0,             1,            0,          "", "Diagnostic port enabled"},
+    { (char*)"tname",          STRING,     4, sizeof(tname),            0,       (char*) NAME, (char*)"Device Name" },
+    { (char*)"cpuspeed",       INTEGER,    0,           240,            0,       (char*)   "", (char*)"CPU Speed" },
+    { (char*)"inventoryLoco",  INTEGER,    0,             2,            0,       (char*)   "", (char*)"DCC_Ex loco inventory"},
+    { (char*)"inventoryTurn",  INTEGER,    0,             2,            0,       (char*)   "", (char*)"DCC_Ex turnouts inventory"},
+    { (char*)"inventoryRout",  INTEGER,    0,             2,            0,       (char*)   "", (char*)"DCC_Ex routes inventory"},
+    { (char*)"diagPort",       INTEGER,   10,         65500,           23,       (char*)   "", (char*)"Diagnostic port"},
+    // { "diagPortEnable", INTEGER,    0,             1,            0,       (char*)   "", (char*)"Diagnostic port enabled"},
     #ifdef DELAYONSTART
-    { "delayOnStart",   INTEGER,    0,           120, DELAYONSTART,          "", "Start up delay in seconds" },
+    { (char*)"delayOnStart",   INTEGER,    0,           120, DELAYONSTART,       (char*)   "", (char*)"Start up delay in seconds" },
     #endif
     #ifndef NODISPLAY
-    { "screenRotate",   INTEGER,    0,             3,            0,          "", "Screen Rotation" },
-    { "fontIndex",      INTEGER,    0,  wwwFontWidth,            1,          "", "Font ID" },
-    { "backlightValue", INTEGER,  100,           255,          200,          "", "Screen Brightness" },
-    { "warnSpeed",      INTEGER,   50,           101,           90,          "", "Warning Speed" },
-    { "allMenuItems",   INTEGER,    0,             1,            0,          "", "Display all menu items" },
-    { "menuWrap",       INTEGER,    0,             1,            0,          "", "Menus wrap around" },
-    { "noPwrTurnouts",  INTEGER,    0,             1,            0,          "", "turnouts work without track power" },
+    { (char*)"screenRotate",   INTEGER,    0,             3,            0,       (char*)   "", (char*)"Screen Rotation" },
+    { (char*)"fontIndex",      INTEGER,    0,  wwwFontWidth,            1,       (char*)   "", (char*)"Font ID" },
+    { (char*)"backlightValue", INTEGER,  100,           255,          200,       (char*)   "", (char*)"Screen Brightness" },
+    { (char*)"warnSpeed",      INTEGER,   50,           101,           90,       (char*)   "", (char*)"Warning Speed" },
+    { (char*)"allMenuItems",   INTEGER,    0,             1,            0,       (char*)   "", (char*)"Display all menu items" },
+    { (char*)"menuWrap",       INTEGER,    0,             1,            0,       (char*)   "", (char*)"Menus wrap around" },
+    { (char*)"noPwrTurnouts",  INTEGER,    0,             1,            0,       (char*)   "", (char*)"turnouts work without track power" },
     #ifdef SCREENSAVER
-    { "screenSaver",    INTEGER,    0,           600,  SCREENSAVER,          "", "Screen Saver Timeout" },
+    { (char*)"screenSaver",    INTEGER,    0,           600,  SCREENSAVER,       (char*)   "", (char*)"Screen Saver Timeout" },
     #endif
     #endif
-    { "debounceTime",   INTEGER,   10,           100,   DEBOUNCEMS,          "", "Debounce mS" },
-    { "detentCount",    INTEGER,    1,            10,            2,          "", "Detent Count" },
-    { "buttonStop",     INTEGER,    0,             1,            0,          "", "Encoder Button Stop" },
-    { "speedStep",      INTEGER,    1,            20,            4,          "", "Speed Change Step" },
-    { "sortData",       INTEGER,    0,             1,            1,          "", "Enable Sorting" },
-    { "clockFormat",    INTEGER,    0,             2,            0,          "", "Fast Clock Format" },
-    { "bidirectional",  INTEGER,    0,             1,            0,          "", "standard/bidirectional mode" },
+    { (char*)"debounceTime",   INTEGER,   10,           100,   DEBOUNCEMS,       (char*)   "", (char*)"Debounce mS" },
+    { (char*)"detentCount",    INTEGER,    1,            10,            2,       (char*)   "", (char*)"Detent Count" },
+    { (char*)"buttonStop",     INTEGER,    0,             1,            0,       (char*)   "", (char*)"Encoder Button Stop" },
+    { (char*)"speedStep",      INTEGER,    1,            20,            4,       (char*)   "", (char*)"Speed Change Step" },
+    { (char*)"sortData",       INTEGER,    0,             1,            1,       (char*)   "", (char*)"Enable Sorting" },
+    { (char*)"clockFormat",    INTEGER,    0,             2,            0,       (char*)   "", (char*)"Fast Clock Format" },
+    { (char*)"bidirectional",  INTEGER,    0,             1,            0,       (char*)   "", (char*)"standard/bidirectional mode" },
     #ifdef BRAKEPRESPIN
-    { "brakeup",        INTEGER,    1,            10,            1,          "", "Brake Up Rate" },
-    { "brakedown",      INTEGER,    1,           100,           20,          "", "Brake Down Rate" },
+    { (char*)"brakeup",        INTEGER,    1,            10,            1,       (char*)   "", (char*)"Brake Up Rate" },
+    { (char*)"brakedown",      INTEGER,    1,           100,           20,       (char*)   "", (char*)"Brake Down Rate" },
     #endif
-    { "funcOverlay",    STRING,    16,            31,            0, FUNCOVERLAY, "Function Overlay" },
-    { "routeDelay",     INTEGER,    0, (sizeof(routeDelay)/sizeof(uint16_t))-1, 2, "", "Delay between Route Steps" },
+    { (char*)"funcOverlay",    STRING,    16,            31,            0, (char*) FUNCOVERLAY, (char*)"Function Overlay" },
+    { (char*)"routeDelay",     INTEGER,    0, ((sizeof(routeDelay)/sizeof(uint16_t))-1), 2, (char*)"", (char*)"Delay between Route Steps" },
     #ifdef OTAUPDATE
-    { "ota_url",        STRING,    16,           120,            0,   OTAUPDATE, "OTA update URL" },
+    { (char*)"ota_url",        STRING,    16,           120,            0,  (char*) OTAUPDATE, (char*)"OTA update URL" },
     #endif
-    { "mdns",           INTEGER,    0,             1,            1,          "", "mDNS Search Endabled" },
-    { "defaultProto",   INTEGER, WITHROT,      DCCEX,      WITHROT,          "", "Preferred Protocol" },
-    { "toOffset",       INTEGER,    1,          1000,          100,          "", "turnout numbering starts at" },
+    { (char*)"mdns",           INTEGER,    0,             1,            1,       (char*)   "", (char*)"mDNS Search Endabled" },
+    { (char*)"defaultProto",   INTEGER, WITHROT,      DCCEX,      WITHROT,        (char*)  "", (char*)"Preferred Protocol" },
+    { (char*)"toOffset",       INTEGER,    1,          1000,          100,       (char*)   "", (char*)"turnout numbering starts at" },
     #ifdef RELAYPORT
-    { "maxRelay",       INTEGER,    0,      MAXRELAY,   MAXRELAY/2,          "", "Max nodes to relay" },
-    { "relayMode",      INTEGER,    0,             2,            1,          "", "Relay mode" },
-    { "relayPort",      INTEGER,    1,         65534,    RELAYPORT,          "", "Relay port" },
-    { "fastclock2dcc",  INTEGER,    0,             1,            0,          "", "send fastclock to dcc-ex" },
+    { (char*)"maxRelay",       INTEGER,    0,      MAXRELAY,   MAXRELAY/2,       (char*)   "", (char*)"Max nodes to relay" },
+    { (char*)"relayMode",      INTEGER,    0,             2,            1,       (char*)   "", (char*)"Relay mode" },
+    { (char*)"relayPort",      INTEGER,    1,         65534,    RELAYPORT,       (char*)   "", (char*)"Relay port" },
+    { (char*)"fastclock2dcc",  INTEGER,    0,             1,            0,       (char*)   "", (char*)"send fastclock to dcc-ex" },
     #ifdef FC_HOUR
-    { "fc_hour",        INTEGER,    0,            23,      FC_HOUR,          "", "fastclock hour" },
+    { (char*)"fc_hour",        INTEGER,    0,            23,      FC_HOUR,       (char*)   "", (char*)"fastclock hour" },
     #endif
     #ifdef FC_MIN
-    { "fc_min",         INTEGER,    0,            59,       FC_MIN,          "", "fastclock minute" },
+    { (char*)"fc_min",         INTEGER,    0,            59,       FC_MIN,       (char*)   "", (char*)"fastclock minute" },
     #endif
     #ifdef FC_RATE
-    { "fc_rate",        INTEGER,    0,          1000,      FC_RATE,          "", "fastclock speed-up rate" },
+    { (char*)"fc_rate",        INTEGER,    0,          1000,      FC_RATE,       (char*)   "", (char*)"fastclock speed-up rate" },
     #endif
     #endif
     #ifdef WEBLIFETIME
-    { "webPort",        INTEGER,    1,         65534,      WEBPORT,          "", "Web server port"},
-    { "webuser",        STRING,     4,            16,            0,     WEBUSER, "Web Admin Name" },
-    { "webpass",        STRING,     4,            16,            0,     WEBPASS, "Web Admin Password" },
-    { "webTimeOut",     INTEGER,    0,           600,  WEBLIFETIME,          "", "Web Server Timeout" },
-    { "webStatus",      INTEGER,    0,             2,            0,          "", "Device descript at start or end of status page" },
-    { "webPwrSwitch",   INTEGER,    0,             1,            1,          "", "Power on/off from web page" },
+    { (char*)"webPort",        INTEGER,    1,         65534,      WEBPORT,       (char*)   "", (char*)"Web server port"},
+    { (char*)"webuser",        STRING,     4,            16,            0,   (char*)  WEBUSER, (char*)"Web Admin Name" },
+    { (char*)"webpass",        STRING,     4,            16,            0,   (char*)  WEBPASS, (char*)"Web Admin Password" },
+    { (char*)"webTimeOut",     INTEGER,    0,           600,  WEBLIFETIME,       (char*)   "", (char*)"Web Server Timeout" },
+    { (char*)"webStatus",      INTEGER,    0,             2,            0,       (char*)   "", (char*)"Device descript at start or end of status page" },
+    { (char*)"webPwrSwitch",   INTEGER,    0,             1,            1,       (char*)   "", (char*)"Power on/off from web page" },
     #endif
     #ifdef WEBCACHE
-    { "cacheTimeout",   INTEGER,    5,          1440,     WEBCACHE,          "", "Static web content cache time"},
+    { (char*)"cacheTimeout",   INTEGER,    5,          1440,     WEBCACHE,       (char*)   "", (char*)"Static web content cache time"},
     #endif
     #ifdef WEBREFRESH
-    { "webRefresh",     INTEGER,    0,          3600,   WEBREFRESH,          "", "Status page refresh time" },
+    { (char*)"webRefresh",     INTEGER,    0,          3600,   WEBREFRESH,       (char*)   "", (char*)"Status page refresh time" },
     #endif
-    { "dccPower",       INTEGER,    0,          JOIN,         BOTH,          "", "Outputs to enable on power-on" },
-    { "dccRtError",     INTEGER,    0,             1,            0,          "", "Stop route setup on error" },
-    { "dccRmLoco",      INTEGER,    0,             1,            0,          "", "Delete locos on DCC-Ex when not in use" },
-    { "staConnect",     INTEGER,    0,             3,            2,          "", "Wifi Station selection criteria" },
-    { "APname",         STRING,     4,            32,            0,        NAME, "Access point name" },
-    { "APpass",         STRING,     4,            32,            0,      "none", "Access point password" },
-    { "apChannel",      INTEGER,    1,            13,            6,          "", "Access point channel" },
-    { "apClients",      INTEGER,    1,             8,            4,          "", "Max access point clients" }
+    { (char*)"dccPower",       INTEGER,    0,          JOIN,         BOTH,       (char*)   "", (char*)"Outputs to enable on power-on" },
+    { (char*)"dccRtError",     INTEGER,    0,             1,            0,       (char*)   "", (char*)"Stop route setup on error" },
+    { (char*)"dccRmLoco",      INTEGER,    0,             1,            0,       (char*)   "", (char*)"Delete locos on DCC-Ex when not in use" },
+    { (char*)"staConnect",     INTEGER,    0,             3,            2,       (char*)   "", (char*)"Wifi Station selection criteria" },
+    { (char*)"APname",         STRING,     4,            32,            0,      (char*)  NAME, (char*)"Access point name" },
+    { (char*)"APpass",         STRING,     4,            32,            0,     (char*) "none", (char*)"Access point password" },
+    { (char*)"apChannel",      INTEGER,    1,            13,            6,       (char*)   "", (char*)"Access point channel" },
+    { (char*)"apClients",      INTEGER,    1,             8,            4,       (char*)   "", (char*)"Max access point clients" }
   };
 
 
@@ -142,80 +142,79 @@ SOFTWARE.
   \********************************************************************** */
   struct pinVar_s pinVars[] = {
     #ifdef DCCTX
-    { DCCTX,        "DCC - Tx" },
+    { DCCTX,        (char*)"DCC - Tx" },
     #endif
     #ifdef DCCRX
-    { DCCRX,        "DCC - Rx" },
+    { DCCRX,        (char*)"DCC - Rx" },
     #endif
     #ifdef SDA_PIN
-    { SDA_PIN,      "I2C - SDA" },
+    { SDA_PIN,      (char*)"I2C - SDA" },
     #endif
     #ifdef SCK_PIN
-    { SCK_PIN,      "I2C - SCK" },
+    { SCK_PIN,      (char*)"I2C - SCK" },
     #endif
     #ifdef SPI_RESET
-    { SPI_RESET,    "SPI - Reset" },
+    { SPI_RESET,    (char*)"SPI - Reset" },
     #endif
     #ifdef SPI_CS
-    { SPI_CS,       "SPI - CS" },
+    { SPI_CS,       (char*)"SPI - CS" },
     #endif
     #ifdef SPI_DC
-    { SPI_DC,       "SPI - DC" },
+    { SPI_DC,       (char*)"SPI - DC" },
     #endif
     #ifdef SPI_SCL
-    { SPI_SCL,      "SPI - Clock/SCL" },
+    { SPI_SCL,      (char*)"SPI - Clock/SCL" },
     #endif
     #ifdef SPI_SDA
-    { SPI_SDA,      "SPI - Data/SDA" },
+    { SPI_SDA,      (char*)"SPI - Data/SDA" },
     #endif
     #ifdef BACKLIGHTPIN
-    { BACKLIGHTPIN, "Backlight" },
+    { BACKLIGHTPIN, (char*)"Backlight" },
     #ifdef BACKLIGHTREF
-    { BACKLIGHTREF, "Backlight Ref" },
+    { BACKLIGHTREF, (char*)"Backlight Ref" },
     #endif
     #endif
     #ifdef ENCODE_UP
-    { ENCODE_UP,    "Encoder Up" },
+    { ENCODE_UP,    (char*)"Encoder Up" },
     #endif
     #ifdef ENCODE_DN
-    { ENCODE_DN,    "Encoder Down" },
+    { ENCODE_DN,    (char*)"Encoder Down" },
     #endif
     #ifdef ENCODE_SW
-    { ENCODE_SW,    "Encoder Switch" },
+    { ENCODE_SW,    (char*)"Encoder Switch" },
     #endif
     #ifdef DIRFWDPIN
-    { DIRFWDPIN,    "Forward Switch" },
+    { DIRFWDPIN,    (char*)"Forward Switch" },
     #endif
     #ifdef DIRREVPIN
-    { DIRRWVPIN,    "Reverse Switch" },
+    { DIRRWVPIN,    (char*)"Reverse Switch" },
     #endif
     #ifdef TRACKPWR
-    { TRACKPWR,     "Trk Power LED" },
+    { TRACKPWR,     (char*)"Trk Power LED" },
     #endif
     #ifdef TRACKPWRINV
-    { TRACKPWRINV,  "Trk Power LED" },
+    { TRACKPWRINV,  (char*)"Trk Power LED" },
     #endif
     #ifdef TRAINSETLEN
-    { TRAINSETPIN,  "Bidirectional LED" },
+    { TRAINSETPIN,  (char*)"Bidirectional LED" },
     #endif
     #ifdef F1LED
-    { F1LED,        "Func 10x LED" },
+    { F1LED,        (char*)"Func 10x LED" },
     #endif
     #ifdef F2LED
-    { F2LED,        "Func 20x LED" },
+    { F2LED,        (char*)"Func 20x LED" },
     #endif
     #ifdef SPEEDOPIN
-    { SPEEDOPIN,    "Speedometer Out" },
+    { SPEEDOPIN,    (char*)"Speedometer Out" },
     #endif
     #ifdef BRAKEPRESPIN
-    { BRAKEPRESPIN, "Brake Pres Out" },
+    { BRAKEPRESPIN, (char*)"Brake Pres Out" },
     #endif
     #ifdef POTTHROTPIN
-    { POTTHROTPIN,  "Throttle Poten" },
+    { POTTHROTPIN,  (char*)"Throttle Poten" },
     #endif
     #ifndef keynone
     #endif
-    { 1,            "Console - Tx" },
-    { 3,            "Console - Rx" }
+    { 1,            (char*)"Console - Tx" },
+    { 3,            (char*)"Console - Rx" }
   }; 
-

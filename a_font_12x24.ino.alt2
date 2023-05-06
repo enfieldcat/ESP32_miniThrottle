@@ -9,6 +9,8 @@
 // to get 16 or more letters per line you need 192 or more pixels width
 // To get 4 or more lines you need 96 or more pixels height
 //
+// To use this file in miniThrottle, please also enable a 12x24 font
+//
 //###########################################################################
 //
 

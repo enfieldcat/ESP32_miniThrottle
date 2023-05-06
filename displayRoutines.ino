@@ -39,9 +39,15 @@ SOFTWARE.
  */
 #ifndef NODISPLAY
 #ifdef CUSTOM_FONT
+#ifdef GIANT_FONT
+const char *fontLabel[] = {"Small", "Std", "Large", "Wide", "Huge", "Giant"};
+const uint8_t fontWidth[]  = { 6,8,10,14,12,16 };
+const uint8_t fontHeight[] = { 8,16,20,16,24,32 };
+#else
 const char *fontLabel[] = {"Small", "Std", "Large", "Wide", "Huge"};
 const uint8_t fontWidth[]  = { 6,8,10,14,12 };
 const uint8_t fontHeight[] = { 8,16,20,16,24 };
+#endif
 #else
 const char *fontLabel[] = {"Small", "Std", "Large", "Wide"};
 const uint8_t fontWidth[]  = { 6,8,10,14 };
@@ -89,6 +95,11 @@ void setupFonts()
     case 4:
       display.setFixedFont(font_12x24);
       break;
+    #ifdef GIANT_FONT
+    case 5:
+      display.setFixedFont(font_16x32);
+      break;
+    #endif
     #endif
     default:
       display.setFixedFont(ssd1306xled_font8x16);
@@ -161,7 +172,7 @@ void mkLocoMenu()
 void mkTurnoutMenu()
 {
   char *switchMenu[turnoutCount + 1];
-  char *stateMenu[] ={"Close", "Throw"};
+  char *stateMenu[] ={(char*)"Close", (char*)"Throw"};
   char operation = 'C';
   uint8_t result = 255;
   uint8_t reqState = 255;

@@ -307,22 +307,22 @@ char* wifi_EncryptionType(wifi_auth_mode_t encryptionType)
 {
   switch (encryptionType) {
     case (WIFI_AUTH_OPEN):
-      return "Open";
+      return (char*) "Open";
       break;
     case (WIFI_AUTH_WEP):
-      return "WEP";
+      return (char*) "WEP";
       break;
     case (WIFI_AUTH_WPA_PSK):
-      return "WPA_PSK";
+      return (char*) "WPA_PSK";
       break;
     case (WIFI_AUTH_WPA2_PSK):
-      return "WPA2_PSK";
+      return (char*) "WPA2_PSK";
       break;
     case (WIFI_AUTH_WPA_WPA2_PSK):
-      return "WPA_WPA2_PSK";
+      return (char*) "WPA_WPA2_PSK";
       break;
     case (WIFI_AUTH_WPA2_ENTERPRISE):
-      return "WPA2_ENTERPRISE";
+      return (char*) "WPA2_ENTERPRISE";
       break;
     }
 }
@@ -494,7 +494,7 @@ void txPacket (const char *header, const char *pktData)
     client.flush();
     xSemaphoreGive(tcpipSem);
     if (diagIsRunning) {
-      diagEnqueue ('p', "--> ", false);
+      diagEnqueue ('p', (char *) "--> ", false);
       if (header != NULL) {
         diagEnqueue ('p', (char*) header, false);
       }
@@ -562,7 +562,7 @@ void txPacket (const char *header, const char *pktData)
     serial_dev.write ("\r\n", 2);
     xSemaphoreGive(serialSem);
     if (diagIsRunning) {
-      diagEnqueue ('p', "--> ", false);
+      diagEnqueue ('p', (char *) "--> ", false);
       if (header!=NULL) {
         diagEnqueue ('p', (char*) header, false);
       }

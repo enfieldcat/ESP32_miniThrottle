@@ -500,8 +500,8 @@ bool routeSetup (int8_t routeNr, bool displayable)
   bool retVal = true;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    char *displayState = {"false"};
-    if (displayable) displayState = "true";
+    char *displayState = {(char*)"false"};
+    if (displayable) displayState = (char*)"true";
     Serial.printf ("%s routeSetup(%d, %s)\r\n", getTimeStamp(), routeNr, displayState);
     xSemaphoreGive(consoleSem);
   }

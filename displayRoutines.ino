@@ -932,9 +932,15 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
           hasChanged = true;
         }
         else if (menuWrap == 1) {
-          lineChanged[currentItem] = true;
-          currentItem = 0;
-          lineChanged[currentItem] = true;
+          if (itemCount < linesPerScreen) {
+            lineChanged[currentItem] = true;
+            currentItem = 0;
+            lineChanged[currentItem] = true;
+          }
+          else {
+            for (uint8_t j=0; j<itemCount; j++) lineChanged[j] = true;
+            currentItem = 0;
+          }
           hasChanged = true;
         }
       }
@@ -973,7 +979,9 @@ void displayScreenLine (const char *menuItem, uint8_t lineNr, bool inverted)
   char linedata[charsPerLine+1];
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s displayScreenLine(%s, %d, inverted)\r\n", getTimeStamp(), menuItem, lineNr);
+    char *boolind = (char*)"false";
+    if (inverted) boolind = (char*) "true";
+    Serial.printf ("%s displayScreenLine(%s, %d, %s)\r\n", getTimeStamp(), menuItem, lineNr, boolind);
     xSemaphoreGive(consoleSem);
   }
   if (lineNr >= linesPerScreen) return;
@@ -1034,9 +1042,11 @@ uint8_t displayTempMessage (const char *header, const char *message, bool wait4r
   char *charPtr = (char *) message;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    if (header!=NULL && message!=NULL) Serial.printf ("%s displayTempMessage(%s, %s, wait)\r\n", getTimeStamp(), header, message);
-    else if (header!=NULL)  Serial.printf ("%s displayTempMessage(%s, NULL, wait)\r\n", getTimeStamp(), header);
-    else if (message!=NULL) Serial.printf ("%s displayTempMessage(NULL, %s, wait)\r\n", getTimeStamp(), message);
+    char *boolind = (char*)"false";
+    if (wait4response) boolind = (char*) "true";
+    if (header!=NULL && message!=NULL) Serial.printf ("%s displayTempMessage(%s, %s, %s)\r\n", getTimeStamp(), header, message, boolind);
+    else if (header!=NULL)  Serial.printf ("%s displayTempMessage(%s, NULL, %s)\r\n", getTimeStamp(), header, boolind);
+    else if (message!=NULL) Serial.printf ("%s displayTempMessage(NULL, %s, %s)\r\n", getTimeStamp(), message, boolind);
     xSemaphoreGive(consoleSem);
   }
   display.clear();

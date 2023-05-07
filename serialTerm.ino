@@ -1637,7 +1637,7 @@ bool showPinConfig()  // Display pin out selection
     for (uint8_t n=0; n<limit; n++) {
       Serial.printf (prtTemplate, pinVars[n].pinDesc, pinVars[n].pinNr);
       for (uint8_t i=0; i<limit; i++) {
-        if (i!=n && pinVars[n].pinNr == pinVars[i].pinNr) {
+        if (i!=n && pinVars[n].pinNr == pinVars[i].pinNr && pinVars[n].pinNr!=-1) {
           retVal = false;
           Serial.printf (", Clash with \"%s\"", pinVars[i].pinDesc);
         }

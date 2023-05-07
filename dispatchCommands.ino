@@ -494,9 +494,7 @@ void setRouteBg (void *pvParameters)
 bool routeSetup (int8_t routeNr, bool displayable)
 {
   uint16_t pause = routeDelay[nvs_get_int("routeDelay", 2)];
-  #ifndef NODISPLAY
   char message[40];
-  #endif
   bool retVal = true;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

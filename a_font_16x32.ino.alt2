@@ -8,6 +8,15 @@
 // to get 16 or more letters per line you need 256 or more pixels width
 // To get 4 or more lines you need 128 or more pixels height
 // 
+// To use this file in miniThrottle, please also enable a 12x24 font
+//
+// Additional fonts may be removed in future releases.
+// Additional fonts have been sourced from open source sources.
+// Given this, it has been assumed that using these fonts is not an issue
+// if the source(s) are acknowleged. While the code text has been altered
+// to suit lcdgfx library, the art work of the lettering remains true to
+// the original source.
+//
 //###########################################################################
 //
 

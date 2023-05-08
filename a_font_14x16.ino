@@ -3,6 +3,13 @@
 //
 // Contents are extracted from bitmap-fonts/bitmap/dylex/14x14.bdf
 //
+// Additional fonts may be removed in future releases.
+// Additional fonts have been sourced from open source sources.
+// Given this, it has been assumed that using these fonts is not an issue
+// if the source(s) are acknowleged. While the code text has been altered
+// to suit lcdgfx library, the art work of the lettering remains true to
+// the original source.
+// 
 //###########################################################################
 //
 

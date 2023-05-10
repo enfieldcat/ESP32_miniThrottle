@@ -4,3 +4,6 @@ miniThrottle.zip
 miniThrottle.h
 partitions.csv
 *.bak
+*.alt1
+*.alt2
+

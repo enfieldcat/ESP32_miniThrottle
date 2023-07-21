@@ -38,26 +38,63 @@ SOFTWARE.
  * The source font should be listed in Ardiuno IDE before displayRoutines.ino
  */
 #ifndef NODISPLAY
-#ifdef CUSTOM_FONT
-#ifdef GIANT_FONT
-const char *fontLabel[] = {"Small", "Std", "Large", "Wide", "Huge", "Giant"};
-const uint8_t fontWidth[]  = { 6,8,10,14,12,16 };
-const uint8_t fontHeight[] = { 8,16,20,16,24,32 };
-#else
-const char *fontLabel[] = {"Small", "Std", "Large", "Wide", "Huge"};
-const uint8_t fontWidth[]  = { 6,8,10,14,12 };
-const uint8_t fontHeight[] = { 8,16,20,16,24 };
+const char *fontLabel[] = {"Small 6x8", "Std 8x16"
+#ifdef FONT_10x20
+, "Large 10x20"
 #endif
-#else
-const char *fontLabel[] = {"Small", "Std", "Large", "Wide"};
-const uint8_t fontWidth[]  = { 6,8,10,14 };
-const uint8_t fontHeight[] = { 8,16,20,16 };
+#ifdef FONT_14x16
+, "Wide 14x16"
 #endif
+#ifdef FONT_12x24
+, "Huge 12x24" 
+#endif
+#ifdef FONT_16x32
+, "Giant 16x32"
+#endif
+#ifdef FONT_32x64
+, "Massive 32x64"
+#endif
+};
+const uint8_t fontWidth[]  = { 6,8
+#ifdef FONT_10x20
+,10
+#endif
+#ifdef FONT_14x16
+,14
+#endif
+#ifdef FONT_12x24
+, 12
+#endif
+#ifdef FONT_16x32
+, 16
+#endif
+#ifdef FONT_32x64
+, 32
+#endif
+};
+const uint8_t fontHeight[] = { 8,16
+#ifdef FONT_10x20
+,20
+#endif
+#ifdef FONT_14x16
+,16
+#endif
+#ifdef FONT_12x24
+, 24
+#endif
+#ifdef FONT_16x32
+, 32
+#endif
+#ifdef FONT_32x64
+, 64
+#endif
+};
 
 
 void setupFonts()
 {
   static uint8_t fontIndex = 1;
+  uint8_t incrementer = 0;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setupFonts()\r\n", getTimeStamp());
@@ -78,33 +115,22 @@ void setupFonts()
   selFontHeight  = fontHeight[fontIndex];
   charsPerLine   = screenWidth  / selFontWidth;
   linesPerScreen = screenHeight / selFontHeight;
-  switch (fontIndex) {
-    case 0:
-      display.setFixedFont(ssd1306xled_font6x8);
-      break;
-    case 1:
-      display.setFixedFont(ssd1306xled_font8x16);
-      break;
-    case 2:
-      display.setFixedFont(font_10x20);
-      break;
-    case 3:
-      display.setFixedFont(font_14x16);
-      break;
-    #ifdef CUSTOM_FONT
-    case 4:
-      display.setFixedFont(font_12x24);
-      break;
-    #ifdef GIANT_FONT
-    case 5:
-      display.setFixedFont(font_16x32);
-      break;
-    #endif
-    #endif
-    default:
-      display.setFixedFont(ssd1306xled_font8x16);
-      break;
-  }
+  if (fontIndex == incrementer++) display.setFixedFont(ssd1306xled_font6x8);
+  else if (fontIndex == incrementer++) display.setFixedFont(ssd1306xled_font8x16);
+#ifdef FONT_10x20
+  else if (fontIndex == incrementer++) display.setFixedFont(font_10x20);
+#endif
+#ifdef FONT_14x16
+  else if (fontIndex == incrementer++) display.setFixedFont(font_14x16);
+#endif
+#ifdef FONT_12x24
+  else if (fontIndex == incrementer++) display.setFixedFont(font_12x24);
+#endif
+#ifdef FONT_16x32
+  else if (fontIndex == incrementer++) display.setFixedFont(font_16x32);
+#endif
+  else display.setFixedFont(ssd1306xled_font8x16);
+
   display.fill(0x00);
   #ifdef STDCOLOR
   display.setColor (STDCOLOR);

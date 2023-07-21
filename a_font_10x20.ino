@@ -10,9 +10,13 @@
 // to suit lcdgfx library, the art work of the lettering remains true to
 // the original source.
 //
+// to exclude from build, rename with .alt1 suffix
+//
 //###########################################################################
 //
 #ifndef NODISPLAY
+#define FONT_10x20
+
 const PROGMEM uint8_t font_10x20[] = {
 0x00, // Fixed width font
 // Font information:

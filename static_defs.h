@@ -30,19 +30,22 @@ SOFTWARE.
  * Use this file to centralise any defines and includes
  * This file should contain non-customisable definitions
  */
-// Used for hardware inspection
-#include "esp_system.h"
-#include "esp_spi_flash.h"
-#include <rom/rtc.h>
-// Used for process / thread control
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
+// #include <stdio.h>
+// #include <time.h>
 // Used for user interfaces
 #ifndef NODISPLAY
 #include "lcdgfx.h"
 #include <Keypad.h>
 #include <ESP32Encoder.h>
 #endif
+// Used for hardware inspection
+#include "esp_system.h"
+#include "esp_spi_flash.h"
+#include <rom/rtc.h>
+#include <esp_timer.h>
+// Used for process / thread control
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 // Used for NVS access and query
 #include <Preferences.h>
 #include <esp_partition.h>
@@ -65,7 +68,10 @@ SOFTWARE.
 // #include <WiFiMulti.h>
 #include <ESPmDNS.h>
 #endif
-
+// Geek feature prereqs
+#ifdef SHOWPARTITIONS
+#include <esp_partition.h>
+#endif
 // Sanity check of BACKLIGHTPIN - not available on some display types
 #ifdef BACKLIGHTPIN
 #ifdef SSD1306
@@ -90,9 +96,10 @@ SOFTWARE.
 // Comment out => no web server, 0 => always running or lifetime in minutes
 //#define WEBLIFETIME   0
 #ifdef WEBLIFETIME
-extern "C" {
-#include "crypto/base64.h"
-}
+//extern "C" {
+//#include "crypto/base64.h"
+#include "mbedtls/base64.h"
+//}
 #define CSSFILE "/miniThrottle.css"
 #ifndef FILESUPPORT
 #define FILESUPPORT
@@ -105,7 +112,9 @@ extern "C" {
 #define DEFAULTCOMMAND "/sampleCommand.cfg"
 #ifdef USEWIFI
 #define CERTFILE "/rootCACertificate"
+#ifndef NOHTTPCLIENT
 #include <HTTPClient.h>
+#endif
 #endif
 #include <FS.h>
 #include <SPIFFS.h>

@@ -81,8 +81,10 @@ static SemaphoreHandle_t screenSvrSem = xSemaphoreCreateMutex();  // used to coo
 static SemaphoreHandle_t relaySvrSem  = xSemaphoreCreateMutex();  // used by various relay threads to coordinate memory/dcc-ex access
 #endif
 #ifdef OTAUPDATE
+#ifndef NOHTTPCLIENT
 static SemaphoreHandle_t otaSem       = xSemaphoreCreateMutex();  // used to ensure only one ota activity at a time
 static HTTPClient *otaHttp            = new HTTPClient();         // Client used for update
+#endif
 #endif
 static QueueHandle_t cvQueue          = xQueueCreate (2,  sizeof(int16_t));  // Queue for querying CV Values
 static QueueHandle_t keyboardQueue    = xQueueCreate (3,  sizeof(char));     // Queue for keyboard type of events
@@ -345,21 +347,46 @@ void setup()  {
   esp_chip_info(&chip_info);
   coreCount = chip_info.cores;
   Serial.printf  ("\r\n----------------------------------------\r\n");
-  Serial.printf  ("Hardware Vers: %d core ESP32 revision %d, Speed %dMHz, Xtal Freq: %dMHz, %d MB %s flash\r\n", \
+  Serial.printf  ("Hardware Vers: %d core ESP32 (rev %d) %dMHz, Xtal: %dMHz, %d MB %s flash\r\n", \
      chip_info.cores, \
      ESP.getChipRevision(), \
      ESP.getCpuFreqMHz(), \
      getXtalFrequencyMhz(), \
      spi_flash_get_chip_size() / (1024 * 1024), \
      (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
+  // Optional define in miniThrottle.h - not everyone cares about BogoMips
+  // do test before starting too many other threads, ideally we have a core to ourselves.
   Serial.printf  ("Software Vers: %s %s\r\n", PRODUCTNAME, VERSION);
   Serial.printf  (" Compile Time: %s %s\r\n", __DATE__, __TIME__);
   #ifndef NODISPLAY
   Serial.printf  (" Display Type: %s\r\n", DISPLAYNAME);
   #endif   //  NODISPLAY
   Serial.printf  ("Throttle Name: %s\r\n", tname);
+  // Optional define in miniThrottle.h, not critical to check partitions on each reboot
+  #ifdef SHOWPARTITIONS
   Serial.printf  ("----------------------------------------\r\n\r\n");
   for (uint8_t n=0; n<coreCount; n++) print_reset_reason(n, rtc_get_reset_reason(n));
+  Serial.printf  ("----------------------------------------\r\n\r\n");
+  printf("ESP32 Partition table:\r\n");
+  Serial.printf("+------+-----+----------+----------+------------------+\r\n");
+  Serial.printf("| Type | Sub |  Offset  |   Size   |       Label      |\r\n");
+  Serial.printf("| ---- | --- | -------- | -------- | ---------------- |\r\n");
+  for (uint8_t part_type=0 ; part_type<2; part_type++) {
+    const char descr[][4] = {"APP", "DAT"};
+    const esp_partition_type_t ptype[] = { ESP_PARTITION_TYPE_APP, ESP_PARTITION_TYPE_DATA };
+    // esp_partition_iterator_t pi = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
+    esp_partition_iterator_t pi = esp_partition_find (ptype[part_type], ESP_PARTITION_SUBTYPE_ANY, NULL);
+    // esp_partition_find(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, NULL);
+    if (pi != NULL) {
+      do {
+        const esp_partition_t* p = esp_partition_get(pi);
+        Serial.printf("| %s  | %02x  | 0x%06X | 0x%06X | %-16s |\r\n", 
+          descr[part_type], p->subtype, p->address, p->size, p->label);
+      } while (pi = (esp_partition_next(pi)));
+    }
+  }
+  Serial.printf("+------+-----+----------+----------+------------------+\r\n");
+  #endif
   debounceTime = nvs_get_int ("debounceTime", DEBOUNCEMS);
   screenRotate = nvs_get_int ("screenRotate", 0);
   if (nvs_get_int ("bidirectional", 0) == 1) bidirectionalMode = true;

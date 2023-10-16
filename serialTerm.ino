@@ -147,7 +147,9 @@ void processSerialCmd (uint8_t *inBuffer)
   else if (nparam==3 && strcmp (param[1], "write") == 0 && strcmp (param[0], "file") == 0) util_writeFile  (SPIFFS, param[2]);
   #endif
   #ifdef USEWIFI
+  #ifndef NOHTTPCLIENT
   else if (nparam==4 && strcmp (param[1], "download") == 0 && strcmp (param[0], "file") == 0) getHttp2File (SPIFFS, param[2], param[3]);
+  #endif
   #endif
   #ifndef NODISPLAY
   else if (nparam<=2 && strcmp (param[0], "font") == 0)          mt_set_font         (nparam, param);

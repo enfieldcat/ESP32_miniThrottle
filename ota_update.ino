@@ -26,6 +26,7 @@ SOFTWARE.
 
 
 #ifdef OTAUPDATE
+#ifndef NOHTTPCLIENT
 /*
  * ota_control
  * 
@@ -534,4 +535,5 @@ const char* OTAstatus()
   return (message);
 }
 
+#endif
 #endif

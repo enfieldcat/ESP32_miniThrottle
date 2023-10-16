@@ -488,6 +488,7 @@ void util_format_spiffs()
 }
 
 #ifdef USEWIFI
+#ifndef NOHTTPCLIENT
 void getHttp2File (fs::FS &fs, char *url, char *fileName)
 {
   HTTPClient *httpClient = NULL;
@@ -541,11 +542,13 @@ void getHttp2File (fs::FS &fs, char *url, char *fileName)
   }
   if (httpClient != NULL) closeHttpStream (httpClient);
 }
+#endif
 
 
 /*
  * Open a stream to read http/s data
  */
+#ifndef NOHTTPCLIENT
 WiFiClient* getHttpStream (char *url, const char *cert, HTTPClient *http)
 {
   WiFiClient *retVal = NULL;
@@ -570,10 +573,12 @@ WiFiClient* getHttpStream (char *url, const char *cert, HTTPClient *http)
   }
 return (retVal);
 }
+#endif
 
 /*
  * Close http stream once done
  */
+#ifndef NOHTTPCLIENT
 void closeHttpStream(HTTPClient *http)
 {
   if (http!= NULL) {
@@ -582,6 +587,7 @@ void closeHttpStream(HTTPClient *http)
     http = NULL;
   }
 }
+#endif
 #endif  //  USEWIFI
 
 void defaultCertExists(fs::FS &fs)

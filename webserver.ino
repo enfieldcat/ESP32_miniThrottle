@@ -94,11 +94,13 @@ void webListener(void *pvParameters)
     size_t outputLength;
     char t_userName[64];
     char t_userPass[64];
+    unsigned char encoded[128];
     nvs_get_string ("webuser", t_userName, WEBUSER, sizeof(t_userName));
     nvs_get_string ("webpass", t_userPass, WEBPASS, sizeof(t_userPass));
     strcat (t_userName, ":");
     strcat (t_userName, t_userPass);
-    unsigned char * encoded = base64_encode((const unsigned char *)t_userName, strlen(t_userName), &outputLength);
+    // unsigned char * encoded = base64_encode((const unsigned char *)t_userName, strlen(t_userName), &outputLength);
+    mbedtls_base64_encode(encoded, 128, &outputLength, (const unsigned char*) t_userName, strlen(t_userName));
     if (outputLength < sizeof(webCredential)) {
       strncpy (webCredential, (const char*) encoded, outputLength);
       webCredential[outputLength] = '\0';
@@ -108,7 +110,7 @@ void webListener(void *pvParameters)
       Serial.printf ("%s Encoded web credential too long, configure shorter webuser or webpass.\r\n", getTimeStamp());
       xSemaphoreGive(consoleSem);
     }
-    free (encoded);
+    //free (encoded);
   }
   // Wait for incoming connections for as long as there is a connection
   while (webIsRunning) {
@@ -1122,6 +1124,7 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   //
   // Download a URL
   //
+  #ifndef NOHTTPCLIENT
   resultPtr = webScanData (data, "downloadURL", dataSize);
   if (resultPtr != NULL && resultPtr[0]!='\0') {
     altPtr = NULL;
@@ -1138,6 +1141,7 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     myClient->printf ((const char*)"<li><a href=\"/\">Back to main page</a></li></ul><hr></body></html>\r\n");
     return;
   }
+  #endif
   //
   // Update any other parameters
   //
@@ -1334,7 +1338,9 @@ void mkWebFileIndex(WiFiClient *myClient)
   }
   myClient->printf ((const char*)"</table><p>%d bytes used of %d available (%d%% used)</p>", SPIFFS.usedBytes(), SPIFFS.totalBytes(), (SPIFFS.usedBytes()*100)/SPIFFS.totalBytes());
   myClient->printf ((const char*)"<p><strong>Note:</strong> File names should always start with a forward slash (/)</p>");
-  myClient->printf ((const char*)"<form action=\"/save\" method=\"post\"><h2>Download</h2><p><input name=\"downloadURL\" type=\"url\" value=\"http://\">&nbsp;<input type=\"submit\" value=\"Download\"><hr></form></td></tr></table></body></html>\r\n");
+  #ifndef NOHHTPCLIENT
+  #endif
+  myClient->printf ((const char*)"</td></tr></table></body></html>\r\n");
 }
 
 

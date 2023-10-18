@@ -15,11 +15,20 @@
  * DEBUG LEVEL
 \*********************************************************************** */
 // Can be changed from runtime console - less than 2 unless diagnosing issues.
-// 0 - Normal
+// 0 - Minimal
 // 1 - Additional info re process start time
 // 2 - Additional info re semaphores
 // 3 - most verbose, show high level routines accessed
 #define DEBUGLEVEL 1
+
+/* ***********************************************************************\
+ * GEEK FEATURES
+ * Use NOHTTPCLIENT for newer compilers, breaks OTA and web download of files
+ *                  otherwise newer compilers error.
+ * Use SHOWPARTITIONS to show eeprom layout on boot
+\*********************************************************************** */
+//#define NOHTTPCLIENT 1
+#define SHOWPARTITIONS 1
 
 /* ***********************************************************************\
  * FILE SUPPORT

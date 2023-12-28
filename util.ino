@@ -306,8 +306,7 @@ void util_listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     file = root.openNextFile();
   }
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    sprintf (msgBuffer, "%d bytes used of %d available (%d%% used)", SPIFFS.usedBytes(), SPIFFS.totalBytes(), (SPIFFS.usedBytes()*100)/SPIFFS.totalBytes());
-    Serial.println (msgBuffer);
+    Serial.printf  ("%d bytes used of %d available (%s%% used)\r\n", SPIFFS.usedBytes(), SPIFFS.totalBytes(), util_ftos((float)(SPIFFS.usedBytes()*100)/(float)SPIFFS.totalBytes(), 2));
     xSemaphoreGive(consoleSem);
   }
 }
@@ -347,6 +346,12 @@ char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
   int ptr = 0;
 
   if (sizeOfFile!=NULL) *sizeOfFile = 0;
+  else if (path[0] != '/') {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("  - File name does not start with /\r\n");
+      xSemaphoreGive(consoleSem);
+    }
+  }
   if (!fs.exists(path)) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("  - File does not exist\r\n");
@@ -396,6 +401,19 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
   uint8_t bufPtr = 0;
   uint8_t cmdBuffer[BUFFSIZE];
   
+  if (path == NULL) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.println ("Missing file name");
+      xSemaphoreGive(consoleSem);
+    }
+    return;
+  }
+  if (path[0] != '/') {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.println ("WARNING: Name does not start with /");
+      xSemaphoreGive(consoleSem);
+    }
+  }
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Reading file: ");
     Serial.println ((char*) path);

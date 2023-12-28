@@ -2,32 +2,31 @@
  * Use this file to centralise any defines and includes
  * This file should contain only customisable data as far as possible
  * 
- * miniThrottle.h.003 template for
- *  - Serially attached throttle - direct attached to DCC-Ex serial port
- *  - WiThrottle over WiFi relay
- *  - built in SDD1306 display
- *  - 4x4 keypad
- *  - potentiometer throttle
- *  - web enabled configuration
  */
 
 /* ***********************************************************************\
  * DEBUG LEVEL
 \*********************************************************************** */
-// Can be changed from runtime console - less than 2 unless diagnosing issues.
-// 0 - Minimal
+// Can be changed from runtime console - recommendation: less than 2 unless diagnosing issues.
+// 0 - Normal
 // 1 - Additional info re process start time
 // 2 - Additional info re semaphores
-// 3 - most verbose, show high level routines accessed
+// 3 - most verbose
 #define DEBUGLEVEL 1
 
 /* ***********************************************************************\
- * GEEK FEATURES
- * Use NOHTTPCLIENT for newer compilers, breaks OTA and web download of files
- *                  otherwise newer compilers error.
- * Use SHOWPARTITIONS to show eeprom layout on boot
+ * SUPPORT HTTP CLIENT
 \*********************************************************************** */
-//#define NOHTTPCLIENT 1
+// On the version 1 of cESP for Arduino the display and http client were compatible
+// On version 2 they are not: choose between NOHTTPCLIENT or NODISPLAY
+#define NOHTTPCLIENT 1
+
+/* ***********************************************************************\
+ * Startup options
+\*********************************************************************** */
+// STARTDELAY - delay before starting ANY initialisation
+// SHOWPARTITIONS - include partition layout in start up diagnostics
+#define STARTDELAY 2
 #define SHOWPARTITIONS 1
 
 /* ***********************************************************************\
@@ -45,10 +44,12 @@
 // 2. to provide for web based configuration
 #define USEWIFI
 #ifdef USEWIFI
+#ifndef NOHTTPCLIENT
 // default location for over the air update, comment out if not required
 // only works if WiFi enabled
-#define OTAUPDATE   "https://conferre.cf/projects/miniThrottleHandheld/"
-#endif
+//#define OTAUPDATE   "https://conferre.cf/projects/miniThrottleHandheld/"
+#endif    // NOHTTPCLIENT
+#endif    // USEWIFI
 
 /* ***********************************************************************\
  * DIRECT SERIAL CONNECTION
@@ -132,15 +133,15 @@
 //#define SSD1306      // SSD1306 128x64     I2C
 //#define SSD1327      // SSD1327 128x128    I2C
 //#define ST7735       // ST7735  128x160x16 SPI
-//#define ST7789       // ST7789  135x240x16 SPI
-#define ILI9341      // ILI9341 240x320x16 SPI
+#define ST7789       // ST7789  135x240x16 SPI
+//#define ILI9341      // ILI9341 240x320x16 SPI
 
 // Display board may have a built in backlight, eg in Lilygo, in which case you probably want this
 // if no backlight, eg monochrome displays this is not needed
 // BACKLIGHTPIN - any PWM capable output
 // BACKLIGHTREF - Optional: Pins 32 - 39 only, optional 0-3V reference voltage for backlight, otherwise can be set at prompt
 // SCREENSAVER  - define idle time in minutes to screen blanking (screen saver), 0 = never blank
-#define BACKLIGHTPIN 23
+#define BACKLIGHTPIN 16
 #ifdef BACKLIGHTPIN
 //#define BACKLIGHTREF 35
 #define SCREENSAVER 60
@@ -163,7 +164,7 @@
 #define MYSSID  "dccStation"
 #define HOST    "192.168.4.1"
 #define PORT    12090
-#define NAME    "HandHeld"
+#define NAME    "miniThrottle"
 #define DCCACKTIMEOUT 500
 
 // Define Pin Assignments
@@ -224,9 +225,9 @@
 /* ***********************************************************************\
  * ENCODERS AND SWITCHES
 \*********************************************************************** */
-#define ENCODE_UP      32   // encoder up bounce
+#define ENCODE_UP      25   // encoder up bounce
 #define ENCODE_DN      33   // encoder down bounce
-#define ENCODE_SW      15   // encoder switch
+#define ENCODE_SW      32   // encoder switch
 //#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
 //#define DIRREVPIN      33   // Direction sw spdt center off LOW active
 //#define POTTHROTPIN    36   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
@@ -368,8 +369,8 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 #ifdef key3x4
 #define COLCOUNT        3
 #define ROWCOUNT        4
-#define MEMBR_COLS     18,19,21
-#define MEMBR_ROWS     05,17,16,04
+#define MEMBR_COLS     18,23,19
+#define MEMBR_ROWS     05,15,02,00
 char keymap[ROWCOUNT][COLCOUNT] = {
 #ifdef POTTHROTPIN
   { 'P', '0', '#' },

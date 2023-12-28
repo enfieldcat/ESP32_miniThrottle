@@ -335,6 +335,14 @@ void setup()  {
   //          (chip_info.features & CHIP_FEATURE_BT) ? "/BT" : "",
   //          (chip_info.features & CHIP_FEATURE_BLE) ? "/BLE" : "");
   Serial.begin(115200);
+  #ifdef STARTDELAY
+    Serial.printf ("Waiting %d seconds:", STARTDELAY);
+    for (uint8_t n=0; n<STARTDELAY; n++) {
+      Serial.printf (" #");
+      delay (1000);
+    }
+    printf (" Starting\r\n");
+  #endif
   for (uint8_t n=0; n<MAXCONSISTSIZE; n++) {
     strcpy (locoRoster[n].name, "Void");
     locoRoster[n].owned    = false;
@@ -346,7 +354,8 @@ void setup()  {
   // Print a diagnostic to the console, Prior to starting tasks no semaphore required
   esp_chip_info(&chip_info);
   coreCount = chip_info.cores;
-  Serial.printf  ("\r\n----------------------------------------\r\n");
+  // Serial.printf  ("\r\n----------------------------------------\r\n");
+  mt_ruler (NULL);
   Serial.printf  ("Hardware Vers: %d core ESP32 (rev %d) %dMHz, Xtal: %dMHz, %d MB %s flash\r\n", \
      chip_info.cores, \
      ESP.getChipRevision(), \
@@ -363,47 +372,35 @@ void setup()  {
   #endif   //  NODISPLAY
   Serial.printf  ("Throttle Name: %s\r\n", tname);
   // Optional define in miniThrottle.h, not critical to check partitions on each reboot
-  #ifdef SHOWPARTITIONS
-  Serial.printf  ("----------------------------------------\r\n\r\n");
+  // Serial.printf  ("----------------------------------------\r\n\r\n");
+  mt_ruler (NULL);
   for (uint8_t n=0; n<coreCount; n++) print_reset_reason(n, rtc_get_reset_reason(n));
-  Serial.printf  ("----------------------------------------\r\n\r\n");
-  printf("ESP32 Partition table:\r\n");
-  Serial.printf("+------+-----+----------+----------+------------------+\r\n");
-  Serial.printf("| Type | Sub |  Offset  |   Size   |       Label      |\r\n");
-  Serial.printf("| ---- | --- | -------- | -------- | ---------------- |\r\n");
-  for (uint8_t part_type=0 ; part_type<2; part_type++) {
-    const char descr[][4] = {"APP", "DAT"};
-    const esp_partition_type_t ptype[] = { ESP_PARTITION_TYPE_APP, ESP_PARTITION_TYPE_DATA };
-    // esp_partition_iterator_t pi = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
-    esp_partition_iterator_t pi = esp_partition_find (ptype[part_type], ESP_PARTITION_SUBTYPE_ANY, NULL);
-    // esp_partition_find(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, NULL);
-    if (pi != NULL) {
-      do {
-        const esp_partition_t* p = esp_partition_get(pi);
-        Serial.printf("| %s  | %02x  | 0x%06X | 0x%06X | %-16s |\r\n", 
-          descr[part_type], p->subtype, p->address, p->size, p->label);
-      } while (pi = (esp_partition_next(pi)));
-    }
-  }
-  Serial.printf("+------+-----+----------+----------+------------------+\r\n");
-  #endif
-  debounceTime = nvs_get_int ("debounceTime", DEBOUNCEMS);
-  screenRotate = nvs_get_int ("screenRotate", 0);
-  if (nvs_get_int ("bidirectional", 0) == 1) bidirectionalMode = true;
+  // Serial.printf  ("----------------------------------------\r\n\r\n");
+  mt_ruler (NULL);
   #ifdef SHOWPACKETSONSTART
   showPackets = true;
   #endif    //  SHOWPACKETSONSTART
+  debounceTime = nvs_get_int ("debounceTime", DEBOUNCEMS);
+  screenRotate = nvs_get_int ("screenRotate", 0);
+  if (nvs_get_int ("bidirectional", 0) == 1) bidirectionalMode = true;
   // Also change CPU speed before starting wireless comms
   #ifndef NOCPUSPEED
-  int cpuSpeed = nvs_get_int ("cpuspeed", 0);
-  if (cpuSpeed > 0) {
-    #ifdef USEWIFI   //  USEWIFI
-    if (cpuSpeed < 80) cpuSpeed = 80; 
-    #endif
-    Serial.printf ("%s Setting CPU speed to %d MHz\r\n", getTimeStamp(), cpuSpeed);
-    setCpuFrequencyMhz (cpuSpeed);
+  {
+    int cpuSpeed = nvs_get_int ("cpuspeed", 0);
+    if (cpuSpeed > 0) {
+      #ifdef USEWIFI   //  USEWIFI
+      if (cpuSpeed < 80) cpuSpeed = 80; 
+      #endif
+      Serial.printf ("%s Setting CPU speed to %d MHz\r\n", getTimeStamp(), cpuSpeed);
+      delay (1000);
+      setCpuFrequencyMhz (cpuSpeed);
+      delay (1000);
+    }
   }
   #endif
+  #ifdef SHOWPARTITIONS
+  displayPartitions();
+  #endif    // SHOWPARTITIONS
   if (showPinConfig()) Serial.printf ("%s Basic hardware check passed\r\n", getTimeStamp());
   else {
     Serial.printf ("%s Basic hardware check failed\r\n", getTimeStamp());
@@ -486,10 +483,14 @@ void setup()  {
 
   // Check filesystem for config, cert and icon storage
   #ifdef FILESUPPORT
-  Serial.printf ("%s Attaching SPIFFS filesystem - may take several minutes if formatting is required.\r\n", getTimeStamp());
-  if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)){
-    Serial.printf ("%s SPIFFS filesystem required formatted.\r\n", getTimeStamp());
-    delay (1500);
+  Serial.printf ("%s Attaching SPIFFS filesystem.\r\n", getTimeStamp());
+  if(SPIFFS.begin (false)) {
+    Serial.printf ("%s SPIFFS filesystem started OK.\r\n", getTimeStamp());
+    }
+  else {
+    Serial.printf ("%s SPIFFS filesystem formatting - please wait.\r\n", getTimeStamp());
+    SPIFFS.begin (true);
+    Serial.printf ("%s SPIFFS filesystem formatted OK.\r\n", getTimeStamp());
   }
   sampleConfigExists(SPIFFS);
   #ifdef CERTFILE
@@ -513,12 +514,16 @@ void setup()  {
   {
     uint16_t delayOnStart = nvs_get_int ("delayOnStart", DELAYONSTART);
     if (delayOnStart>120) delayOnStart = 120;
-    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.printf ("%s Delay %ds before starting network services and initialising display\r\n", getTimeStamp(), delayOnStart);
+    if (delayOnStart > 0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s Waiting %d seconds before starting network services and initialising display.\r\n", getTimeStamp(), delayOnStart);
+      Serial.printf ("%s Count down: ", getTimeStamp());
+      for (uint8_t n=0; n<delayOnStart; n++) {
+        Serial.printf (" #");
+        delay (1000);
+      }
+      printf (" Starting\r\n");
       xSemaphoreGive(consoleSem);
     }
-    delayOnStart *= 1000;
-    delay (delayOnStart);  // console started but no network services before the delay
   }
   #endif   // DELAYONSTART
   #ifdef USEWIFI

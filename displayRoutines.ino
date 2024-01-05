@@ -607,7 +607,7 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
   if (routeCount == 0   || (menuMask&4) > 0) reference[5] = 200;  // Routes   are array index 2 in baseMenu => mask 0x04
   if (retval <= 1)      {reference[1] = 200; reference[4] = 200;  }
   retval = 0;
-  result = displayMenu((const char**)CABOptions, reference , 5, 2);
+  result = displayMenu((const char**)CABOptions, reference , 7, 2);
   if (result == 1) {     // Add loco, should only show locos we don't yet own
     char *addOpts [locomotiveCount+1];
     for (uint8_t n = 0; n<locomotiveCount; n++) if (!locoRoster[n].owned) addOpts[option++] = locoRoster[n].name;

@@ -97,8 +97,8 @@ void diagPortMonitor (void *pvParameters)
         else {
           diagWrite (&(diagServerClient[0]), (char*) " * p - show/pause packets\r\n");
           diagWrite (&(diagServerClient[0]), (char*) " * m - memory dump\r\n");
-          diagWrite (&(diagServerClient[0]), (char*) " * c - close connection\r\n");
-          diagWrite (&(diagServerClient[0]), (char*) " * q - quit diagnostic mode\r\n");
+          diagWrite (&(diagServerClient[0]), (char*) " * c - close connection, but leave diag port running\r\n");
+          diagWrite (&(diagServerClient[0]), (char*) " * q - quit diagnostic mode, and stop listening for connections\r\n");
           diagWrite (&(diagServerClient[0]), (char*) " * Prefixes: <-- Received, --> Sent\r\n");
         }
       }

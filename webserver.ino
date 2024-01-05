@@ -827,8 +827,22 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   myClient->printf ((const char*)"<input type=\"radio\" id=\"allMenuEvery\" name=\"allMenuItems\" value=\"1\"");
   if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"allMenuEvery\">Show all menu options</label></td></tr>");
+  compInt = nvs_get_int ("mainMenuMask", 0);
+  myClient->printf ((const char*)"<tr><td>Disable Menus</td><td><strong>NB:</strong> To disable also select \"only show valid menu options\" (Above).");
+  {
+    uint8_t mask=1;
+    for (uint8_t n=0; n<6; n++, mask<<=1) {
+      myClient->printf ((const char*)"<br><input type=\"checkbox\" id=\"disableMenu%d\" name=\"disableMenu%d\" value=\"%d\"", n, n, n);
+      if ((mask&compInt) > 0) myClient->printf ((const char*)" checked=\"true\"");
+      myClient->printf ((const char*)"><label for=\"disableMenu%d\"> %s</label>", n, baseMenu[n]);
+    }    
+  }
+  compInt = nvs_get_int ("disableCabMenu", 0);
+  myClient->printf ((const char*)"<br><input type=\"checkbox\" id=\"disableCabMenu\" name=\"disableCabMenu\" value=\"1\"");
+  if (compInt > 0) myClient->printf ((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"disableCabMenu\"> Cab (Loco) Menu - Menu button becomes \"Release Loco\"</label></td></tr>");
   compInt = nvs_get_int ("menuWrap", 0);
-  myClient->printf ((const char*)"<tr><td>Menu Wrap around</td><td><input type=\"radio\" id=\"menuWrapNo\" name=\"menuWrap\" value=\"0\"");
+  myClient->printf ((const char*)"<tr><td>Menu Wrap Around</td><td><input type=\"radio\" id=\"menuWrapNo\" name=\"menuWrap\" value=\"0\"");
   if (compInt == 0) myClient->printf((const char*)" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"menuWrapNo\">Hard stop at menu top and bottom</label><br>");
   myClient->printf ((const char*)"<input type=\"radio\" id=\"menuWrapYes\" name=\"menuWrap\" value=\"1\"");
@@ -983,7 +997,10 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   if (compInt == WITHROT) myClient->printf (" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"defProtoWITHROT\">WiThrottle</label><br><input type=\"radio\" name=\"defaultProto\" id=\"defProtoDCC\" value=\"%d\"", DCCEX);
   if (compInt == DCCEX) myClient->printf (" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"defProtoDCC\">DCC-Ex</label></td></tr></table><br><br><table><tr><th>Server</th><th>Port</th></tr>");
+  myClient->printf ((const char*)"><label for=\"defProtoDCC\">DCC-Ex</label></td></tr>");
+  compInt = nvs_get_int ("clientTimeout", 5000);
+  myClient->printf ((const char*)"<tr><td>Network Client Timeout</td><td><input type=\"number\" name=\"clientTimeout\" value=\"%d\" min=\"20\" max=\"120000\" size=\"8\"> mS</td></tr>", compInt);
+  myClient->printf ((const char*)"</table><br><br><table><tr><th>Server</th><th>Port</th></tr>");
   for (uint8_t n=0; n<WIFINETS; n++) {
     sprintf (labelName, "server_%d", n);
     if (n==0) nvs_get_string (labelName, labelDesc, HOST, sizeof(labelDesc));
@@ -1028,9 +1045,9 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   compInt = nvs_get_int ("buttonStop", 1);
   myClient->printf ((const char*)"><label for=\"bidiTrue\">Bidirectional</label></td></tr><tr><td>Encoder button</td><td><input type=\"radio\" name=\"buttonStop\" id=\"buttonStopNo\" value=\"0\"");
   if (compInt == 0) myClient->printf (" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"buttonStopNo\">Loco menu only in driving mode, must be stopped</label><br><input type=\"radio\" name=\"buttonStop\" id=\"buttonStopYes\" value=\"1\"");
+  myClient->printf ((const char*)"><label for=\"buttonStopNo\">Cab menu displayed in driving mode</label><br><input type=\"radio\" name=\"buttonStop\" id=\"buttonStopYes\" value=\"1\"");
   if (compInt == 1)  myClient->printf (" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"buttonStopYes\">Push stops train or loco menu if stopped in driving mode<label></td></tr>");
+  myClient->printf ((const char*)"><label for=\"buttonStopYes\">Push stops train or cab menu if stopped in driving mode<label></td></tr>");
   #endif  // NODISPLAY
   compInt = nvs_get_int ("noPwrTurnouts", 0);
   myClient->printf ((const char*)"<tr><td>Turnout/Route Options</td><td><input type=\"radio\" id=\"noPwrTurnout\" name=\"noPwrTurnouts\" value=\"0\"");
@@ -1071,6 +1088,7 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   bool rebootRequired = false;
   int checkNum;
   int inputNum;
+  int mask;
 
   mkWebHeader (myClient, 200, 0, keepAlive);
   mkWebHtmlHeader (myClient, "Saved file/data", 0);
@@ -1203,6 +1221,30 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
       }
     }
   }
+  checkNum = nvs_get_int("mainMenuMask", 0);
+  inputNum = 0;
+  mask = 1;
+  // Checks fpr disabling menus
+  for (uint8_t n=0; n<6; n++, mask<<=1) {
+    sprintf (varName, "disableMenu%d", n);
+    resultPtr = webScanData (data, varName, dataSize);
+    if (resultPtr!=NULL) inputNum = inputNum|mask;
+  }
+  if (checkNum != inputNum) {
+    nvs_put_int ("mainMenuMask", inputNum);
+    myClient->printf ("<li>mainMenuMask = %d</li>", inputNum);
+    hasChanged = true;
+  }
+  checkNum = nvs_get_int("disableCabMenu", 0);
+  resultPtr = webScanData (data, "disableCabMenu", dataSize);
+  if (resultPtr==NULL) inputNum = 0;
+  else inputNum=1;
+  if (checkNum != inputNum) {
+    nvs_put_int ("disableCabMenu", inputNum);
+    myClient->printf ("<li>disableCabMenu = %d</li>", inputNum);
+    hasChanged = true;
+  }
+  //checks for WiFi defs
   for (uint8_t n=0; n<WIFINETS; n++) {
     sprintf (varName, "wifissid_%d", n);
     resultPtr = webScanData (data, varName, dataSize);
@@ -1299,6 +1341,7 @@ void mkWebFileIndex(WiFiClient *myClient)
   char *dirname = {(char*)"/"};
   char *suffix;
   char msgBuffer[80];
+  char *curFileName;
   bool editable;
   fs::FS fs = (fs::FS) SPIFFS;
   File root = fs.open(dirname);
@@ -1322,17 +1365,19 @@ void mkWebFileIndex(WiFiClient *myClient)
   File file = root.openNextFile();
   myClient->printf ((const char*)"<table><tr><th>Type</th><th></th><th>Name</th><th></th><th>Size</th></tr>");
   while(file){
+    curFileName  = (char*)file.name();
     if(file.isDirectory()){
-      myClient->printf  ((const char*)"<tr><td>DIR</td><td rowspan=\"2\">%s</td></tr>",(char*)file.name());
+      myClient->printf  ((const char*)"<tr><td>DIR</td><td rowspan=\"2\">%s</td></tr>", curFileName);
       mkWebFileIndex(myClient);
     }
     else {
       editable = true;
+      if (curFileName[0]=='/') curFileName++;
       suffix = (char*) file.name() + (strlen((char*) file.name()) - 4);
       if (strcmp(suffix, ".ico") == 0 || strcmp(suffix, ".png") == 0 || strcmp(suffix, ".jpg") == 0 || strcmp(suffix, "jpeg") == 0) editable = false;
       myClient->printf ((const char*)"<tr><td>FILE</td><td>&nbsp;&nbsp;</td><td><a href=\"");
       if (editable) myClient->printf ((const char*)"/edit");
-      myClient->printf ((const char*)"%s\">%s</a></td><td>&nbsp;&nbsp;</td><td align=\"right\">%d</td></tr>", (char*)file.name(), (char*)file.name(), (uint) file.size());
+      myClient->printf ((const char*)"/%s\">/%s</a></td><td>&nbsp;&nbsp;</td><td align=\"right\">%d</td></tr>", curFileName, curFileName, (uint) file.size());
     }
     file = root.openNextFile();
   }

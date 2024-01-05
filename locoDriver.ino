@@ -114,13 +114,16 @@ void locomotiveDriver()
     #endif
     if (speedLine == 0) refreshDisplay = true;
     if (refreshDisplay) {
+      uint8_t dispColorFlag = 'S';
       refreshDisplay = false;
       display.clear();
       lineNr = 0;
       // display all controlled locos, but leave at least 1 status line
       for (uint8_t n=0; n<maxLocoArray && lineNr<(linesPerScreen-2); n++) if (locoRoster[n].owned) {
-        // sprintf (displayLine, "Loco: %s", locoRoster[n].name);
-        displayScreenLine (locoRoster[n].name, lineNr++, true);
+        if (n == initialLoco) dispColorFlag = 'L';
+        else if (locoRoster[n].reverseConsist) dispColorFlag = 'R';
+        else dispColorFlag = 'I';
+        displayScreenLine (locoRoster[n].name, lineNr++, dispColorFlag, true);
       }
       speedLine = lineNr++;
       if (speedLine < linesPerScreen-4) {
@@ -475,10 +478,20 @@ void locomotiveDriver()
           uint8_t check = 0;
           for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && locoRoster[n].speed>0) check++;
           if (check == 0) {
-            locoCount = mkCabMenu();
+            if (nvs_get_int("disableCabMenu", 0) == 0) locoCount = mkCabMenu();
+            else {  //Only expect the initialLoco to be controlled if Cab  Menu is disabled
+              setLocoOwnership (initialLoco, false);
+              locoRoster[initialLoco].owned = false;
+              #ifdef RELAYPORT
+              locoRoster[initialLoco].relayIdx = 255;
+              #endif
+              locoCount = 0;
+            }
           }
           else {
-            if (commandChar == '#' || nvs_get_int ("buttonStop", 1) == 0) displayTempMessage ("Warning:", "Cannot enter Cab menu when speed > 0", true);
+            if (commandChar == '#' || nvs_get_int ("buttonStop", 1) == 0) {
+              displayTempMessage ("Warning:", "Cannot enter Cab menu when speed > 0", true);
+            }
             else {
               speedChange = true;
               #ifdef BRAKEPRESPIN
@@ -494,6 +507,7 @@ void locomotiveDriver()
             }
           }
           refreshDisplay = true;
+          delay (20);
           break;
         }
       if (commandChar >= '0' && commandChar <= '9') {
@@ -549,7 +563,10 @@ void locomotiveDriver()
   for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
     setLocoOwnership (n, false);
     if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      if (cmdProtocol==DCCEX) locoRoster[n].owned = false;
+      if (cmdProtocol==DCCEX) {
+        locoRoster[n].owned = false;
+        locoRoster[n].reverseConsist = false;
+      }
       #ifdef RELAYPORT
       if (locoRoster[n].relayIdx == 240) locoRoster[n].relayIdx = 255;
       #endif
@@ -567,6 +584,10 @@ void locomotiveDriver()
   dacWrite (BRAKEPRESPIN, 0);
   #endif
   drivingLoco = false;
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Ending locoDriver session\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
 }
 
 #ifdef BRAKEPRESPIN

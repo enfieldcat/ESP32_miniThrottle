@@ -6,6 +6,7 @@ miniThrottle.h
 miniThrottleHandheld.h
 miniThrottleNoCtrl.h
 miniThrottleNoDisp.h
+miniThrottleStackRelay.h
 miniThrottleRelay.h
 partitions.csv
 *.bak

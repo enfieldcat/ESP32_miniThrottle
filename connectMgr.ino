@@ -351,13 +351,16 @@ void wifi_scanNetworks(bool echo)
 #ifndef SERIALCTRL
 void connect2server (char *server, int port)
 {
+  uint32_t clientTimeout;
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s connect2server(%s, %d)\r\n", getTimeStamp(), server, port);
     xSemaphoreGive(consoleSem);
   }
 
+  clientTimeout = nvs_get_int ("clientTimeout", 5000);
   if (strcmp (server, "none") == 0) return;
-  if (client.connect(server, port)) {
+  if (client.connect(server, port, clientTimeout)) {
+    client.setNoDelay (true);
     initialDataSent = false;
     cmdProtocol = nvs_get_int ("defaultProto", WITHROT);  // Go straight to default protocol
     if (strlen(server) < sizeof(remServerNode)-1) strcpy (remServerNode, server);
@@ -556,10 +559,10 @@ void txPacket (const char *header, const char *pktData)
   }
   if (xSemaphoreTake(serialSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (header!=NULL) {
-      serial_dev.write (header, strlen(header));
+      serial_dev.write ((const uint8_t*)header, strlen(header));
     }
-    serial_dev.write (pktData, strlen(pktData));
-    serial_dev.write ("\r\n", 2);
+    serial_dev.write ((const uint8_t*)pktData, strlen(pktData));
+    serial_dev.write ((const uint8_t*)"\r\n", 2);
     xSemaphoreGive(serialSem);
     if (diagIsRunning) {
       diagEnqueue ('p', (char *) "--> ", false);

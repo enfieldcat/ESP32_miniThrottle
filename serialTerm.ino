@@ -799,7 +799,9 @@ void mt_sys_restart (const char *reason) // restart the throttle
   for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
     setLocoSpeed (n, 0, STOP);
     setLocoOwnership (n, false);
-    if (cmdProtocol==DCCEX) locoRoster[n].owned = false;
+    if (cmdProtocol==DCCEX) {
+      locoRoster[n].owned = false;
+    }
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("-> Stopping loco: %s\r\n", locoRoster[n].name);
       xSemaphoreGive(consoleSem);

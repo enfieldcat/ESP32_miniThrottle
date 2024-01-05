@@ -35,6 +35,7 @@ void receiveNetData(void *pvParameters)
   char inBuffer[NETWBUFFSIZE];
   char inChar;
   uint8_t bufferPtr = 0;
+  uint8_t checkVar = 0;
   bool quit = false;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -67,6 +68,16 @@ void receiveNetData(void *pvParameters)
   #else
   while (netConnState (1)) {
     while (netConnState(2)) {
+      checkVar = 0;
+      // wait for a character to become available - read sometimes fails if there is none available
+      while (checkVar == 0) {
+        if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (client.available()) checkVar = 1;
+          xSemaphoreGive(tcpipSem);
+        }
+        if (checkVar == 0) delay (10);  // relinquish the tcpipSem for 1/100 th second
+      }
+      // Now we should have something to read
       if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         inChar = client.read();
         xSemaphoreGive(tcpipSem);

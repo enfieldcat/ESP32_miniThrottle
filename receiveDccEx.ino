@@ -785,13 +785,14 @@ void dccPopulateLoco()
       }
       curData = curData + NAMELENGTH;
       locoData[n].functionString  = NULL;
-      locoData[n].direction = STOP;
-      locoData[n].speed     = 0;
-      locoData[n].steps     = 128;
-      locoData[n].owned     = false;
-      locoData[n].function  = 0;
-      locoData[n].throttleNr= 255;
-      locoData[n].relayIdx  = 255;
+      locoData[n].direction       = STOP;
+      locoData[n].speed           = 0;
+      locoData[n].steps           = 128;
+      locoData[n].owned           = false;
+      locoData[n].function        = 0;
+      locoData[n].throttleNr      = 255;
+      locoData[n].relayIdx        = 255;
+      locoData[n].reverseConsist  = false;
       sprintf (labelName, "latch%d", n);
       locoData[n].functionLatch = nvs_get_int (labelName, 65535);
     }
@@ -851,8 +852,9 @@ void dccPopulateLoco()
       locoRoster[tokenPtr].function  = 0;
       locoRoster[tokenPtr].throttleNr= 255;
       locoRoster[tokenPtr].relayIdx  = 255;
-      locoRoster[tokenPtr].functionLatch = 65535;
-      locoRoster[tokenPtr].functionString  = NULL;
+      locoRoster[tokenPtr].functionLatch  = 65535;
+      locoRoster[tokenPtr].functionString = NULL;
+      locoRoster[tokenPtr].reverseConsist = false;
     }
   }
 }

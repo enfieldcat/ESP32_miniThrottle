@@ -58,7 +58,7 @@ SOFTWARE.
 #undef VERSION
 #endif
 #define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.7a"         // Version string
+#define VERSION     "0.7b"         // Version string
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.
@@ -201,6 +201,7 @@ struct locomotive_s {
   char type;                      // Long or short addr. 127 and below should be short, 128 and above should be long
   char name[NAMELENGTH];          // name of loco
   bool owned;                     // Is loco owned by this throttle?
+  bool reverseConsist;            // Is loco reversed in a consist?
 };
 
 struct turnoutState_s {

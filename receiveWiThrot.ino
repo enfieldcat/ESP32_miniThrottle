@@ -187,6 +187,7 @@ void processWiThrotPacket (char *packet)
         for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
           if ((locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type) || (locoNumber == 0 && throtId == locoRoster[ptr].throttleNr)) {
             locoRoster[ptr].owned = false;
+            locoRoster[ptr].reverseConsist = false;
           }
         }        
       }
@@ -303,25 +304,27 @@ void processWiThrotPacket (char *packet)
         }
         if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0'; // Allow up to 32 chars in a name
         strcpy (locoData[tokenPtr].name, workingToken);  // Name is in first part - pointed by by workingToken
-        locoData[tokenPtr].type      = subToken[1][0];
-        locoData[tokenPtr].direction = STOP;
-        locoData[tokenPtr].speed     = 0;
-        locoData[tokenPtr].steps     = 128;
-        locoData[tokenPtr].id        = (int) strtol ((const char*)subToken[0], &tptr, 10);
-        locoData[tokenPtr].owned     = false;
-        locoData[tokenPtr].function  = 0;
-        locoData[tokenPtr].throttleNr= 255;
-        locoData[tokenPtr].relayIdx  = 255;
-        locoData[tokenPtr].functionLatch = 65535;  // should not use in JMRI, but set it to all on => use default.
+        locoData[tokenPtr].type           = subToken[1][0];
+        locoData[tokenPtr].direction      = STOP;
+        locoData[tokenPtr].speed          = 0;
+        locoData[tokenPtr].steps          = 128;
+        locoData[tokenPtr].id             = (int) strtol ((const char*)subToken[0], &tptr, 10);
+        locoData[tokenPtr].owned          = false;
+        locoData[tokenPtr].function       = 0;
+        locoData[tokenPtr].throttleNr     = 255;
+        locoData[tokenPtr].relayIdx       = 255;
+        locoData[tokenPtr].reverseConsist = false;
+        locoData[tokenPtr].functionLatch  = 65535;  // should not use in JMRI, but set it to all on => use default.
         locoData[tokenPtr].functionString = NULL;
       }
       uint8_t maxLoco = tokenTally + MAXCONSISTSIZE;
       uint8_t n = 0;
       for (;tokenPtr < maxLoco; tokenPtr++) {
         sprintf (locoData[tokenPtr].name, "ad-hoc-%d", ++n);
-        locoData[tokenPtr].owned    = false;
-        locoData[tokenPtr].relayIdx = 255;
-        locoData[tokenPtr].functionLatch = 65535;  // should not use in JMRI, but set it to all on => use default.
+        locoData[tokenPtr].owned          = false;
+        locoData[tokenPtr].relayIdx       = 255;
+        locoData[tokenPtr].reverseConsist = false;
+        locoData[tokenPtr].functionLatch  = 65535;  // should not use in JMRI, but set it to all on => use default.
         locoData[tokenPtr].functionString = NULL;
       }
       if (locoRoster != NULL) free(locoRoster);   // free space if we had previously allocated it

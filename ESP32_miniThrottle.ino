@@ -101,6 +101,7 @@ static struct turnout_s      *turnoutList  = NULL;  // table of turnouts
 static struct routeState_s   *routeState   = NULL;  // table of route states
 static struct route_s        *routeList    = NULL;  // table of routes
 static char *sharedMemory = NULL;     // inter process communication shared memory buffer
+const char *baseMenu[]  = { "Locomotives", "Turnouts", "Routes", "Track Power", "CV Programming", "Configuration" };
 #ifdef BACKLIGHTPIN
 #ifdef SCREENSAVER
 static uint64_t screenActTime  = 0;   // time stamp of last user activity
@@ -345,8 +346,9 @@ void setup()  {
   #endif
   for (uint8_t n=0; n<MAXCONSISTSIZE; n++) {
     strcpy (locoRoster[n].name, "Void");
-    locoRoster[n].owned    = false;
-    locoRoster[n].relayIdx = 255;
+    locoRoster[n].owned          = false;
+    locoRoster[n].relayIdx       = 255;
+    locoRoster[n].reverseConsist = false;
   }
   // load initial settings from Non Volatile Storage (NVS)
   nvs_init();
@@ -401,11 +403,12 @@ void setup()  {
   #ifdef SHOWPARTITIONS
   displayPartitions();
   #endif    // SHOWPARTITIONS
-  if (showPinConfig()) Serial.printf ("%s Basic hardware check passed\r\n", getTimeStamp());
+  if (showPinConfig()) Serial.printf ("%s Basic hardware check passed.\r\n", getTimeStamp());
   else {
-    Serial.printf ("%s Basic hardware check failed\r\n", getTimeStamp());
-    Serial.printf ("%s Reconfigure and recompile required to proceed\r\n", getTimeStamp());
-    Serial.printf ("%s System initialisation aborted\r\n", getTimeStamp());
+    Serial.printf ("%s Basic hardware check failed.\r\n", getTimeStamp());
+    Serial.printf ("%s Some I/O pins may have more than one assignment.\r\n", getTimeStamp());
+    Serial.printf ("%s Reconfigure and recompile required to proceed.\r\n", getTimeStamp());
+    Serial.printf ("%s System initialisation aborted.\r\n", getTimeStamp());
     while (true) delay (10000);
   }
   debuglevel      = nvs_get_int ("debuglevel",    DEBUGLEVEL);
@@ -595,10 +598,11 @@ void loop()
   uint8_t change = 0;
   uint8_t answer;
   uint8_t menuResponse[] = {1,2,3,4,5,6};
+  uint8_t menuMask = nvs_get_int("mainMenuMask", 0);
   char commandKey;
   char commandStr[2];
-  const char *baseMenu[]  = { "Locomotives", "Turnouts", "Routes", "Track Power", "CV Programming", "Configuration" };
   const char txtNoPower[] = { "Track power off. Turn power on to enable function." };
+  bool menuDisplayable = false;
   #endif   // NODISPLAY
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -714,50 +718,66 @@ void loop()
     if (true) {
       while (true) { // Assume serial => always connected
     #endif
-        if (trackPower) {
-          menuResponse[0] = 1;
+        // Prime the menuResponse as if it will all work
+        for (uint8_t n=0; n<sizeof(menuResponse); n++) menuResponse[n] = n+1;
+        // Find if any options are disabled due to lack of power
+        if (trackPower) {  // We have track power
           if (turnoutCount == 0) menuResponse[1] = 200;
-          else menuResponse[1] = 2;
           if (routeCount == 0)   menuResponse[2] = 200;
-          else menuResponse[2] = 3;
           if (cmdProtocol == WITHROT) {
             menuResponse[4] = 200;
             if (lastMainMenuOption == 4) lastMainMenuOption = 0;
           }
-          else menuResponse[4] = 5;
         }
-        else {
+        else {   // We have no track power
           menuResponse[0] = 200;
           if (nvs_get_int("noPwrTurnouts", 0) == 0) menuResponse[1] = 200;
           if (nvs_get_int("noPwrTurnouts", 0) == 0) menuResponse[2] = 200;
           menuResponse[4] = 200;
           if (lastMainMenuOption != 3 && lastMainMenuOption != 5) lastMainMenuOption = 3;
         }
-        answer = displayMenu ((const char**)baseMenu, menuResponse, 6, lastMainMenuOption);
-        if (answer > 0) lastMainMenuOption = answer - 1;
-        switch (answer) {
-          case 1:
-            if (trackPower) mkLocoMenu ();
-            else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
-            break;
-          case 2:
-            if (trackPower || nvs_get_int("noPwrTurnouts", 0) == 1) mkTurnoutMenu ();
-            else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
-            break;
-          case 3:
-            if (trackPower || nvs_get_int("noPwrTurnouts", 0) == 1) mkRouteMenu();
-            else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
-            break;
-          case 4:
-            mkPowerMenu();
-            break;
-          case 5:
-            if (trackPower) mkCVMenu ();
-            else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
-            break;
-          case 6:
-            mkConfigMenu();
-            break;
+        // check if any menu options are disabled from configuration
+        {
+          uint8_t chkMask  = 1;
+          menuMask = nvs_get_int("mainMenuMask", 0);
+          for (uint8_t n=0; n<6; n++, chkMask <<= 1) {
+            if ((menuMask & chkMask) > 0 ) menuResponse[n] = 200; // Kill the option
+          }
+        }
+        // Check if the menu is displayable
+        menuDisplayable = false;
+        for (uint8_t n=0; n<6 && !menuDisplayable; n++) if (menuResponse[n] != 200) menuDisplayable = true;
+        if (menuDisplayable) {   // Menu is displayable
+          answer = displayMenu ((const char**)baseMenu, menuResponse, 6, lastMainMenuOption);
+          if (answer > 0) lastMainMenuOption = answer - 1;
+          switch (answer) {
+            case 1:
+              if (trackPower) mkLocoMenu ();
+              else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
+              break;
+            case 2:
+              if (trackPower || nvs_get_int("noPwrTurnouts", 0) == 1) mkTurnoutMenu ();
+              else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
+              break;
+            case 3:
+              if (trackPower || nvs_get_int("noPwrTurnouts", 0) == 1) mkRouteMenu();
+              else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
+              break;
+            case 4:
+              mkPowerMenu();
+              break;
+            case 5:
+              if (trackPower) mkCVMenu ();
+              else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
+              break;
+            case 6:
+              mkConfigMenu();
+              break;
+          }
+        }
+        else {     // Menu is not displayable - show info instead, 10 second refresh
+          displayInfo();
+          delay (10000);
         }
       }
     }
@@ -767,12 +787,12 @@ void loop()
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Terminate loop()\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
-  }
+  }   //  stop thread is not required
   vTaskDelete( NULL );
 }
 
 
-
+// Decode reason for last reser
 void print_reset_reason(uint8_t n, RESET_REASON reason)
 {
   if (reason>0 && reason<17) {
@@ -794,7 +814,7 @@ void print_reset_reason(uint8_t n, RESET_REASON reason)
       case 14 : Serial.printf ("for APP CPU, reset by PRO CPU");break;
       case 15 : Serial.printf ("Reset when the vdd voltage is not stable");break;
       case 16 : Serial.printf ("RTC Watch dog reset digital core and rtc module");break;
-      default : Serial.printf ("NO_MEAN");
+      default : Serial.printf ("Unknown - NO_MEAN code");
     }
     Serial.printf ("\r\n");
   }

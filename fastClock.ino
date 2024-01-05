@@ -138,13 +138,7 @@ void fc_sendUpdate()
     }
     sprintf(buffer, "<JC %d %d>", itime, speed);
     txPacket (buffer);
-    //if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
-    //  // wait for ack
-    //  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    //    Serial.printf ("%s Warning: No response for DCC-Ex clock update\r\n", getTimeStamp());
-    //    xSemaphoreGive(consoleSem);
-    //  }
-    //}
+    // Do not wait for any ACK packet
   }
 }
 

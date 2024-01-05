@@ -366,6 +366,9 @@ void setLocoSpeed (uint8_t locoIndex, int16_t speed, int8_t direction)
     uint8_t tdir = 0;
     if (direction == FORWARD) tdir = 1;
     if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (locoRoster[locoIndex].reverseConsist) {
+        tdir = abs(tdir - 1);
+      }
       sprintf (commandPacket, "<t 1 %d %d %d>", locoRoster[locoIndex].id, speed, tdir);
       xSemaphoreGive(velociSem);
       while (xQueueReceive(dccAckQueue, &reqState, 0) == pdPASS);
@@ -401,6 +404,9 @@ void setLocoDirection (uint8_t locoIndex, uint8_t direction)
 
       if (direction == REVERSE) dirFlag = 0;
       if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (locoRoster[locoIndex].reverseConsist) {
+          dirFlag = abs (dirFlag - 1);
+        }
         sprintf (commandPacket, "M%cA%c%d<;>R%d", locoRoster[locoIndex].throttleNr, locoRoster[locoIndex].type, locoRoster[locoIndex].id, dirFlag);
         xSemaphoreGive(velociSem);
         txPacket (commandPacket);

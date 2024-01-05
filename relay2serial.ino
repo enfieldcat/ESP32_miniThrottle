@@ -339,7 +339,7 @@ void forward2serial (char *packet)
     xSemaphoreGive(consoleSem);
   }
   if (xSemaphoreTake(serialSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    serial_dev.write (packet, strlen(packet));  // Forward to serial
+    serial_dev.write ((const uint8_t*)packet, strlen(packet));  // Forward to serial
     xSemaphoreGive(serialSem);
     if (showPackets && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("F-> %s", packet);
@@ -644,6 +644,7 @@ void wiThrotRelayPkt (struct relayConnection_s *thisRelay, char *inPacket, char 
                   if (locoRoster[j].owned) {
                     if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                       locoRoster[j].owned = false;
+                      locoRoster[j].reverseConsist = false;
                       xSemaphoreGive(velociSem);
                     }
                   }
@@ -763,8 +764,8 @@ void dcc_relay (char *packet, char indicator)
   }
   if (packet[0]=='<') {
     if (xSemaphoreTake(serialSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      serial_dev.write (packet, strlen(packet));
-      serial_dev.write ("\r\n", 2);
+      serial_dev.write ((const uint8_t*)packet, strlen(packet));
+      serial_dev.write ((const uint8_t*) "\r\n", 2);
       xSemaphoreGive(serialSem);
       // count forwarded packets
       if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

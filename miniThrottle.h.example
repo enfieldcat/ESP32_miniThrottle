@@ -17,7 +17,7 @@
 /* ***********************************************************************\
  * SUPPORT HTTP CLIENT
 \*********************************************************************** */
-// On the version 1 of cESP for Arduino the display and http client were compatible
+// On the version 1 of ESP for Arduino the display and http client were compatible
 // On version 2 they are not: choose between NOHTTPCLIENT or NODISPLAY
 #define NOHTTPCLIENT 1
 
@@ -317,6 +317,8 @@
 #define FUNCCOLOR   RGB_COLOR16(100,255,255)   // function key colors
 #define INPUTCOLOR  RGB_COLOR16(50,255,50)     // input color
 #define WARNCOLOR   RGB_COLOR16(255,150,150)   // Warning color
+#define LEADCOLOR   RGB_COLOR16(255,255,127)   // Lead Loco color
+#define REVERSCOLOR RGB_COLOR16(255,127,255)   // Reversed in consist color
 #endif
 
 

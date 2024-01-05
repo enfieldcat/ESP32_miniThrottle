@@ -59,7 +59,11 @@ SOFTWARE.
     { (char*)"inventoryTurn",  INTEGER,    0,             2,            0,       (char*)   "", (char*)"DCC_Ex turnouts inventory"},
     { (char*)"inventoryRout",  INTEGER,    0,             2,            0,       (char*)   "", (char*)"DCC_Ex routes inventory"},
     { (char*)"diagPort",       INTEGER,   10,         65500,           23,       (char*)   "", (char*)"Diagnostic port"},
-    // { "diagPortEnable", INTEGER,    0,             1,            0,       (char*)   "", (char*)"Diagnostic port enabled"},
+    { (char*)"mainMenuMask",   INTEGER,    0,            15,            0,       (char*)   "", (char*)"Main Menu Mask"},
+    #ifndef SERIALCTRL
+    { (char*)"clientTimeout",   INTEGER,   20,        120000,         5000,       (char*)   "", (char*)"WiFi client timeout"},
+    #endif
+    //{ (char*)"disableCabMenu", INTEGER,    0,             1,            0,       (char*)   "", (char*)"Disable Cab menu"},
     #ifdef DELAYONSTART
     { (char*)"delayOnStart",   INTEGER,    0,           120, DELAYONSTART,       (char*)   "", (char*)"Start up delay in seconds" },
     #endif

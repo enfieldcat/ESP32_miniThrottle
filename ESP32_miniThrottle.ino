@@ -658,7 +658,7 @@ void loop()
       static bool wifiConnected = false;
       static bool APConnected   = false;
 
-      if ((!APrunning) && WiFi.status() != WL_CONNECTED && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
+      if (((!APrunning) && WiFi.status() != WL_CONNECTED || !client.connected()) && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
         mkConfigMenu();
         stateChange = true;
       }

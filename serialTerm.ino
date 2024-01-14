@@ -807,6 +807,12 @@ void mt_sys_restart (const char *reason) // restart the throttle
       xSemaphoreGive(consoleSem);
     }
   }
+  if (diagIsRunning) {
+    diagEnqueue ('e', (char*) "### Restart: ", false);
+    if (reason!=NULL) diagEnqueue ('e', (char*) reason, true);
+    else diagEnqueue ('e', (char*) "Unknown cause.", true);
+    delay(1000); // allow time for message to be processed
+  }
   esp_restart();  
 }
 

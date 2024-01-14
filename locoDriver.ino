@@ -65,6 +65,8 @@ void locomotiveDriver()
     xSemaphoreGive(consoleSem);
   }
 
+  if (diagIsRunning)
+    diagEnqueue ('e', (char *) "### Starting loco driving session -----------------------------------------", true);
   potVal[0] = '\0';
   funVal[0] = '\0';
   speedStep = nvs_get_int ("speedStep", 4);
@@ -588,6 +590,8 @@ void locomotiveDriver()
     Serial.printf ("%s Ending locoDriver session\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
+  if (diagIsRunning)
+    diagEnqueue ('e', (char *) "### Stopping loco driving session -----------------------------------------", true);
 }
 
 #ifdef BRAKEPRESPIN

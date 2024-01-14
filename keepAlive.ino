@@ -67,6 +67,8 @@ void keepAlive(void *pvParameters)
     }
   }
   else {
+    if (diagIsRunning)
+      diagEnqueue ('e', (char *) "### Starting keep alive thread --------------------------------------------", true);
     lastTime = keepAliveTime;
     if (lastTime > 0) xTimerStart (keepAliveTimer, pdMS_TO_TICKS(lastTime * 1000));
     while (lastTime > 0 && cmdProtocol != DCCEX) {
@@ -103,6 +105,8 @@ void keepAlive(void *pvParameters)
   }
   if (keepAliveTimer != NULL) xTimerDelete (keepAliveTimer, pdMS_TO_TICKS(TIMEOUT));
   if (keepAliveQueue != NULL) vQueueDelete (keepAliveQueue);
+  if (diagIsRunning)
+    diagEnqueue ('e', (char *) "### Stopping keep alive thread --------------------------------------------", true);
   vTaskDelete( NULL );
 }
 
@@ -127,6 +131,10 @@ void sendKeepAlive(const char *pktData)
         if (pktData!= NULL) Serial.printf ("--> %s\r\n", pktData);
         xSemaphoreGive(consoleSem);
       }
+    }
+    if (diagIsRunning) {
+      diagEnqueue ('p', (char*) "KA> ", false);
+      diagEnqueue ('p', (char*) pktData, true);
     }
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);

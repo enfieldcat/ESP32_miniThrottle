@@ -87,6 +87,15 @@ void connectionManager(void *pvParameters)
         }
         else semFailed ("tcpipSem", __FILE__, __LINE__);
         staPref = nvs_get_int ("staConnect", 0);
+        if (trackPower && nvs_get_int("waitForReconn", 0) < 2) {
+          trackPower = false;
+          #ifdef TRACKPWR
+          digitalWrite(TRACKPWR, LOW);
+          #endif
+          #ifdef TRACKPWRINV
+          digitalWrite(TRACKPWRINV, HIGH);
+          #endif
+        }
         // Preference is to only access known access points in a strict order of preference
         if (staPref == 0) {
           networkFound = false;
@@ -197,6 +206,11 @@ void connectionManager(void *pvParameters)
             else WiFi.begin(stassid, stapass);
             xSemaphoreGive(tcpipSem);
           }
+          if (diagIsRunning) {
+            diagEnqueue ('e', (char*) "### connecting to WiFi ", false);
+            diagEnqueue ('e', (char*) stassid, false);
+            diagEnqueue ('e', (char*) "-------------------------------------------", true);
+          }
           delay (TIMEOUT);
           if ((!APrunning) && xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
             MDNS.begin(tname);
@@ -256,13 +270,15 @@ void connectionManager(void *pvParameters)
       char server[65];
       int  port;
 
-      trackPower = false;
-      #ifdef TRACKPWR
-      digitalWrite(TRACKPWR, LOW);
-      #endif
-      #ifdef TRACKPWRINV
-      digitalWrite(TRACKPWRINV, HIGH);
-      #endif
+      if (trackPower && nvs_get_int("waitForReconn", 0) == 0) {
+        trackPower = false;
+        #ifdef TRACKPWR
+        digitalWrite(TRACKPWR, LOW);
+        #endif
+        #ifdef TRACKPWRINV
+        digitalWrite(TRACKPWRINV, HIGH);
+        #endif
+      }
       // Use mdns to look up service
       if ((!client.connected()) && nvs_get_int ("mdns", 1) == 1) {
         server[0] = '\0';
@@ -279,6 +295,7 @@ void connectionManager(void *pvParameters)
           Serial.printf ("%s MDNS look up: no services found.\r\n", getTimeStamp());
           xSemaphoreGive (consoleSem);
         }
+      // Serial.print (WiFi.RSSI());
       }
       // now work through server list until we connect or just give up
       for (index = 0; index <WIFINETS && !client.connected(); index++) {
@@ -369,6 +386,11 @@ void connect2server (char *server, int port)
       remServerNode[sizeof(remServerNode)-1] = '\0';
     }
     // Once connected, we can listen for returning packets
+    if (diagIsRunning) {
+      diagEnqueue ('e', (char*) "### connecting to Server ", false);
+      diagEnqueue ('e', (char*) server, false);
+      diagEnqueue ('e', (char*) "-------------------------------------------", true);
+    }
     xTaskCreate(receiveNetData, "Network_In", 4096, NULL, 4, NULL);
     // Print diagnostic
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

@@ -112,6 +112,8 @@ void webListener(void *pvParameters)
     }
     //free (encoded);
   }
+  if (diagIsRunning)
+    diagEnqueue ('e', (char *) "### Starting web server ---------------------------------------------------", true);
   // Wait for incoming connections for as long as there is a connection
   while (webIsRunning) {
     if (APrunning || WiFi.status() == WL_CONNECTED) {
@@ -160,6 +162,8 @@ void webListener(void *pvParameters)
     xSemaphoreGive(webServerSem);
   }
   else semFailed ("webServerSem", __FILE__, __LINE__);
+  if (diagIsRunning)
+    diagEnqueue ('e', (char *) "### Stopping web server ---------------------------------------------------", true);
   vTaskDelete( NULL );
 }
 
@@ -954,8 +958,14 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   if (compInt == DCCRELAY)  myClient->printf ((const char*)" checked=\"true\"");
   compInt = nvs_get_int ("relayPort", RELAYPORT);
   myClient->printf ((const char*)"><label for=\"relaydcc\">DCC-Ex</label></td></tr><tr><td>Relay port (1-65534)</td><td><input type=\"number\" name=\"relayPort\" value=\"%d\" min=\"1\" max=\"65534\" size=\"7\"> Default is %d</td></tr>", compInt, RELAYPORT);
+  compInt = nvs_get_int ("clientTimeout", 5000);
+  myClient->printf ((const char*)"<tr><td>TCP/IP Timeout</td><td><input type=\"number\" name=\"clientTimeout\" value=\"%d\" min=\"20\" max=\"120000\" size=\"8\"> mS</td></tr>", compInt);
   compInt = nvs_get_int ("maxRelay", MAXRELAY);
-  myClient->printf ((const char*)"<tr><td>Max clients (3-%d)</td><td><input type=\"number\" name=\"maxRelay\" value=\"%d\" min=\"3\" max=\"%d\" size=\"5\"></td></tr></table>", MAXRELAY, compInt, MAXRELAY);
+  myClient->printf ((const char*)"<tr><td>Max clients (3-%d)</td><td><input type=\"number\" name=\"maxRelay\" value=\"%d\" min=\"3\" max=\"%d\" size=\"5\"></td></tr>", MAXRELAY, compInt, MAXRELAY);
+  compInt = nvs_get_int ("relayKeepAlive", KEEPALIVETIMEOUT);
+  myClient->printf ((const char*)"<tr><td>Request JMRI Keepalive</td><td><input type=\"number\" name=\"relayKeepAlive\" value=\"%d\" min=\"0\" max=\"3600\" size=\"5\"> Seconds</td></tr>", compInt);
+  compInt = nvs_get_int ("missedKeepAlive", 2);
+  myClient->printf ((const char*)"<tr><td>Max missed Keepalives</td><td><input type=\"number\" name=\"missedKeepAlive\" value=\"%d\" min=\"1\" max=\"10\" size=\"5\"> keep alive packets then disconnect</td></tr></table>", compInt);
   #endif   // RELAYPORT
   #ifdef WEBLIFETIME    // should not be building a web page without this, but anyhow...
   compInt = nvs_get_int ("webTimeOut", WEBLIFETIME);
@@ -999,7 +1009,15 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   if (compInt == DCCEX) myClient->printf (" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"defProtoDCC\">DCC-Ex</label></td></tr>");
   compInt = nvs_get_int ("clientTimeout", 5000);
-  myClient->printf ((const char*)"<tr><td>Network Client Timeout</td><td><input type=\"number\" name=\"clientTimeout\" value=\"%d\" min=\"20\" max=\"120000\" size=\"8\"> mS</td></tr>", compInt);
+  myClient->printf ((const char*)"<tr><td>TCP/IP Timeout</td><td><input type=\"number\" name=\"clientTimeout\" value=\"%d\" min=\"20\" max=\"120000\" size=\"8\"> mS</td></tr>", compInt);
+  compInt = nvs_get_int("waitForReconn", 0);
+  myClient->printf ((const char*)"<tr><td>Server disconnect</td><td><input type=\"radio\" name=\"waitForReconn\" id=\"waitForReconnNo\" value=\"0\"");
+  if (compInt == 0) myClient->printf (" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"waitForReconnNo\">Break on disconnect</label><br><input type=\"radio\" name=\"waitForReconn\" id=\"waitForReconnYes\" value=\"1\"");
+  if (compInt == 1) myClient->printf (" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"waitForReconnYes\">Wait for reconnection if WiFi OK</label><br><input type=\"radio\" name=\"waitForReconn\" id=\"waitForReconnAlways\" value=\"2\"");
+  if (compInt == 2) myClient->printf (" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"waitForReconnalways\">Wait for reconnection if WiFi disconnected</label></td></tr>");
   myClient->printf ((const char*)"</table><br><br><table><tr><th>Server</th><th>Port</th></tr>");
   for (uint8_t n=0; n<WIFINETS; n++) {
     sprintf (labelName, "server_%d", n);

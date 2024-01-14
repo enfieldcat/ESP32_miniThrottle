@@ -31,6 +31,7 @@ void diagPortMonitor (void *pvParameters)
 {
   (void) pvParameters;
   static WiFiClient diagServerClient[MAXDIAGCONNECT];
+  int readState = 0;
   uint16_t diagPort = nvs_get_int ("diagPort", 23);
   uint16_t outPtr = 0;
   uint8_t i = 1;
@@ -95,11 +96,8 @@ void diagPortMonitor (void *pvParameters)
           }
         }
         else {
-          diagWrite (&(diagServerClient[0]), (char*) " * p - show/pause packets\r\n");
-          diagWrite (&(diagServerClient[0]), (char*) " * m - memory dump\r\n");
-          diagWrite (&(diagServerClient[0]), (char*) " * c - close connection, but leave diag port running\r\n");
-          diagWrite (&(diagServerClient[0]), (char*) " * q - quit diagnostic mode, and stop listening for connections\r\n");
-          diagWrite (&(diagServerClient[0]), (char*) " * Prefixes: <-- Received, --> Sent\r\n");
+          diagWrite (&(diagServerClient[0]), (char*) "New diag client connects:\r\n");
+          diagHelp(&(diagServerClient[0]));
         }
       }
       if (xQueueReceive(diagQueue, &inChar, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
@@ -114,52 +112,84 @@ void diagPortMonitor (void *pvParameters)
         if (diagServerClient[i] && diagServerClient[i].connected()){
           if(diagServerClient[i].available()){
             //get data from the telnet client
-            inChar = diagServerClient[i].read();
+            //inChar = diagServerClient[i].read();
+            readState = diagServerClient[i].read((uint8_t*) &inChar, 1);
             // read options & ignore
-            if (inChar == 0xFF) {
-              delay(10);
-              if(diagServerClient[i].available()) diagServerClient[i].read();
-              if(diagServerClient[i].available()) diagServerClient[i].read();
-            }
-            switch (inChar) {
-              case 'c':
-              case 'C':
-                diagServerClient[i].write((char*)  "----  Close Connection  ----\r\n");
-                diagServerClient[i].stop();
-                break;
-              case 'q':
-              case 'Q':
-                if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-                  diagIsRunning = false;
-                  diagMonitorMode = ' ';
-                  xSemaphoreGive(shmSem);
-                  diagWrite (&(diagServerClient[0]), (char*)  "----  Quit Diagnostic Mode  ----\r\n");
-                }
-                break;
-              case 'p':
-              case 'P':
-                if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-                  if (diagMonitorMode == 'p') {
+            if (readState == 1) {
+              if (inChar == 0xFF) {
+                delay(10);
+                if(diagServerClient[i].available()) diagServerClient[i].read((uint8_t*) &inChar, 1);
+                if(diagServerClient[i].available()) diagServerClient[i].read((uint8_t*) &inChar, 1);
+              }
+              else switch (inChar) {
+                case 'h':
+                case 'H':
+                case '?':
+                  diagHelp(&(diagServerClient[0]));
+                  break;
+                case 'c':
+                case 'C':
+                  diagServerClient[i].write((char*)  "----  Close Connection  ----\r\n");
+                  diagServerClient[i].stop();
+                  break;
+                case 'q':
+                case 'Q':
+                  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                    diagIsRunning = false;
                     diagMonitorMode = ' ';
+                    xSemaphoreGive(shmSem);
+                    diagWrite (&(diagServerClient[0]), (char*)  "----  Quit Diagnostic Mode  ----\r\n");
+                  }
+                  break;
+                case 'p':
+                case 'P':
+                  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                    if (diagMonitorMode == 'p') {
+                      diagMonitorMode = ' ';
+                      diagWrite (&(diagServerClient[0]), (char*)  "----  Pause Packets  ----\r\n");
+                    }
+                    else {
+                      diagMonitorMode = 'p';
+                      diagWrite (&(diagServerClient[0]), (char*)  "----  Show Packets  ----\r\n");
+                      diagWrite (&(diagServerClient[0]), (char*)  "    --> Sent by this unit\r\n");
+                      #ifndef RELAYPORT
+                      diagWrite (&(diagServerClient[0]), (char*)  "    KA> Keep Alives sent\r\n");
+                      #endif
+                      diagWrite (&(diagServerClient[0]), (char*)  "    <-- Received by this Unit\r\n");
+                    }
+                    xSemaphoreGive(shmSem);
+                  }
+                  break;
+                #ifdef RELAYPORT
+                case 'r':
+                case 'R':
+                  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                    if (diagMonitorMode == 'r') {
+                      diagMonitorMode = ' ';
+                      diagWrite (&(diagServerClient[0]), (char*)  "----  Pause Relay Packets  ----\r\n");
+                    }
+                    else {
+                      diagMonitorMode = 'r';
+                      diagWrite (&(diagServerClient[0]), (char*)  "----  Show Relay Packets  ----\r\n");
+                      diagWrite (&(diagServerClient[0]), (char*)  "    n-> Sent by this unit\r\n");
+                      diagWrite (&(diagServerClient[0]), (char*)  "    n<- Received by this Unit\r\n");
+                      diagWrite (&(diagServerClient[0]), (char*)  "    Where n is the relay client number, or * for all clients\r\n");
+                    }
+                    xSemaphoreGive(shmSem);
+                  }
+                  break;
+                #endif
+                case 'm':
+                case 'M':
+                  const char *param = {"m"};
+                  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                    diagMonitorMode = 'm';
+                    xSemaphoreGive(shmSem);
                     diagWrite (&(diagServerClient[0]), (char*)  "----  Pause Packets  ----\r\n");
+                    xTaskCreate(diagSlaveRunner, "runner_m", 4096, (void*) param, 4, NULL);
                   }
-                  else {
-                    diagMonitorMode = 'p';
-                    diagWrite (&(diagServerClient[0]), (char*)  "----  Show Packets  ----\r\n");
-                  }
-                  xSemaphoreGive(shmSem);
-                }
-                break;
-              case 'm':
-              case 'M':
-                const char *param = {"m"};
-                if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-                  diagMonitorMode = 'm';
-                  xSemaphoreGive(shmSem);
-                  diagWrite (&(diagServerClient[0]), (char*)  "----  Pause Packets  ----\r\n");
-                  xTaskCreate(diagSlaveRunner, "runner_m", 4096, (void*) param, 4, NULL);
-                }
-                break;
+                  break;
+              }
             }
           }
         }
@@ -215,6 +245,18 @@ void diagPortMonitor (void *pvParameters)
 }
 
 
+void diagHelp(WiFiClient* myClient)
+{
+  diagWrite (myClient, (char*) " * p - show/pause packets with control system\r\n");
+  #ifdef RELAYPORT
+  diagWrite (myClient, (char*) " * r - show/pause relayed packets\r\n");
+  #endif
+  diagWrite (myClient, (char*) " * m - memory dump\r\n");
+  diagWrite (myClient, (char*) " * h - help\r\n");
+  diagWrite (myClient, (char*) " * c - close connection, but leave diag port running\r\n");
+  diagWrite (myClient, (char*) " * q - quit diagnostic mode, and stop diag port service\r\n\n");
+}
+
 void diagWrite (WiFiClient *client, char *message)
 {
   uint16_t i;
@@ -239,7 +281,8 @@ void diagEnqueue (char source, char *data, bool addTermination)
   }
   if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     isRunning = diagIsRunning;
-    if (source != diagMonitorMode) isRunning = false;
+    if (source != diagMonitorMode) isRunning = false; // print if mode matches or it is an "emergency" message.
+    if (source == 'e') isRunning = true;
     xSemaphoreGive(shmSem);
   }
   else semFailed ("shmSem", __FILE__, __LINE__);

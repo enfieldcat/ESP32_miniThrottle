@@ -36,6 +36,7 @@ void receiveNetData(void *pvParameters)
   char inChar;
   uint8_t bufferPtr = 0;
   uint8_t checkVar = 0;
+  int readState = 1;
   bool quit = false;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -56,6 +57,8 @@ void receiveNetData(void *pvParameters)
     }
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
+  if (diagIsRunning)
+    diagEnqueue ('e', (char *) "### Starting network/serial receiver service ------------------------------", true);
   setInitialData();
   #ifdef SERIALCTRL
   while (true) {
@@ -77,26 +80,29 @@ void receiveNetData(void *pvParameters)
         }
         if (checkVar == 0) delay (10);  // relinquish the tcpipSem for 1/100 th second
       }
-      // Now we should have something to read
+      // Now we should have something to read attempt to avoid uncaught exception on some reads
       if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        inChar = client.read();
+        // inChar = client.read();
+        readState = client.read((uint8_t*)&inChar, 1);
         xSemaphoreGive(tcpipSem);
       }
       else semFailed ("tcpipSem", __FILE__, __LINE__);
   #endif
-      if (inChar == '\r' || inChar == '\n' || (cmdProtocol==DCCEX && inChar=='>') || bufferPtr == (NETWBUFFSIZE-1)) {
-        if (bufferPtr > 0) {
-          if (cmdProtocol==DCCEX && inChar=='>') inBuffer[bufferPtr++] = '>';
-          inBuffer[bufferPtr] = '\0';
-          if (diagIsRunning) {
-            diagEnqueue ('p', (char *) "<-- ", false);
-            diagEnqueue ('p', inBuffer, true);
+      if (readState == 1) {
+        if (inChar == '\r' || inChar == '\n' || (cmdProtocol==DCCEX && inChar=='>') || bufferPtr == (NETWBUFFSIZE-1)) {
+          if (bufferPtr > 0) {
+            if (cmdProtocol==DCCEX && inChar=='>') inBuffer[bufferPtr++] = '>';
+            inBuffer[bufferPtr] = '\0';
+            if (diagIsRunning) {
+              diagEnqueue ('p', (char *) "<-- ", false);
+              diagEnqueue ('p', inBuffer, true);
+            }
+            processPacket (inBuffer);
+            bufferPtr = 0;
           }
-          processPacket (inBuffer);
-          bufferPtr = 0;
         }
+        else inBuffer[bufferPtr++] = inChar;
       }
-      else inBuffer[bufferPtr++] = inChar;
     }
     delay (debounceTime);
     if (cmdProtocol == DCCEX) { // send out periodic <s> status request - a keep alive of sorts on an approx 10 minute basis
@@ -128,6 +134,8 @@ void receiveNetData(void *pvParameters)
     xSemaphoreGive(tcpipSem);
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
+  if (diagIsRunning)
+    diagEnqueue ('e', (char *) "### Stopping network/serial receiver service ------------------------------", true);
   vTaskDelete( NULL );
 }
 
@@ -136,16 +144,22 @@ void receiveNetData(void *pvParameters)
 bool netConnState (uint8_t chkmode)
 {
   bool retval = false;
+  static uint8_t waitForReconn = 100;
+
+  if (waitForReconn == 100) waitForReconn = nvs_get_int("waitForReconn", 0);
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     switch (chkmode) {
-    case 1: retval = (APrunning || WiFi.status() == WL_CONNECTED) && client.connected();
+    case 1: retval = (APrunning || WiFi.status() == WL_CONNECTED) && (waitForReconn==1 || client.connected());
             break;
     case 2: retval = (APrunning || WiFi.status() == WL_CONNECTED) && client.connected() && client.available()>0;
             break;
     }
     xSemaphoreGive(tcpipSem);
   }
-  else semFailed ("tcpipSem", __FILE__, __LINE__);
+  else {
+    semFailed ("tcpipSem", __FILE__, __LINE__);
+    retval = true;   ///need to assume something else is holding the semaphore and all is actually OK
+  }
   return (retval);
 }
 #endif

@@ -336,6 +336,7 @@ void mkConfigMenu()
       case 6:
         setDisconnected();
         displayTempMessage ("Restarting", "Press any key to reboot or wait 30 seconds", true);
+        displayTempMessage ("Restarting", "Please wait", false);
         ESP.restart();
         break;
       case 7:

@@ -64,7 +64,8 @@ void relayListener(void *pvParameters)
     }
     vTaskDelete( NULL );
   }
-
+  if (diagIsRunning)
+    diagEnqueue ('e', (char *) "### Starting relay service ------------------------------------------------", true);
   remoteSys = (relayConnection_s*) malloc (sizeof (relayConnection_s) * maxRelay);
   {
     char* tptr = (char*) remoteSys;
@@ -74,6 +75,14 @@ void relayListener(void *pvParameters)
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Starting relay, port %d\r\n", getTimeStamp(), relayPort); 
       xSemaphoreGive(consoleSem);
+    }
+    // calculate how long to wait before missing keep alive is a problem.
+    {
+      uint8_t maxMissedKeepAlive = nvs_get_int ("missedKeepAlive", 2);
+      uint16_t keepAliveInterval = nvs_get_int ("relayKeepAlive", KEEPALIVETIMEOUT);
+      if (maxMissedKeepAlive < 1 || maxMissedKeepAlive > 10) maxMissedKeepAlive = 2;
+      if (keepAliveInterval  < 1) keepAliveInterval = 1;
+      maxRelayTimeOut = ((keepAliveInterval * maxMissedKeepAlive) + 1 ) * uS_TO_S_FACTOR;
     }
     for (uint8_t n=0; n<maxRelay; n++) {
       remoteSys[n].client = &(relayClient[n]);
@@ -102,7 +111,8 @@ void relayListener(void *pvParameters)
               }
               else semFailed ("relaySvrSem", __FILE__, __LINE__);
               sprintf (relayName, "RelayHandler%d", i);
-              // xTaskCreate(relayHandler, relayName, 6144, &remoteSys[i], 4, NULL);
+              relayClient[i].setNoDelay(true);
+              relayClient[i].setTimeout(nvs_get_int("clientTimeout", 5000));
               xTaskCreate(relayHandler, relayName, 7168, &remoteSys[i], 4, NULL);
               if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 Serial.printf ("%s Starting relay client as %s\r\n", getTimeStamp(), relayName); 
@@ -147,6 +157,8 @@ void relayListener(void *pvParameters)
     startRelay = true;
     xSemaphoreGive(relaySvrSem);
   }
+  if (diagIsRunning) 
+    diagEnqueue ('e', (char *) "### Stopping relay service ------------------------------------------------", true);
   vTaskDelete( NULL );
 }
 
@@ -174,6 +186,7 @@ return (retVal);
 void relayHandler(void *pvParameters)
 {
   struct relayConnection_s *thisRelay = (struct relayConnection_s *) pvParameters;
+  int readState = 0;
   uint16_t inPtr = 0;
   char inBuffer[NETWBUFFSIZE];
   char inchar;
@@ -209,54 +222,69 @@ void relayHandler(void *pvParameters)
     xSemaphoreGive(relaySvrSem);
   }
   else semFailed ("relaySvrSem", __FILE__, __LINE__);
+  if (diagIsRunning) {
+    char t_buffer [90];
+    sprintf (t_buffer, "--- Relay Client %d (%d.%d.%d.%d) connecting ---------------------------", thisRelay->id, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
+    diagEnqueue ('e', (char*) t_buffer, true);
+  }
   // For WiThrottle connections, send inventory information as par of the initial headers
   if (relayMode == WITHROTRELAY) {
     sendWiThrotHeader(thisRelay, &inBuffer[0]);
   }
+  
   while (keepAlive && relayConnState(thisRelay, 1)) {
     inchar = '\0';
     while (keepAlive && relayConnState(thisRelay, 2)) {
       if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        inchar = thisRelay->client->read();
+        //inchar = thisRelay->client->read();
+        readState = thisRelay->client->read((uint8_t*) &inchar, 1);
         xSemaphoreGive(tcpipSem);
       }
       else semFailed ("tcpipSem", __FILE__, __LINE__);
-      if (inchar == '\r' || inchar == '\n') {
-        if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          if (thisRelay->client->available()>0 && thisRelay->client->peek() == '\n') thisRelay->client->read();
-          xSemaphoreGive(tcpipSem);
-        }
-        else semFailed ("tcpipSem", __FILE__, __LINE__);
-        if (inPtr > 0) {
-          inBuffer[inPtr] = '\0';  // terminate input string
-          // Packet count
-          if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            thisRelay->inPackets++;
-            xSemaphoreGive(relaySvrSem);
+      if (readState==1) {
+        if (inchar == '\r' || inchar == '\n') {
+          if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            if (thisRelay->client->available()>0 && thisRelay->client->peek() == '\n') thisRelay->client->read();
+            xSemaphoreGive(tcpipSem);
           }
-          else semFailed ("relaySvrSem", __FILE__, __LINE__);
-          // Display packets if required
-          if (showPackets && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            Serial.printf ("<%cR %s\r\n", indicator, inBuffer);
-            xSemaphoreGive(consoleSem);
-          }
-          // Use the appropriate relay function
-          // - but treat JMRI keep alives as a lower level feature dealt with here
-          if (relayMode == WITHROTRELAY) {
-            // keep alive handling
-            if (inBuffer[0] == '*' && strlen(inBuffer) < 3) {
-              if (inBuffer[1] == '+') { trackKeepAlive= true; Serial.println ("keepalive on"); }
-              else if (inBuffer[1] == '-') { trackKeepAlive= false; Serial.println ("keepalive off"); }
-              reply2relayNode (thisRelay, "HTJMRI\r\n");  // Ack by sending Node type
+          else semFailed ("tcpipSem", __FILE__, __LINE__);
+          if (inPtr > 0) {
+            inBuffer[inPtr] = '\0';  // terminate input string
+            // Packet count
+            if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              thisRelay->inPackets++;
+              xSemaphoreGive(relaySvrSem);
             }
-            else wiThrotRelayPkt (thisRelay, inBuffer, indicator);
+            else semFailed ("relaySvrSem", __FILE__, __LINE__);
+            // Display packets if required
+            if (showPackets && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              Serial.printf ("<%cR %s\r\n", indicator, inBuffer);
+              xSemaphoreGive(consoleSem);
+            }
+            if (diagIsRunning) {
+              char t_buffer [6];
+              sprintf (t_buffer, "%d<- ", thisRelay->id);
+              diagEnqueue ('r', (char*) t_buffer, false);
+              diagEnqueue ('r', (char*) inBuffer, true);
+            }
+            // Use the appropriate relay function
+            // - but treat JMRI keep alives as a lower level feature dealt with here
+            if (relayMode == WITHROTRELAY) {
+              // keep alive handling
+              if (inBuffer[0] == '*' && strlen(inBuffer) <3) {
+                if (inBuffer[1] == '+') { trackKeepAlive= true; }
+                else if (inBuffer[1] == '-') { trackKeepAlive= false; }
+                reply2relayNode (thisRelay, "HTJMRI\r\n");  // Ack by sending Node type
+              }
+              else wiThrotRelayPkt (thisRelay, inBuffer, indicator);
+            }
+            else dcc_relay (inBuffer, indicator);
           }
-          else dcc_relay (inBuffer, indicator);
+          inPtr = 0;
+          if (trackKeepAlive) thisRelay->keepAlive = esp_timer_get_time();
         }
-        inPtr = 0;
-        if (trackKeepAlive) thisRelay->keepAlive = esp_timer_get_time();
-      }
-      else if (inchar>31 && inchar<127) inBuffer[inPtr++] = inchar;
+        else if (inchar>31 && inchar<127) inBuffer[inPtr++] = inchar;
+        }
       if (!relayConnState(thisRelay, 2)) delay(20);
     }
     if (trackKeepAlive && (esp_timer_get_time() - thisRelay->keepAlive) > maxRelayTimeOut) {
@@ -267,6 +295,11 @@ void relayHandler(void *pvParameters)
           xSemaphoreGive(consoleSem);
         }
         xSemaphoreGive(relaySvrSem);
+        if (diagIsRunning) {
+          char t_buffer [90];
+          sprintf (t_buffer, "--- Relay Client %d (%d.%d.%d.%d) keep-alive timeout -------------------", thisRelay->id, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
+          diagEnqueue ('e', (char*) t_buffer, true);
+        }
       }
       else semFailed ("relaySvrSem", __FILE__, __LINE__);
     }
@@ -292,6 +325,11 @@ void relayHandler(void *pvParameters)
     xSemaphoreGive(tcpipSem);
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
+  if (diagIsRunning) {
+    char t_buffer [90];
+    sprintf (t_buffer, "--- Relay Client %d (%d.%d.%d.%d) disconnecting ------------------------", thisRelay->id, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
+    diagEnqueue ('e', (char*) t_buffer, true);
+  }
   // Stop and drop any owned locos
   for (uint16_t n=0; n<locomotiveCount+MAXCONSISTSIZE; n++) {
     inchar = 0;
@@ -375,6 +413,13 @@ void reply2relayNode (struct relayConnection_s *thisRelay, const char *outPacket
       if (showPackets && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf ("R-> %s", outPacket);
         xSemaphoreGive(consoleSem);
+      }
+      if (diagIsRunning) {
+        char t_buffer[5];
+        bool needsTermination = (outPacket[strlen(outPacket)-1] != '\n');
+        sprintf (t_buffer, "%d-> ", thisRelay->id);
+        diagEnqueue ('r', (char*) t_buffer, false);
+        diagEnqueue ('r', (char*) outPacket, needsTermination);
       }
     }
     else semFailed ("tcpipSem", __FILE__, __LINE__);
@@ -890,7 +935,8 @@ void sendWiThrotHeader(struct relayConnection_s *thisRelay, char *inBuffer)
   sprintf (inBuffer, "PW%d\r\n", webPort);
   reply2relayNode (thisRelay, inBuffer);
   #endif
-  sprintf (inBuffer, "*%d\r\n", nvs_get_int ("relayKeepAlive", KEEPALIVETIMEOUT));
+  tint = nvs_get_int ("relayKeepAlive", KEEPALIVETIMEOUT);
+  if (tint > 0) sprintf (inBuffer, "*%d\r\n", tint);   // Request keep alive packets only if non zero
   reply2relayNode (thisRelay, inBuffer);
   sprintf (inBuffer, "HtJMRI %s v%s (%s)\r\n", PRODUCTNAME, VERSION, tname);
   reply2relayNode (thisRelay, inBuffer);

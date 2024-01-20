@@ -58,7 +58,7 @@ SOFTWARE.
 #undef VERSION
 #endif
 #define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.7b"         // Version string
+#define VERSION     "0.7c"         // Version string
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.
@@ -237,6 +237,7 @@ struct relayConnection_s {
   uint32_t outPackets;            // count of packets out - sent to remote side
   uint8_t  id;                    // serial number of this entry, used for reverse lookup
   char nodeName[NAMELENGTH];      // remote name
+  bool active;                    // expected to be active and connected
 };
 #endif
 

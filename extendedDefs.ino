@@ -60,7 +60,7 @@ SOFTWARE.
     { (char*)"inventoryRout",  INTEGER,    0,             2,            0,       (char*)   "", (char*)"DCC_Ex routes inventory"},
     { (char*)"diagPort",       INTEGER,   10,         65500,           23,       (char*)   "", (char*)"Diagnostic port"},
     { (char*)"mainMenuMask",   INTEGER,    0,            15,            0,       (char*)   "", (char*)"Main Menu Mask"},
-    { (char*)"clientTimeout",  INTEGER,   20,        120000,         5000,       (char*)   "", (char*)"WiFi client timeout"},
+    { (char*)"clientTimeout",  INTEGER,   20,       TIMEOUT,    TIMEOUT/4,       (char*)   "", (char*)"WiFi client timeout"},
     { (char*)"waitForReconn",  INTEGER,    0,             2,            0,       (char*)   "", (char*)"Client waits for reconnect"},
     //{ (char*)"disableCabMenu", INTEGER,    0,             1,            0,       (char*)   "", (char*)"Disable Cab menu"},
     #ifdef DELAYONSTART
@@ -102,9 +102,10 @@ SOFTWARE.
     { (char*)"relayMode",      INTEGER,    0,             2,            1,       (char*)   "", (char*)"Relay mode" },
     { (char*)"relayPort",      INTEGER,    1,         65534,    RELAYPORT,       (char*)   "", (char*)"Relay port" },
     { (char*)"fastclock2dcc",  INTEGER,    0,             1,            0,       (char*)   "", (char*)"send fastclock to dcc-ex" },
-    { (char*)"clientTimeout",  INTEGER,   20,        120000,         5000,       (char*)   "", (char*)"WiFi client timeout"},
+    { (char*)"clientTimeout",  INTEGER,   20,       TIMEOUT,    TIMEOUT/4,       (char*)   "", (char*)"WiFi client timeout"},
     { (char*)"relayKeepAlive", INTEGER,    0,          3600,KEEPALIVETIMEOUT,    (char*)   "", (char*)"JMRI Relay keepalive interval" },
     { (char*)"missedKeepAlive",INTEGER,    1,            10,            2,       (char*)   "", (char*)"Max missed keepalive packets" },
+    { (char*)"oneIPoneClient", INTEGER,    0,             1,            1,       (char*)   "", (char*)"One IP, One Client" },
     #ifdef FC_HOUR
     { (char*)"fc_hour",        INTEGER,    0,            23,      FC_HOUR,       (char*)   "", (char*)"fastclock hour" },
     #endif

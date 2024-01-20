@@ -206,10 +206,11 @@ void connectionManager(void *pvParameters)
             else WiFi.begin(stassid, stapass);
             xSemaphoreGive(tcpipSem);
           }
-          if (diagIsRunning) {
+          if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             diagEnqueue ('e', (char*) "### connecting to WiFi ", false);
             diagEnqueue ('e', (char*) stassid, false);
             diagEnqueue ('e', (char*) "-------------------------------------------", true);
+            xSemaphoreGive(diagPortSem);
           }
           delay (TIMEOUT);
           if ((!APrunning) && xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
@@ -374,7 +375,7 @@ void connect2server (char *server, int port)
     xSemaphoreGive(consoleSem);
   }
 
-  clientTimeout = nvs_get_int ("clientTimeout", 5000);
+  clientTimeout = nvs_get_int ("clientTimeout", TIMEOUT/4);
   if (strcmp (server, "none") == 0) return;
   if (client.connect(server, port, clientTimeout)) {
     client.setNoDelay (true);
@@ -386,10 +387,11 @@ void connect2server (char *server, int port)
       remServerNode[sizeof(remServerNode)-1] = '\0';
     }
     // Once connected, we can listen for returning packets
-    if (diagIsRunning) {
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       diagEnqueue ('e', (char*) "### connecting to Server ", false);
       diagEnqueue ('e', (char*) server, false);
       diagEnqueue ('e', (char*) "-------------------------------------------", true);
+      xSemaphoreGive(diagPortSem);
     }
     xTaskCreate(receiveNetData, "Network_In", 4096, NULL, 4, NULL);
     // Print diagnostic
@@ -518,12 +520,13 @@ void txPacket (const char *header, const char *pktData)
     client.println (pktData);
     client.flush();
     xSemaphoreGive(tcpipSem);
-    if (diagIsRunning) {
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       diagEnqueue ('p', (char *) "--> ", false);
       if (header != NULL) {
         diagEnqueue ('p', (char*) header, false);
       }
       diagEnqueue ('p', (char*) pktData, true);
+      xSemaphoreGive(diagPortSem);
     }
     if (showPackets) {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -586,12 +589,13 @@ void txPacket (const char *header, const char *pktData)
     serial_dev.write ((const uint8_t*)pktData, strlen(pktData));
     serial_dev.write ((const uint8_t*)"\r\n", 2);
     xSemaphoreGive(serialSem);
-    if (diagIsRunning) {
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       diagEnqueue ('p', (char *) "--> ", false);
       if (header!=NULL) {
         diagEnqueue ('p', (char*) header, false);
       }
       diagEnqueue ('p', (char*) pktData, true);
+      xSemaphoreGive(diagPortSem);
     }
     if (showPackets) {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

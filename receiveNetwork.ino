@@ -57,8 +57,10 @@ void receiveNetData(void *pvParameters)
     }
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
-  if (diagIsRunning)
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     diagEnqueue ('e', (char *) "### Starting network/serial receiver service ------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
   setInitialData();
   #ifdef SERIALCTRL
   while (true) {
@@ -93,9 +95,10 @@ void receiveNetData(void *pvParameters)
           if (bufferPtr > 0) {
             if (cmdProtocol==DCCEX && inChar=='>') inBuffer[bufferPtr++] = '>';
             inBuffer[bufferPtr] = '\0';
-            if (diagIsRunning) {
+            if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               diagEnqueue ('p', (char *) "<-- ", false);
               diagEnqueue ('p', inBuffer, true);
+              xSemaphoreGive(diagPortSem);
             }
             processPacket (inBuffer);
             bufferPtr = 0;
@@ -134,8 +137,10 @@ void receiveNetData(void *pvParameters)
     xSemaphoreGive(tcpipSem);
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
-  if (diagIsRunning)
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     diagEnqueue ('e', (char *) "### Stopping network/serial receiver service ------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
   vTaskDelete( NULL );
 }
 

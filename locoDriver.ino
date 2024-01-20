@@ -65,8 +65,10 @@ void locomotiveDriver()
     xSemaphoreGive(consoleSem);
   }
 
-  if (diagIsRunning)
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     diagEnqueue ('e', (char *) "### Starting loco driving session -----------------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
   potVal[0] = '\0';
   funVal[0] = '\0';
   speedStep = nvs_get_int ("speedStep", 4);
@@ -561,6 +563,7 @@ void locomotiveDriver()
         }
       }
     }
+    if (speedChange || funcChange) delay (20); // hold off for processing messages
   }
   for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
     setLocoOwnership (n, false);
@@ -590,8 +593,10 @@ void locomotiveDriver()
     Serial.printf ("%s Ending locoDriver session\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
-  if (diagIsRunning)
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     diagEnqueue ('e', (char *) "### Stopping loco driving session -----------------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
 }
 
 #ifdef BRAKEPRESPIN

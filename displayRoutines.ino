@@ -55,12 +55,12 @@ const char *fontLabel[] = {"Small 6x8", "Std 8x16"
 , "XX Large 32x64"
 #endif
 };
-const uint8_t fontWidth[]  = { 6,8
+const uint8_t fontWidth[]  = { 6, 8
 #ifdef FONT_10x20
-,10
+, 10
 #endif
 #ifdef FONT_14x16
-,14
+, 14
 #endif
 #ifdef FONT_12x24
 , 12
@@ -72,12 +72,12 @@ const uint8_t fontWidth[]  = { 6,8
 , 32
 #endif
 };
-const uint8_t fontHeight[] = { 8,16
+const uint8_t fontHeight[] = { 8, 16
 #ifdef FONT_10x20
-,20
+, 20
 #endif
 #ifdef FONT_14x16
-,16
+, 16
 #endif
 #ifdef FONT_12x24
 , 24
@@ -111,6 +111,13 @@ void setupFonts()
   screenWidth    = display.width();
   screenHeight   = display.height();
   fontIndex      = nvs_get_int ("fontIndex", 1);
+  if (fontIndex >= sizeof(fontWidth)) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s WARNING: Font index out of range: %d\r\n", getTimeStamp(), fontIndex);
+      xSemaphoreGive(consoleSem);
+    }
+    fontIndex = 1;   // out of range check
+  }
   selFontWidth   = fontWidth[fontIndex];
   selFontHeight  = fontHeight[fontIndex];
   charsPerLine   = screenWidth  / selFontWidth;

@@ -71,6 +71,7 @@ static SemaphoreHandle_t routeSem     = xSemaphoreCreateMutex();  // used for se
 static SemaphoreHandle_t tcpipSem     = xSemaphoreCreateMutex();
 static SemaphoreHandle_t fastClockSem = xSemaphoreCreateMutex();  // for sending/receiving/displaying fc messages
 static SemaphoreHandle_t shmSem       = xSemaphoreCreateMutex();  // shared memory for used for moved blocks of data between tasks/threads
+static SemaphoreHandle_t diagPortSem  = xSemaphoreCreateMutex();  // try to only enqueue one message at a time
 #ifdef WEBLIFETIME
 static SemaphoreHandle_t webServerSem = xSemaphoreCreateMutex();  // used by different web server threads
 #endif
@@ -534,7 +535,7 @@ void setup()  {
     Serial.printf ("%s Starting WiFi network services\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
-  xTaskCreate(connectionManager, "connectionMgr", 4096, NULL, 4, NULL);
+  xTaskCreate(connectionManager, "connectionMgr", 6144, NULL, 4, NULL);
   #ifndef SERIALCTRL
   // Only used if connection to controlstation is over WiFi
   xTaskCreate(keepAlive, "keepAlive", 2048, NULL, 4, NULL);
@@ -545,7 +546,7 @@ void setup()  {
     Serial.printf ("%s Starting connection to serially connected DCC-Ex\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
-  xTaskCreate(serialConnectionManager, "serialCntMgr", 4096, NULL, 4, NULL);
+  xTaskCreate(serialConnectionManager, "serialCntMgr", 6144, NULL, 4, NULL);
   #ifdef RELAYPORT
   #ifdef USEWIFI
   // if (relayMode == WITHROTRELAY) {

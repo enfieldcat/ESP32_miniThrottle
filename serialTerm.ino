@@ -807,10 +807,11 @@ void mt_sys_restart (const char *reason) // restart the throttle
       xSemaphoreGive(consoleSem);
     }
   }
-  if (diagIsRunning) {
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     diagEnqueue ('e', (char*) "### Restart: ", false);
     if (reason!=NULL) diagEnqueue ('e', (char*) reason, true);
     else diagEnqueue ('e', (char*) "Unknown cause.", true);
+    xSemaphoreGive(diagPortSem);
     delay(1000); // allow time for message to be processed
   }
   esp_restart();  
@@ -1504,7 +1505,10 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
       blk_count = locomotiveCount + MAXCONSISTSIZE;
       blk_start = (char*) locoRoster;
       sprintf (message, "%d additional slots allocated for ad-hoc loco IDs", MAXCONSISTSIZE);
-      if (diagIsRunning) diagEnqueue ('m', (char*) message, true);
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('m', (char*) message, true);
+        xSemaphoreGive(diagPortSem);
+      }
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println (message);
         xSemaphoreGive(consoleSem);
@@ -1548,7 +1552,10 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
     }
     if (blk_start == NULL || blk_count == 0) {
       sprintf (message, "%s: No data available to dump", param[1]);
-      if (diagIsRunning) diagEnqueue ('m', (char*) message, true);
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('m', (char*) message, true);
+        xSemaphoreGive(diagPortSem);
+      }
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println (message);
         xSemaphoreGive(consoleSem);
@@ -1556,7 +1563,10 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
       return;
     }
     sprintf (message, "--- %s (n=%d) ---", param[1], blk_count);
-    if (diagIsRunning) diagEnqueue ('m', (char*) message, true);
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      diagEnqueue ('m', (char*) message, true);
+      xSemaphoreGive(diagPortSem);
+    }
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println (message);
       for (uint16_t n=0; n<blk_count; n++) {
@@ -1567,10 +1577,11 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
       Serial.println ("---");
       xSemaphoreGive(consoleSem);
     }
-    if (diagIsRunning) {
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       strcpy (message, "---");
       for (uint8_t n = 0; n<15; n++) strcat (message, "-----");
       diagEnqueue ('m', (char*) message, true);
+      xSemaphoreGive(diagPortSem);
     }
   }
 }
@@ -1590,11 +1601,17 @@ void mt_dump (char* memblk, int memsize)
     sprintf (message, "--- Address 0x%08x, Size %d bytes ", (uint32_t) memblk, memsize);
     for (rowoffset=strlen(message); rowoffset<77; rowoffset++) strcat (message, "-");
     Serial.println (message);
-    if (diagIsRunning) diagEnqueue ('m', (char*) message, true);
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      diagEnqueue ('m', (char*) message, true);
+      xSemaphoreGive(diagPortSem);
+    }
     for (memoffset=0; memoffset<memsize; ) {
       sprintf (message, "0x%04x ", memoffset);
       Serial.print (message);
-      if (diagIsRunning) diagEnqueue ('m', (char*) message, false);
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('m', (char*) message, false);
+        xSemaphoreGive(diagPortSem);
+      }
       message[0] = '\0';
       for (rowoffset=0; rowoffset<16 && memoffset<memsize; rowoffset++) {
         if (memblk[memoffset]>=' ' && memblk[memoffset]<='z') postfix[rowoffset] = memblk[memoffset];
@@ -1610,10 +1627,11 @@ void mt_dump (char* memblk, int memsize)
       Serial.print   (message);
       Serial.print   ("   ");
       Serial.println (postfix);
-      if (diagIsRunning) {
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         diagEnqueue ('m', (char*) message, false);
         diagEnqueue ('m', (char*) "   ",   false);
         diagEnqueue ('m', (char*) postfix, true);
+        xSemaphoreGive(diagPortSem);
       }
     }
 }

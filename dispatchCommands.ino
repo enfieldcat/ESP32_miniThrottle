@@ -364,7 +364,7 @@ void setLocoSpeed (uint8_t locoIndex, int16_t speed, int8_t direction)
   }
   else if (cmdProtocol == DCCEX) {
     uint8_t tdir = 0;
-    if (direction == FORWARD) tdir = 1;
+    if (direction == FORWARD || direction == STOP) tdir = 1;
     if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       if (locoRoster[locoIndex].reverseConsist) {
         tdir = abs(tdir - 1);

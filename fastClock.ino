@@ -73,8 +73,10 @@ void fastClock (void *pvParameters)
     }
   }
   else {
-    if (diagIsRunning)
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       diagEnqueue ('e', (char *) "### Starting fast clock service -------------------------------------------", true);
+      xSemaphoreGive(diagPortSem);
+    }
     xTimerStart (fastClockTimer, pdMS_TO_TICKS(int (60000/fc_multiplier)));
     while (true) {
       if (fc_multiplier != 0.00) {
@@ -105,8 +107,10 @@ void fastClock (void *pvParameters)
       else semFailed ("fastClockSem", __FILE__, __LINE__);
     }
   }
-  if (diagIsRunning)
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     diagEnqueue ('e', (char *) "### Stopping fast clock service -------------------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
   vTaskDelete( NULL );
 }
 

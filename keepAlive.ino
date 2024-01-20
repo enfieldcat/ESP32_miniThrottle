@@ -67,8 +67,10 @@ void keepAlive(void *pvParameters)
     }
   }
   else {
-    if (diagIsRunning)
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       diagEnqueue ('e', (char *) "### Starting keep alive thread --------------------------------------------", true);
+      xSemaphoreGive(diagPortSem);
+    }
     lastTime = keepAliveTime;
     if (lastTime > 0) xTimerStart (keepAliveTimer, pdMS_TO_TICKS(lastTime * 1000));
     while (lastTime > 0 && cmdProtocol != DCCEX) {
@@ -105,8 +107,10 @@ void keepAlive(void *pvParameters)
   }
   if (keepAliveTimer != NULL) xTimerDelete (keepAliveTimer, pdMS_TO_TICKS(TIMEOUT));
   if (keepAliveQueue != NULL) vQueueDelete (keepAliveQueue);
-  if (diagIsRunning)
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     diagEnqueue ('e', (char *) "### Stopping keep alive thread --------------------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
   vTaskDelete( NULL );
 }
 
@@ -132,9 +136,10 @@ void sendKeepAlive(const char *pktData)
         xSemaphoreGive(consoleSem);
       }
     }
-    if (diagIsRunning) {
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       diagEnqueue ('p', (char*) "KA> ", false);
       diagEnqueue ('p', (char*) pktData, true);
+      xSemaphoreGive(diagPortSem);
     }
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);

@@ -76,20 +76,16 @@ void keepAlive(void *pvParameters)
     while (lastTime > 0 && cmdProtocol != DCCEX) {
       while (lastTime > 0 && (APrunning || WiFi.status() == WL_CONNECTED) && cmdProtocol != DCCEX) {
         while (lastTime > 0 && wiCliConnected && cmdProtocol != DCCEX) {
-          if (xQueueReceive(keepAliveQueue, &queueData, pdMS_TO_TICKS((lastTime*1000)+1000)) != pdPASS) {
-            if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-              Serial.printf ("%s Missing keep-alive packet\r\n", getTimeStamp());
-              xSemaphoreGive(consoleSem);
+          if (xQueueReceive(keepAliveQueue, &queueData, pdMS_TO_TICKS((lastTime*1000)+1000)) == pdPASS) {
+            if (lastTime > 0 && !turnOff) sendKeepAlive ("*");    // send the heartbeat, if we have started the sequence
+            if (lastTime != keepAliveTime) { // has the period changed?
+              lastTime = keepAliveTime;
+              if (lastTime > 0) xTimerChangePeriod(keepAliveTimer, pdMS_TO_TICKS(lastTime * 1000), pdMS_TO_TICKS(1100));
             }
-          }
-          if (lastTime > 0 && !turnOff) sendKeepAlive ("*");    // send the heartbeat, if we have started the sequence
-          if (lastTime != keepAliveTime) { // has the period changed?
-            lastTime = keepAliveTime;
-            if (lastTime > 0) xTimerChangePeriod(keepAliveTimer, pdMS_TO_TICKS(lastTime * 1000), pdMS_TO_TICKS(1100));
-          }
-          if (turnOff) { // Enable heartbeats if they have stopped.
-            turnOff = false;
-            sendKeepAlive ("*+");
+            if (turnOff) { // Enable heartbeats if they have stopped.
+              turnOff = false;
+              sendKeepAlive ("*+");
+            }
           }
         }
         turnOff = true;
@@ -146,5 +142,12 @@ void sendKeepAlive(const char *pktData)
     }
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
+}
+
+void resetKeepAlive()
+{
+  if (resetKeepAliveInd && cmdProtocol == WITHROT && keepAliveTimer != NULL) {
+    xTimerReset( keepAliveTimer, 0 );
+  }
 }
 #endif

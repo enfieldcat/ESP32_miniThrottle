@@ -521,13 +521,12 @@ void txPacket (const char *header, const char *pktData)
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (header != NULL) {
       if (client.write ((const uint8_t*) header, strlen(header)) < 0) wiCliConnected = false;
-      // client.print (header);
     }
     if (wiCliConnected && client.write ((const uint8_t*) pktData, strlen(pktData)) < 0) wiCliConnected = false;
     if (wiCliConnected && client.write ((const uint8_t*) "\r\n", 2) < 0) wiCliConnected = false;
-    // client.println (pktData);
     client.flush();
     xSemaphoreGive(tcpipSem);
+    resetKeepAlive();
     if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       if (!wiCliConnected) diagEnqueue ('p', (char*) "connection failed on: ", false);
       diagEnqueue ('p', (char *) "--> ", false);

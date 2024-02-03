@@ -144,7 +144,7 @@ void receiveNetData(void *pvParameters)
     }
     #ifndef SERIALCTRL
     else if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      if (maxKeepAliveTO != 0 && bumpCount++ > 200) {
+      if (maxKeepAliveTO != 0 && bumpCount++ > 30) {
         bumpCount = 0;
         if (esp_timer_get_time() - statusTime > maxKeepAliveTO) {
           xSemaphoreGive(shmSem);

@@ -208,6 +208,7 @@ static bool diagIsRunning     = false;   // run state indicator
 static bool APrunning         = false;   // are we running as an access point?
 static bool wiCliConnected    = false;   // manage our own wifi client connected state
 static bool inConfigMenu      = false;   // in config menu flag - config menu can run without server connection
+static bool resetKeepAliveInd = false;   // is the keep alive timer reset if other oackets are sent?
 static WiFiServer *diagServer = NULL;    // the diagnostic server wifi service
 #ifdef POTTHROTPIN
 static bool enablePot         = true;    // potentiometer enable/disable while driving
@@ -519,6 +520,9 @@ void setup()  {
   cmdProtocol = DCCEX;    // expect it always to be this!
   #else
   cmdProtocol = nvs_get_int ("defaultProto", WITHROT);
+  if (cmdProtocol == WITHROT) {
+    resetKeepAliveInd = nvs_get_int("resetKeepAlive", 0) > 0;
+  }
   #endif  //  SERIALCTRL
   #ifdef DELAYONSTART
   {

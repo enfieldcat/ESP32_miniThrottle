@@ -1022,6 +1022,12 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   myClient->printf ((const char*)"<tr><td>TCP/IP Timeout</td><td><input type=\"number\" name=\"clientTimeout\" value=\"%d\" min=\"20\" max=\"120000\" size=\"8\"> mS</td></tr>", compInt);
   compInt = nvs_get_int ("missedKeepAlive", 0);
   myClient->printf ((const char*)"<tr><td>Max Missed Keepalive</td><td><input type=\"number\" name=\"missedKeepAlive\" value=\"%d\" min=\"0\" max=\"20\" size=\"8\"> missed responses, 0 => ignore WiThrottle keepalive response</td></tr>", compInt);
+  compInt = nvs_get_int ("resetKeepAlive", 0);
+  myClient->printf ((const char*)"<tr><td>Keepalive timer</td><td><input type=\"radio\" name=\"resetKeepAlive\" id=\"resetKA0\" value=\"0\"");
+  if (compInt==0) myClient->printf ((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for\"resetKA0\">WiThrottle keepalives sent on regular interval</label><br><input type=\"radio\" name=\"resetKeepAlive\" id=\"resetKA1\" value=\"1\"");
+  if (compInt==1) myClient->printf ((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for\"resetKA1\">Only send keepalives during lul in activity</label></td></tr>");
   myClient->printf ((const char*)"</table><br><br><table><tr><th>Server</th><th>Port</th></tr>");
   for (uint8_t n=0; n<WIFINETS; n++) {
     sprintf (labelName, "server_%d", n);

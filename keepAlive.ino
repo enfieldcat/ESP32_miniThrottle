@@ -75,7 +75,7 @@ void keepAlive(void *pvParameters)
     if (lastTime > 0) xTimerStart (keepAliveTimer, pdMS_TO_TICKS(lastTime * 1000));
     while (lastTime > 0 && cmdProtocol != DCCEX) {
       while (lastTime > 0 && (APrunning || WiFi.status() == WL_CONNECTED) && cmdProtocol != DCCEX) {
-        while (lastTime > 0 && client.connected() && cmdProtocol != DCCEX) {
+        while (lastTime > 0 && wiCliConnected && cmdProtocol != DCCEX) {
           if (xQueueReceive(keepAliveQueue, &queueData, pdMS_TO_TICKS((lastTime*1000)+1000)) != pdPASS) {
             if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               Serial.printf ("%s Missing keep-alive packet\r\n", getTimeStamp());
@@ -98,7 +98,7 @@ void keepAlive(void *pvParameters)
       delay (1000);   // wait for WiFi reconnect
     }
   }
-  if (client.connected() && cmdProtocol == WITHROT) {
+  if (wiCliConnected && cmdProtocol == WITHROT) {
     sendKeepAlive ("*-");
   }
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -126,7 +126,9 @@ void sendKeepAlive(const char *pktData)
   }
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (pktData!= NULL) {
-      client.println (pktData);
+      if (wiCliConnected && client.write ((const uint8_t*) pktData, strlen(pktData)) < 0) wiCliConnected = false;
+      if (wiCliConnected && client.write ((const uint8_t*) "\r\n", 2) < 0) wiCliConnected = false;
+      // client.println (pktData);
       client.flush();
     }
     xSemaphoreGive(tcpipSem);
@@ -137,6 +139,7 @@ void sendKeepAlive(const char *pktData)
       }
     }
     if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (!wiCliConnected) diagEnqueue ('p', (char*) "connection failed on: ", false);
       diagEnqueue ('p', (char*) "KA> ", false);
       diagEnqueue ('p', (char*) pktData, true);
       xSemaphoreGive(diagPortSem);

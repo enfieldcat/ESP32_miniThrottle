@@ -24,13 +24,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-
+#ifdef USEWIFI
 
 void diagPortMonitor (void *pvParameters)
 // This is the diagnostic port monitor task.
 {
   (void) pvParameters;
   static WiFiClient diagServerClient[MAXDIAGCONNECT];
+  const char paramm = 'm';
+  const char paramw = 'w';
+  const char paramu = 'u';
   int readState = 0;
   uint16_t diagPort = nvs_get_int ("diagPort", 23);
   uint16_t outPtr = 0;
@@ -85,6 +88,7 @@ void diagPortMonitor (void *pvParameters)
           if (!diagServerClient[i] || !diagServerClient[i].connected()){
             if(diagServerClient[i]) diagServerClient[i].stop();
             diagServerClient[i] = diagServer->available();
+            diagServerClient[i].setNoDelay (true);
             i = MAXDIAGCONNECT + 1;
           }
         }
@@ -96,15 +100,15 @@ void diagPortMonitor (void *pvParameters)
           }
         }
         else {
-          diagWrite (&(diagServerClient[0]), (char*) "New diag client connects:\r\n");
-          diagHelp(&(diagServerClient[0]));
+          diagWrite (&(diagServerClient[i]), (char*) "New diag client connects:\r\n");
+          diagHelp(&(diagServerClient[i]));
         }
       }
       if (xQueueReceive(diagQueue, &inChar, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
         outBuffer[outPtr++] = inChar;
         if (inChar=='\n' || outPtr==(sizeof(outBuffer)-1)) {
           outBuffer[outPtr++] = '\0';
-          diagWrite (&(diagServerClient[0]), outBuffer);
+          diagWrite (&(diagServerClient[i]), outBuffer);
           outPtr = 0;
         }
       }
@@ -122,10 +126,25 @@ void diagPortMonitor (void *pvParameters)
                 if(diagServerClient[i].available()) diagServerClient[i].read((uint8_t*) &inChar, 1);
               }
               else switch (inChar) {
+                case 'k':
+                case 'K':
+                  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                    if (diagMonitorMode == 'k') {
+                      diagMonitorMode = ' ';
+                      xSemaphoreGive(shmSem);
+                      diagWrite (&(diagServerClient[i]), (char*)  "----  Pause Keypad Data  ----\r\n");
+                    }
+                    else {
+                      diagMonitorMode = 'k';
+                      xSemaphoreGive(shmSem);
+                      diagWrite (&(diagServerClient[i]), (char*)  "----  Show Keypad Data  ----\r\n");
+                    }
+                  }
+                  break;
                 case 'h':
                 case 'H':
                 case '?':
-                  diagHelp(&(diagServerClient[0]));
+                  diagHelp(&(diagServerClient[i]));
                   break;
                 case 'c':
                 case 'C':
@@ -138,7 +157,7 @@ void diagPortMonitor (void *pvParameters)
                     diagIsRunning = false;
                     diagMonitorMode = ' ';
                     xSemaphoreGive(shmSem);
-                    diagWrite (&(diagServerClient[0]), (char*)  "----  Quit Diagnostic Mode  ----\r\n");
+                    diagWrite (&(diagServerClient[i]), (char*)  "----  Quit Diagnostic Mode  ----\r\n");
                   }
                   break;
                 case 'p':
@@ -146,18 +165,19 @@ void diagPortMonitor (void *pvParameters)
                   if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                     if (diagMonitorMode == 'p') {
                       diagMonitorMode = ' ';
-                      diagWrite (&(diagServerClient[0]), (char*)  "----  Pause Packets  ----\r\n");
+                      xSemaphoreGive(shmSem);
+                      diagWrite (&(diagServerClient[i]), (char*)  "----  Pause Packets  ----\r\n");
                     }
                     else {
                       diagMonitorMode = 'p';
-                      diagWrite (&(diagServerClient[0]), (char*)  "----  Show Packets  ----\r\n");
-                      diagWrite (&(diagServerClient[0]), (char*)  "    --> Sent by this unit\r\n");
+                      xSemaphoreGive(shmSem);
+                      diagWrite (&(diagServerClient[i]), (char*)  "----  Show Packets  ----\r\n");
+                      diagWrite (&(diagServerClient[i]), (char*)  "    --> Sent by this unit\r\n");
                       #ifndef RELAYPORT
-                      diagWrite (&(diagServerClient[0]), (char*)  "    KA> Keep Alives sent\r\n");
+                      diagWrite (&(diagServerClient[i]), (char*)  "    KA> Keep Alives sent\r\n");
                       #endif
-                      diagWrite (&(diagServerClient[0]), (char*)  "    <-- Received by this Unit\r\n");
+                      diagWrite (&(diagServerClient[i]), (char*)  "    <-- Received by this Unit\r\n");
                     }
-                    xSemaphoreGive(shmSem);
                   }
                   break;
                 #ifdef RELAYPORT
@@ -166,29 +186,51 @@ void diagPortMonitor (void *pvParameters)
                   if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                     if (diagMonitorMode == 'r') {
                       diagMonitorMode = ' ';
-                      diagWrite (&(diagServerClient[0]), (char*)  "----  Pause Relay Packets  ----\r\n");
+                      xSemaphoreGive(shmSem);
+                      diagWrite (&(diagServerClient[i]), (char*)  "----  Pause Relay Packets  ----\r\n");
                     }
                     else {
                       diagMonitorMode = 'r';
-                      diagWrite (&(diagServerClient[0]), (char*)  "----  Show Relay Packets  ----\r\n");
-                      diagWrite (&(diagServerClient[0]), (char*)  "    n-> Sent by this unit\r\n");
-                      diagWrite (&(diagServerClient[0]), (char*)  "    n<- Received by this Unit\r\n");
-                      diagWrite (&(diagServerClient[0]), (char*)  "    Where n is the relay client number, or * for all clients\r\n");
+                      xSemaphoreGive(shmSem);
+                      diagWrite (&(diagServerClient[i]), (char*)  "----  Show Relay Packets  ----\r\n");
+                      diagWrite (&(diagServerClient[i]), (char*)  "    n-> Sent by this unit\r\n");
+                      diagWrite (&(diagServerClient[i]), (char*)  "    n<- Received by this Unit\r\n");
+                      diagWrite (&(diagServerClient[i]), (char*)  "    Where n is the relay client number, or * for all clients\r\n");
                     }
-                    xSemaphoreGive(shmSem);
                   }
                   break;
                 #endif
                 case 'm':
                 case 'M':
-                  const char *param = {"m"};
                   if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                     diagMonitorMode = 'm';
                     xSemaphoreGive(shmSem);
-                    diagWrite (&(diagServerClient[0]), (char*)  "----  Pause Packets  ----\r\n");
-                    xTaskCreate(diagSlaveRunner, "runner_m", 4096, (void*) param, 4, NULL);
+                    diagWrite (&(diagServerClient[i]), (char*)  "----  Switch to memory dump mode  ----\r\n");
+                    xTaskCreate(diagSlaveRunner, "runner_m", 4096, (void*) &paramm, 4, NULL);
                   }
                   break;
+                case 'w':
+                case 'W':
+                  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                    diagMonitorMode = 'w';
+                    xSemaphoreGive(shmSem);
+                    diagWrite (&(diagServerClient[i]), (char*)  "----  Switch to WiFi scan  ----\r\n");
+                    xTaskCreate(diagSlaveRunner, "runner_w", 4096, (void*) &paramw, 4, NULL);
+                  }
+                  break;
+                #ifdef OTAUPDATE
+                #ifndef NOHTTPCLIENT
+                case 'u':
+                case 'U':
+                  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                    diagMonitorMode = 'u';
+                    xSemaphoreGive(shmSem);
+                    diagWrite (&(diagServerClient[i]), (char*)  "----  Switch to Over The Air Update Mode  ----\r\n");
+                    xTaskCreate(diagSlaveRunner, "runner_u", 10240, (void*) &paramu, 4, NULL);
+                  }
+                  break;
+                #endif
+                #endif
               }
             }
           }
@@ -247,11 +289,20 @@ void diagPortMonitor (void *pvParameters)
 
 void diagHelp(WiFiClient* myClient)
 {
-  diagWrite (myClient, (char*) " * p - show/pause packets with control system\r\n");
-  #ifdef RELAYPORT
-  diagWrite (myClient, (char*) " * r - show/pause relayed packets\r\n");
-  #endif
+  diagWrite (myClient, (char*) " * k - keypad trace\r\n");
   diagWrite (myClient, (char*) " * m - memory dump\r\n");
+  #ifdef RELAYPORT
+  diagWrite (myClient, (char*) " * p - show/pause packets with DCC-Ex\r\n");
+  diagWrite (myClient, (char*) " * r - show/pause relayed packets with clients\r\n");
+  #else
+  diagWrite (myClient, (char*) " * p - show/pause packets with control system\r\n");
+  #endif
+  diagWrite (myClient, (char*) " * w - wifi scan\r\n");
+  #ifdef OTAUPDATE
+  #ifndef NOHTTPCLIENT
+  diagWrite (myClient, (char*) " * u - over the air update\r\n");
+  #endif
+  #endif
   diagWrite (myClient, (char*) " * h - help\r\n");
   diagWrite (myClient, (char*) " * c - close connection, but leave diag port running\r\n");
   diagWrite (myClient, (char*) " * q - quit diagnostic mode, and stop diag port service\r\n\n");
@@ -275,7 +326,7 @@ void diagEnqueue (char source, char *data, bool addTermination)
 {
   bool isRunning = false;
 
-  if (debuglevel>2 && source!='m' && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+  if (debuglevel>3 && source!='m' && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s diagEnqueue (%c, %s)\r\n", getTimeStamp(), source, data);
     xSemaphoreGive(consoleSem);
   }
@@ -314,6 +365,31 @@ void diagSlaveRunner(void *pvParameters)
   case 'm':
     mt_dump_data (1, param);
     break;
+  case 'w':
+    char outBuffer[80];
+    diagEnqueue ('w', "Please wait. Scanning WiFi networks", true);
+    numberOfNetworks = WiFi.scanNetworks();
+    sprintf(outBuffer, "Number of networks found: %d", numberOfNetworks);
+    diagEnqueue ('w', outBuffer, true);
+    sprintf(outBuffer, "%-16s %8s %-17s Channel Type", "Name", "Strength", "Address");
+    diagEnqueue ('w', outBuffer, true);
+    for (int i = 0; i < numberOfNetworks; i++) {
+      sprintf (outBuffer, "%-16s %8d %-17s %7d %s", WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.channel(i), wifi_EncryptionType(WiFi.encryptionType(i)));
+      diagEnqueue ('w', outBuffer, true);
+    }
+    break;
+  #ifdef OTAUPDATE
+  #ifndef NOHTTPCLIENT
+  case 'u':
+    if (OTAcheck4update(NULL)) {
+      delay (1000);
+      mt_sys_restart ("Restarting to boot updated code.");
+      }
+    break;
+  #endif
+  #endif
   }
   vTaskDelete( NULL ); 
 }
+
+#endif

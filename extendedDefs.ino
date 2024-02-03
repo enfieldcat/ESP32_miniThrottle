@@ -61,8 +61,7 @@ SOFTWARE.
     { (char*)"diagPort",       INTEGER,   10,         65500,           23,       (char*)   "", (char*)"Diagnostic port"},
     { (char*)"mainMenuMask",   INTEGER,    0,            15,            0,       (char*)   "", (char*)"Main Menu Mask"},
     { (char*)"clientTimeout",  INTEGER,   20,       TIMEOUT,    TIMEOUT/4,       (char*)   "", (char*)"WiFi client timeout"},
-    { (char*)"waitForReconn",  INTEGER,    0,             2,            0,       (char*)   "", (char*)"Client waits for reconnect"},
-    //{ (char*)"disableCabMenu", INTEGER,    0,             1,            0,       (char*)   "", (char*)"Disable Cab menu"},
+    { (char*)"missedKeepAlive",INTEGER,    0,            20,            0,       (char*)   "", (char*)"Max missed keepalive responses"},
     #ifdef DELAYONSTART
     { (char*)"delayOnStart",   INTEGER,    0,           120, DELAYONSTART,       (char*)   "", (char*)"Start up delay in seconds" },
     #endif

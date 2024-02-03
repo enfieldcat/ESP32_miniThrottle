@@ -87,7 +87,8 @@ void connectionManager(void *pvParameters)
         }
         else semFailed ("tcpipSem", __FILE__, __LINE__);
         staPref = nvs_get_int ("staConnect", 0);
-        if (trackPower && nvs_get_int("waitForReconn", 0) < 2) {
+        #ifndef SERIALCTRL
+        if ((!APrunning) && trackPower) {
           trackPower = false;
           #ifdef TRACKPWR
           digitalWrite(TRACKPWR, LOW);
@@ -96,6 +97,7 @@ void connectionManager(void *pvParameters)
           digitalWrite(TRACKPWRINV, HIGH);
           #endif
         }
+        #endif
         // Preference is to only access known access points in a strict order of preference
         if (staPref == 0) {
           networkFound = false;
@@ -267,11 +269,12 @@ void connectionManager(void *pvParameters)
     // Does the connection to the Control System need to be estabilished?
     #ifndef SERIALCTRL
     // if Wifi connected but server not connected
-    if ((APrunning || WiFi.status() == WL_CONNECTED) && !client.connected()) {
+    // if ((APrunning || WiFi.status() == WL_CONNECTED) && !client.connected()) {
+    if ((APrunning || WiFi.status() == WL_CONNECTED) && !wiCliConnected) {
       char server[65];
       int  port;
 
-      if (trackPower && nvs_get_int("waitForReconn", 0) == 0) {
+      if ((!APrunning) && trackPower) {
         trackPower = false;
         #ifdef TRACKPWR
         digitalWrite(TRACKPWR, LOW);
@@ -281,7 +284,7 @@ void connectionManager(void *pvParameters)
         #endif
       }
       // Use mdns to look up service
-      if ((!client.connected()) && nvs_get_int ("mdns", 1) == 1) {
+      if ((!wiCliConnected) && nvs_get_int ("mdns", 1) == 1) {
         server[0] = '\0';
         port = mdnsLookup ("_withrottle", server);
         if (port != 0 && strlen(server) > 0) {
@@ -291,6 +294,7 @@ void connectionManager(void *pvParameters)
           }
           connect2server (server, port);
           delay (TIMEOUT);
+          if ((!wiCliConnected) && client.connected()) wiCliConnected = true;
         }
         else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("%s MDNS look up: no services found.\r\n", getTimeStamp());
@@ -299,7 +303,7 @@ void connectionManager(void *pvParameters)
       // Serial.print (WiFi.RSSI());
       }
       // now work through server list until we connect or just give up
-      for (index = 0; index <WIFINETS && !client.connected(); index++) {
+      for (index = 0; index <WIFINETS && !wiCliConnected; index++) {
         sprintf (paramName, "server_%d", index);
         nvs_get_string (paramName, server, "none", sizeof(server));
         if (strcmp (server, "none") != 0) {
@@ -311,6 +315,7 @@ void connectionManager(void *pvParameters)
           }
           connect2server (server, port);
           delay(TIMEOUT);
+          if ((!wiCliConnected) && client.connected()) wiCliConnected = true;
         }
       }
     }
@@ -505,7 +510,7 @@ int mdnsLookup (const char *service, char *addr)
 // Transmit a packet
 void txPacket (const char *header, const char *pktData)
 {
-  if (!client.connected()) return;
+  if (!wiCliConnected) return;
   if (pktData == NULL) return;
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (header==NULL) Serial.printf ("%s txPacket(NULL, %s)\r\n", getTimeStamp(), pktData);
@@ -515,12 +520,16 @@ void txPacket (const char *header, const char *pktData)
 
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (header != NULL) {
-      client.print (header);
+      if (client.write ((const uint8_t*) header, strlen(header)) < 0) wiCliConnected = false;
+      // client.print (header);
     }
-    client.println (pktData);
+    if (wiCliConnected && client.write ((const uint8_t*) pktData, strlen(pktData)) < 0) wiCliConnected = false;
+    if (wiCliConnected && client.write ((const uint8_t*) "\r\n", 2) < 0) wiCliConnected = false;
+    // client.println (pktData);
     client.flush();
     xSemaphoreGive(tcpipSem);
     if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (!wiCliConnected) diagEnqueue ('p', (char*) "connection failed on: ", false);
       diagEnqueue ('p', (char *) "--> ", false);
       if (header != NULL) {
         diagEnqueue ('p', (char*) header, false);

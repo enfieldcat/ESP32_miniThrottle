@@ -126,8 +126,10 @@ void dccLocoStatus (char* locoStatus)
     if (locoFunc>=0 && locoFunc != 9999 && xSemaphoreTake(functionSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       uint32_t changes  = locoRoster[next].function ^ locoFunc;  // xor new state with current to detect changes
       if (changes>0) {
+        const char inChar = 'F';
         locoRoster[next].function = locoFunc;
-        funcChange = true;
+        // funcChange = true;
+        if (locoRoster[next].owned) xQueueSend (locoUpdateQueue, &inChar, 0);
       }
       xSemaphoreGive(functionSem);
       #ifdef RELAYPORT
@@ -179,6 +181,7 @@ void dccSpeedChange (char* speedSet)
   int16_t maxLocoArray = locomotiveCount + MAXCONSISTSIZE;
   char *token;
   char *remain = speedSet;
+  const char inChar = 'S';
   uint8_t result = 15;
   uint8_t locoIndex = 0;
   #ifdef RELAYPORT
@@ -212,12 +215,13 @@ void dccSpeedChange (char* speedSet)
   dccSpeed = util_str2int(token);
   token = strtok_r (remain, " ", &remain);
   dccDirection = util_str2int(token);
-  if (dccSpeed>127) dccSpeed = -1;
+  if (dccSpeed>127 || dccSpeed<-1) dccSpeed = -1;
   if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     locoRoster[locoIndex].speed = (int16_t) dccSpeed;
     if (dccDirection == 1) locoRoster[locoIndex].direction = FORWARD;
     else locoRoster[locoIndex].direction = REVERSE;
-    if (locoRoster[locoIndex].owned) speedChange = true;
+    //if (locoRoster[locoIndex].owned) speedChange = true;
+    if (locoRoster[locoIndex].owned) xQueueSend (locoUpdateQueue, &inChar, 0);
     #ifdef RELAYPORT
     if (relayMode == WITHROTRELAY) {
       if (locoRoster[locoIndex].direction == REVERSE) t_direction = 0;

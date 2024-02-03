@@ -51,6 +51,10 @@ void keypadMonitor(void *pvParameters)
     char inChar = keypad.getKey();
     if (inChar != NO_KEY) {
       if (showKeypad) Serial.println (inChar);
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('k', (char *) &inChar, false);
+        xSemaphoreGive(diagPortSem);
+      }
       if (menuMode) {   // when driving menus, use numbers as arrows
         switch (inChar) {
           case 'U': inChar = 'D' ; break;  // transpose meaning of up and down

@@ -90,6 +90,7 @@ static HTTPClient *otaHttp            = new HTTPClient();         // Client used
 static QueueHandle_t cvQueue          = xQueueCreate (2,  sizeof(int16_t));  // Queue for querying CV Values
 static QueueHandle_t keyboardQueue    = xQueueCreate (3,  sizeof(char));     // Queue for keyboard type of events
 static QueueHandle_t keyReleaseQueue  = xQueueCreate (3,  sizeof(char));     // Queue for keyboard release type of events
+static QueueHandle_t locoUpdateQueue  = xQueueCreate (3,  sizeof(char));     // Queue for signaling change required to loco driving display
 static QueueHandle_t dccAckQueue      = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc updates, avoid flooding of WiFi
 static QueueHandle_t dccLocoRefQueue  = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc locomotive speed and direction changes
 static QueueHandle_t dccTurnoutQueue  = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc turnout data
@@ -167,6 +168,9 @@ static uint8_t defaultWifiMode  = WIFIBOTH;      // default wifi mode
 #else
 static uint8_t defaultWifiMode  = WIFIBOTH;      // default wifi mode - Optionally change to WIFISTA as non-relay default
 #endif
+#ifndef SERIALCTRL
+static uint64_t maxKeepAliveTO  = 0;             // by default ignore keep alive replies
+#endif
 #ifdef WEBLIFETIME
 static WiFiServer *webServer;                    // the web server wifi service
 static uint16_t webPort         = WEBPORT;       // tcp/ip web server port
@@ -202,6 +206,8 @@ static bool netReceiveOK      = false;
 static bool diagReceiveOK     = false;   // flag to ensure only one cpy is running
 static bool diagIsRunning     = false;   // run state indicator
 static bool APrunning         = false;   // are we running as an access point?
+static bool wiCliConnected    = false;   // manage our own wifi client connected state
+static bool inConfigMenu      = false;   // in config menu flag - config menu can run without server connection
 static WiFiServer *diagServer = NULL;    // the diagnostic server wifi service
 #ifdef POTTHROTPIN
 static bool enablePot         = true;    // potentiometer enable/disable while driving
@@ -509,11 +515,11 @@ void setup()  {
   // Use tasks to process various input and output streams
   // micro controller has enough memory, that stack sizes can be generously allocated to avoid stack overflows
   xTaskCreate(serialConsole, "serialConsole", 8192, NULL, 4, NULL);
-  #ifdef SERIALPORT
+  #ifdef SERIALCTRL
   cmdProtocol = DCCEX;    // expect it always to be this!
   #else
   cmdProtocol = nvs_get_int ("defaultProto", WITHROT);
-  #endif  //  SERIALPORT
+  #endif  //  SERIALCTRL
   #ifdef DELAYONSTART
   {
     uint16_t delayOnStart = nvs_get_int ("delayOnStart", DELAYONSTART);
@@ -653,17 +659,17 @@ void loop()
   // Normal control
   while (true) {
     #ifndef SERIALCTRL
-    if (!client.connected()) {
+    if (!wiCliConnected) {
       uint8_t answer;
       static bool stateChange   = true;
       static bool wifiConnected = false;
       static bool APConnected   = false;
 
-      if (((!APrunning) && WiFi.status() != WL_CONNECTED || !client.connected()) && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
+      if (((!APrunning) && WiFi.status() != WL_CONNECTED || !wiCliConnected) && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
         mkConfigMenu();
         stateChange = true;
       }
-      if (((!APrunning) && WiFi.status() != WL_CONNECTED) || (!client.connected())) {
+      if (((!APrunning) && WiFi.status() != WL_CONNECTED) || (!wiCliConnected)) {
         if (wifiConnected && WiFi.status() != WL_CONNECTED) {
           wifiConnected = false;
           stateChange   = true;
@@ -713,7 +719,7 @@ void loop()
       }
     }
     else {
-      while (client.connected()) {
+      while (wiCliConnected) {
     #else
     // handling for Serial connection
     if (true) {

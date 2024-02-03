@@ -1253,10 +1253,10 @@ void mt_set_server (int nparam, char **param)  // set details about remote serve
         }
         else if (nparam<2) Serial.printf ("|%5d | %-32s |       |\r\n", index, "none");
       }
-      if (!client.connected()) {
+      Serial.printf ("+------+----------------------------------+-------+\r\n");
+      if (!wiCliConnected) {
         Serial.printf ("--- Server not connected ---\r\n");
       }
-      else Serial.printf ("+------+----------------------------------+-------+\r\n");
       xSemaphoreGive(consoleSem);
     }
   return;

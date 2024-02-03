@@ -164,7 +164,7 @@ void mkLocoMenu()
   locoMenu[locomotiveCount+1] = (char*) prevMenuOption;   // give option to go to previous menu
   while (result!=0 && trackPower
     #ifndef SERIALCTRL
-    && client.connected()
+    && wiCliConnected
     #endif
     ) {
     result = displayMenu ((const char**) locoMenu, locomotiveCount+2, lastLocoMenuOption);
@@ -224,7 +224,7 @@ void mkTurnoutMenu()
   //for (uint8_t n=0; n<turnoutStateCount; n++) stateMenu[n] = turnoutState[n].name;
   while (result!=0
     #ifndef SERIALCTRL
-    && client.connected()
+    && wiCliConnected
     #endif
     ) {
     result = displayMenu ((const char**) switchMenu, turnoutCount+1, lastSwitchMenuOption);
@@ -263,7 +263,7 @@ void mkRouteMenu()
   routeMenu[routeCount] = (char*) prevMenuOption;
   while (result!=0
     #ifndef SERIALCTRL
-    && client.connected()
+    && wiCliConnected
     #endif
     ) {
     result = displayMenu ((const char**)routeMenu, routeCount+1, lastRouteMenuOption);
@@ -306,6 +306,7 @@ void mkConfigMenu()
     Serial.printf ("%s mkConfigMenu()\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
+  inConfigMenu = true;
   #ifdef SERIALCTRL
   reference[4] = 200;  // protocol, serial => DCC-Ex direct connection
   reference[7] = 200;  // Server IP, not applicable for serial link
@@ -382,6 +383,7 @@ void mkConfigMenu()
         break;
     }
   }
+  inConfigMenu = false;
 }
 
 void mkCVMenu()
@@ -401,7 +403,7 @@ void mkCVMenu()
   if (cmdProtocol == DCCEX) {
     while (result!=0
       #ifndef SERIALCTRL
-      && client.connected()
+      && wiCliConnected
       #endif
       ) {
       result = displayMenu (cvMenu, 6, lastCvMenuOption);
@@ -949,7 +951,7 @@ void displayInfo()
 
 
 //
-// display menu after weeding out code-200 items not for display
+// display menu after weeding out code-200(dead) items not for display
 //
 uint8_t displayMenu (const char **menuItems, uint8_t *menuIndex, uint8_t itemCount, uint8_t selectedItem)
 {
@@ -985,11 +987,13 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
   char commandKey;
   bool hasChanged = true;
   bool lineChanged[itemCount];
+  bool lastTrackPower;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s displayMenu(%x, %d, %d)\r\n", getTimeStamp(), menuItems, itemCount, selectedItem);
     xSemaphoreGive(consoleSem);
   }
+  lastTrackPower = trackPower;
   for (uint8_t n=0; n<itemCount; n++) lineChanged[n] = true;
   if (selectedItem > itemCount) selectedItem = 0;
   display.clear();
@@ -1007,7 +1011,12 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
         lineChanged[displayLine] = false;
       }
     }
-    if (xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(10)) == pdPASS) {
+    #ifndef SERIALCTRL
+    // we are here by grace of having a connection unless in config menu
+    // exit if no connection
+    if (!(inConfigMenu || netConnState (1))) exitCode = 0;
+    #endif
+    if (exitCode != 0 && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(10)) == pdPASS) {
       #ifdef SCREENSAVER
       if (xSemaphoreTake(screenSvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         if (inScreenSaver) {
@@ -1017,6 +1026,7 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
             Serial.printf ("%s SCREEN: Blanking ended\r\n", getTimeStamp());
             xSemaphoreGive(consoleSem);
           }
+          commandKey = '\\'; // just cleared, so key should be meaningless
         }
         screenActTime = esp_timer_get_time();
         xSemaphoreGive(screenSvrSem);
@@ -1026,7 +1036,7 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
       if (commandKey == 'S' || commandKey == 'R') {
         exitCode = currentItem + 1;
       }
-      else if (commandKey == 'E' || commandKey == 'L') {
+      else if (commandKey == 'E' || commandKey == 'L' || lastTrackPower != trackPower) {
         exitCode = 0;
       }
       else if (commandKey == 'D') {

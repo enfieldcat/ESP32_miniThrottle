@@ -36,6 +36,9 @@ void receiveNetData(void *pvParameters)
   char inChar;
   uint8_t bufferPtr = 0;
   uint8_t checkVar = 0;
+  #ifndef SERIALCTRL
+  uint8_t connChkCount = 0;
+  #endif
   int readState = 1;
   bool quit = false;
 
@@ -61,6 +64,7 @@ void receiveNetData(void *pvParameters)
     diagEnqueue ('e', (char *) "### Starting network/serial receiver service ------------------------------", true);
     xSemaphoreGive(diagPortSem);
   }
+  wiCliConnected = true;
   setInitialData();
   #ifdef SERIALCTRL
   while (true) {
@@ -71,7 +75,23 @@ void receiveNetData(void *pvParameters)
       }
       else semFailed ("serialSem", __FILE__, __LINE__);
   #else
+  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    // set to no tracking
+    uint8_t maxMissedKeepAlive = nvs_get_int ("missedKeepAlive", 0);
+    if (cmdProtocol == WITHROT && maxMissedKeepAlive > 0) {
+      uint16_t keepAliveInterval = nvs_get_int ("relayKeepAlive", 60);
+      if (maxMissedKeepAlive < 1 || maxMissedKeepAlive > 20) maxMissedKeepAlive = 20;
+      if (keepAliveInterval  < 1) keepAliveInterval = 1;
+      maxKeepAliveTO = ((keepAliveInterval * maxMissedKeepAlive) + 1 ) * uS_TO_S_FACTOR;
+    }
+    else maxKeepAliveTO = 0;
+    xSemaphoreGive(shmSem);
+  }
   while (netConnState (1)) {
+    if (++connChkCount > 20) {  // Reduce calls to connected check, and cache in wiCliConnected variable
+      connChkCount = 0;
+      if (!client.connected()) wiCliConnected = false;
+    }
     while (netConnState(2)) {
       checkVar = 0;
       // wait for a character to become available - read sometimes fails if there is none available
@@ -84,7 +104,6 @@ void receiveNetData(void *pvParameters)
       }
       // Now we should have something to read attempt to avoid uncaught exception on some reads
       if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        // inChar = client.read();
         readState = client.read((uint8_t*)&inChar, 1);
         xSemaphoreGive(tcpipSem);
       }
@@ -93,6 +112,10 @@ void receiveNetData(void *pvParameters)
       if (readState == 1) {
         if (inChar == '\r' || inChar == '\n' || (cmdProtocol==DCCEX && inChar=='>') || bufferPtr == (NETWBUFFSIZE-1)) {
           if (bufferPtr > 0) {
+            if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) { // Value can change asynchronous by JMRI server
+              if (maxKeepAliveTO != 0 && cmdProtocol==WITHROT) statusTime = esp_timer_get_time();
+              xSemaphoreGive(shmSem);
+            }
             if (cmdProtocol==DCCEX && inChar=='>') inBuffer[bufferPtr++] = '>';
             inBuffer[bufferPtr] = '\0';
             if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -117,7 +140,29 @@ void receiveNetData(void *pvParameters)
         }
       }
     }
+    #ifndef SERIALCTRL
+    else if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (maxKeepAliveTO != 0 && bumpCount++ > 200) {
+        bumpCount = 0;
+        if (esp_timer_get_time() - statusTime > maxKeepAliveTO) {
+          xSemaphoreGive(shmSem);
+          wiCliConnected = false;
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("%s Missed keepalive packet - unresponsive connection\r\n", getTimeStamp());
+            xSemaphoreGive(consoleSem);
+          }
+          if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            diagEnqueue ('e', (char *) "### Missed keepalive packet - unresponsive connection ---------------------", true);
+            xSemaphoreGive(diagPortSem);
+          }
+        }
+        else xSemaphoreGive(shmSem);
+      }
+      else xSemaphoreGive(shmSem);
+    }
+    #endif
   }
+  client.stop();
   #ifndef SERIALCTRL
   #ifdef TRACKPWR
   digitalWrite(TRACKPWR, LOW);
@@ -149,14 +194,12 @@ void receiveNetData(void *pvParameters)
 bool netConnState (uint8_t chkmode)
 {
   bool retval = false;
-  static uint8_t waitForReconn = 100;
 
-  if (waitForReconn == 100) waitForReconn = nvs_get_int("waitForReconn", 0);
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     switch (chkmode) {
-    case 1: retval = (APrunning || WiFi.status() == WL_CONNECTED) && (waitForReconn==1 || client.connected());
+    case 1: retval = (APrunning || WiFi.status() == WL_CONNECTED) && wiCliConnected;
             break;
-    case 2: retval = (APrunning || WiFi.status() == WL_CONNECTED) && client.connected() && client.available()>0;
+    case 2: retval = (APrunning || WiFi.status() == WL_CONNECTED) && wiCliConnected && client.available()>0;
             break;
     }
     xSemaphoreGive(tcpipSem);

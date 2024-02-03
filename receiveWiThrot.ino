@@ -106,6 +106,18 @@ void processWiThrotPacket (char *packet)
       Serial.printf ("%s Keep Alive interval set to %d seconds\r\n", getTimeStamp(), keepAliveTime);
       xSemaphoreGive(consoleSem);
     }
+    {
+      // set to no tracking
+      uint8_t maxMissedKeepAlive = nvs_get_int ("missedKeepAlive", 0);
+      if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (maxMissedKeepAlive > 0) {
+          if (maxMissedKeepAlive > 20) maxMissedKeepAlive = 20;
+          maxKeepAliveTO = ((keepAliveTime * maxMissedKeepAlive) + 1 ) * uS_TO_S_FACTOR;
+        }
+        else maxKeepAliveTO = 0;
+        xSemaphoreGive(shmSem);
+      }
+    }
   }
   else if (strncmp (packet, "PFT", 3) == 0 && strlen(packet) > 7) { // Update fast clock
     for (uint8_t n=3; n<strlen(packet); n++) if (packet[n]=='<') packet[n]='\0';
@@ -178,16 +190,20 @@ void processWiThrotPacket (char *packet)
       if (packet[2] == '+') {  // Add locomotive
         for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
           if ((locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type) || (locoNumber == 0 && throtId == locoRoster[ptr].throttleNr)) {
+            const char inChar = 'S';
             locoRoster[ptr].owned = true;
             locoRoster[ptr].steal = 'N';
+            xQueueSend (locoUpdateQueue, &inChar, 0);
           }
         }        
       }
       else if (packet[2] == '-') {  // Remove locomotive
         for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
           if ((locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type) || (locoNumber == 0 && throtId == locoRoster[ptr].throttleNr)) {
+            const char inChar = 'S';
             locoRoster[ptr].owned = false;
             locoRoster[ptr].reverseConsist = false;
+            xQueueSend (locoUpdateQueue, &inChar, 0);
           }
         }        
       }
@@ -211,9 +227,11 @@ void processWiThrotPacket (char *packet)
             if ((locoNumber == 0 && throtId == locoRoster[ptr].throttleNr) || (locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type)) {
               if (locoNumber != 0) found = true;
               if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                const char inChar = 'F';
                 if (tptr[1] == '1') locoRoster[ptr].function = locoRoster[ptr].function | mask;
                 else locoRoster[ptr].function = locoRoster[ptr].function & mask;
                 xSemaphoreGive(functionSem);
+                xQueueSend (locoUpdateQueue, &inChar, 0);
               }
               else semFailed ("functionSem", __FILE__, __LINE__);
             }
@@ -225,12 +243,15 @@ void processWiThrotPacket (char *packet)
         //
         else if (tptr[0] == 'V') {  // Velocity Update
           int velocity = strtol (&tptr[1], &workingToken, 10);
+          if (velocity>127 || velocity < -1) velocity = 0;
           for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
             if ((locoNumber == 0 && throtId == locoRoster[ptr].throttleNr) || (locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type)) {
               if (locoNumber != 0) found = true;
               if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                const char inChar = 'S';
                 locoRoster[ptr].speed = velocity;
                 xSemaphoreGive(velociSem);
+                xQueueSend (locoUpdateQueue, &inChar, 0);
               }
               else semFailed ("velociSem", __FILE__, __LINE__);
             }
@@ -244,9 +265,11 @@ void processWiThrotPacket (char *packet)
             if ((locoNumber == 0 && throtId == locoRoster[ptr].throttleNr) || (locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type)) {
               if (locoNumber != 0) found = true;
               if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                const char inChar = 'S';
                 if (tptr[1] == '0') locoRoster[ptr].direction = REVERSE;
                 else locoRoster[ptr].direction = FORWARD;
                 xSemaphoreGive(velociSem);
+                xQueueSend (locoUpdateQueue, &inChar, 0);
               }
               else semFailed ("velociSem", __FILE__, __LINE__);
             }

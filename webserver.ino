@@ -1020,14 +1020,8 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   myClient->printf ((const char*)"><label for=\"defProtoDCC\">DCC-Ex</label></td></tr>");
   compInt = nvs_get_int ("clientTimeout", TIMEOUT/4);
   myClient->printf ((const char*)"<tr><td>TCP/IP Timeout</td><td><input type=\"number\" name=\"clientTimeout\" value=\"%d\" min=\"20\" max=\"120000\" size=\"8\"> mS</td></tr>", compInt);
-  compInt = nvs_get_int("waitForReconn", 0);
-  myClient->printf ((const char*)"<tr><td>Server disconnect</td><td><input type=\"radio\" name=\"waitForReconn\" id=\"waitForReconnNo\" value=\"0\"");
-  if (compInt == 0) myClient->printf (" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"waitForReconnNo\">Break on disconnect</label><br><input type=\"radio\" name=\"waitForReconn\" id=\"waitForReconnYes\" value=\"1\"");
-  if (compInt == 1) myClient->printf (" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"waitForReconnYes\">Wait for reconnection if WiFi OK</label><br><input type=\"radio\" name=\"waitForReconn\" id=\"waitForReconnAlways\" value=\"2\"");
-  if (compInt == 2) myClient->printf (" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"waitForReconnAlways\">Wait for reconnection if WiFi disconnected</label></td></tr>");
+  compInt = nvs_get_int ("missedKeepAlive", 0);
+  myClient->printf ((const char*)"<tr><td>Mx Missed Keepalive</td><td><input type=\"number\" name=\"missedKeepAlive\" value=\"%d\" min=\"0\" max=\"20\" size=\"8\"> missed responses, 0 => ignore WiThrottle keepalive response</td></tr>", compInt);
   myClient->printf ((const char*)"</table><br><br><table><tr><th>Server</th><th>Port</th></tr>");
   for (uint8_t n=0; n<WIFINETS; n++) {
     sprintf (labelName, "server_%d", n);
@@ -1114,6 +1108,7 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   char varName[16];
   bool hasChanged     = false;
   bool rebootRequired = false;
+  bool diagOn         = false;
   int checkNum;
   int inputNum;
   int mask;
@@ -1320,11 +1315,22 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     }
   }
   if (!hasChanged) {
-     myClient->printf ((const char*)"<li>No changes saved.</li>");
+    myClient->printf ((const char*)"<li>No changes saved.</li>");
   }
   resultPtr = webScanData (data, "diagEnable", dataSize);
   if (resultPtr!=NULL && resultPtr[0]=='1') {
+    diagOn = true;
     startDiagPort();
+    myClient->printf ((const char*)"<li>Diagnostic port started: telnet ");
+    if (WiFi.status() == WL_CONNECTED) {
+      IPAddress ip = WiFi.localIP();
+      myClient->printf (" %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+      if (APrunning) { myClient->printf (" or"); }
+    }
+    if (APrunning) {
+      myClient->printf (" 192.168.4.1");
+    }
+    myClient->printf ((const char*)" port %d.</li>", nvs_get_int ("diagPort", 23));
   }
   #ifdef OTAUPDATE
   resultPtr = webScanData (data, "ota_action", dataSize);
@@ -1347,10 +1353,11 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   resultPtr = webScanData (data, "rebootOnUpdate", dataSize);
   if (resultPtr!=NULL && (resultPtr[0]=='Y' || (hasChanged && resultPtr[0]=='C'))) {
     rebootRequired = true;
-    myClient->printf ((const char*)"<li>Rebooting %s.</li>", tname);
+    if (diagOn) myClient->printf ((const char*)"<li>Reboot required, but diagnostic port has been turned on, not rebooting. %s.</li>", tname);
+    else myClient->printf ((const char*)"<li>Rebooting %s.</li>", tname);
   } 
   myClient->printf ((const char*)"</ul><p><a href=\"/\">Back to main page</a></p></td></tr></table><hr></body></html>\r\n");
-  if (rebootRequired) {
+  if (rebootRequired && !diagOn) {
     myClient->stop();
     delay (1000);
     mt_sys_restart ((const char*)"web requested reboot");

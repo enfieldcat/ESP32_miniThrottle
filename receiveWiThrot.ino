@@ -106,6 +106,7 @@ void processWiThrotPacket (char *packet)
       Serial.printf ("%s Keep Alive interval set to %d seconds\r\n", getTimeStamp(), keepAliveTime);
       xSemaphoreGive(consoleSem);
     }
+    #ifndef SERIALCTRL
     {
       // set to no tracking
       uint8_t maxMissedKeepAlive = nvs_get_int ("missedKeepAlive", 0);
@@ -118,6 +119,7 @@ void processWiThrotPacket (char *packet)
         xSemaphoreGive(shmSem);
       }
     }
+    #endif
   }
   else if (strncmp (packet, "PFT", 3) == 0 && strlen(packet) > 7) { // Update fast clock
     for (uint8_t n=3; n<strlen(packet); n++) if (packet[n]=='<') packet[n]='\0';

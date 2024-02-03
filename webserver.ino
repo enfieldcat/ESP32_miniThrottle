@@ -1021,7 +1021,7 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   compInt = nvs_get_int ("clientTimeout", TIMEOUT/4);
   myClient->printf ((const char*)"<tr><td>TCP/IP Timeout</td><td><input type=\"number\" name=\"clientTimeout\" value=\"%d\" min=\"20\" max=\"120000\" size=\"8\"> mS</td></tr>", compInt);
   compInt = nvs_get_int ("missedKeepAlive", 0);
-  myClient->printf ((const char*)"<tr><td>Mx Missed Keepalive</td><td><input type=\"number\" name=\"missedKeepAlive\" value=\"%d\" min=\"0\" max=\"20\" size=\"8\"> missed responses, 0 => ignore WiThrottle keepalive response</td></tr>", compInt);
+  myClient->printf ((const char*)"<tr><td>Max Missed Keepalive</td><td><input type=\"number\" name=\"missedKeepAlive\" value=\"%d\" min=\"0\" max=\"20\" size=\"8\"> missed responses, 0 => ignore WiThrottle keepalive response</td></tr>", compInt);
   myClient->printf ((const char*)"</table><br><br><table><tr><th>Server</th><th>Port</th></tr>");
   for (uint8_t n=0; n<WIFINETS; n++) {
     sprintf (labelName, "server_%d", n);

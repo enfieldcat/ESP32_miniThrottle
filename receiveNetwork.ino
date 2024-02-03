@@ -112,10 +112,12 @@ void receiveNetData(void *pvParameters)
       if (readState == 1) {
         if (inChar == '\r' || inChar == '\n' || (cmdProtocol==DCCEX && inChar=='>') || bufferPtr == (NETWBUFFSIZE-1)) {
           if (bufferPtr > 0) {
+            #ifndef SERIALCTRL
             if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) { // Value can change asynchronous by JMRI server
               if (maxKeepAliveTO != 0 && cmdProtocol==WITHROT) statusTime = esp_timer_get_time();
               xSemaphoreGive(shmSem);
             }
+            #endif
             if (cmdProtocol==DCCEX && inChar=='>') inBuffer[bufferPtr++] = '>';
             inBuffer[bufferPtr] = '\0';
             if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

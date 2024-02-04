@@ -1027,7 +1027,7 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   if (compInt==0) myClient->printf ((const char*)" checked=\"true\"");
   myClient->printf ((const char*)"><label for\"resetKA0\">WiThrottle keepalives sent on regular interval</label><br><input type=\"radio\" name=\"resetKeepAlive\" id=\"resetKA1\" value=\"1\"");
   if (compInt==1) myClient->printf ((const char*)" checked=\"true\"");
-  myClient->printf ((const char*)"><label for\"resetKA1\">Only send keepalives during lul in activity</label></td></tr>");
+  myClient->printf ((const char*)"><label for\"resetKA1\">Only send keepalives during lulls in activity</label></td></tr>");
   myClient->printf ((const char*)"</table><br><br><table><tr><th>Server</th><th>Port</th></tr>");
   for (uint8_t n=0; n<WIFINETS; n++) {
     sprintf (labelName, "server_%d", n);

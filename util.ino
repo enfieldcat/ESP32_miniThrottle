@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -658,16 +658,34 @@ void sampleConfigExists(fs::FS &fs)
       Serial.println (DEFAULTCONF);
       xSemaphoreGive(consoleSem);
     }
-    File defCertFile = fs.open(DEFAULTCONF, FILE_WRITE);
-    if(!defCertFile){
+    File defConfFile = fs.open(DEFAULTCONF, FILE_WRITE);
+    if(!defConfFile){
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println("  - failed to open sample configuration file for writing");
         xSemaphoreGive(consoleSem);
       }
     }
     else {
-      defCertFile.print (sampleConfig);
-      defCertFile.close();
+      defConfFile.print (sampleConfig);
+      defConfFile.close();
+    }
+  }
+  if(!fs.exists(DEFAULTAUTO)) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.print ("Missing sample automation file, creating ");
+      Serial.println (DEFAULTAUTO);
+      xSemaphoreGive(consoleSem);
+    }
+    File defAutoFile = fs.open(DEFAULTAUTO, FILE_WRITE);
+    if(!defAutoFile){
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.println("  - failed to open sample automation file for writing");
+        xSemaphoreGive(consoleSem);
+      }
+    }
+    else {
+      defAutoFile.print (sampleAuto);
+      defAutoFile.close();
     }
   }
 }

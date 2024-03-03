@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -58,7 +58,7 @@ SOFTWARE.
 #undef VERSION
 #endif
 #define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.7c"         // Version string
+#define VERSION     "0.7e"         // Version string
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.
@@ -110,6 +110,7 @@ SOFTWARE.
 #ifdef FILESUPPORT
 #define DEFAULTCONF "/sampleConfig.cfg"
 #define DEFAULTCOMMAND "/sampleCommand.cfg"
+#define DEFAULTAUTO "/sampleAuto.run"
 #ifdef USEWIFI
 #define CERTFILE "/rootCACertificate"
 #ifndef NOHTTPCLIENT
@@ -157,6 +158,9 @@ SOFTWARE.
 
 // Divisor for converting uSeconds to Seconds
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
+
+// automation data
+#define LABELSIZE 16
 
 // DCC-Ex Values
 #define CALLBACKNUM 10812
@@ -258,6 +262,36 @@ struct pinVar_s {
   char *pinDesc;
 };
 
+/*
+ * structures used by automated processes
+ */
+#ifndef PROCTABLESIZE
+#define PROCTABLESIZE 10
+#endif
+#ifndef PROCNAMELENGTH
+#define PROCNAMELENGTH 29
+#endif
+// proc table structure
+struct procTable_s {
+  uint16_t id;
+  uint8_t state;
+  char filename[PROCNAMELENGTH];
+};
+enum procStates  { PROCFREE = 7 , PROCDIE = 13, PROCRUN = 17 };
+// structure for holding jump table info
+struct jumpTable_s {
+  uint16_t jumpTo;
+  char label[LABELSIZE];
+};
+// structure for tokenising key words and pointing to lines
+struct lineTable_s {
+  char* start;
+  uint8_t token;
+  uint8_t sec_token; // secondary tokens also ensure word alignment of pointers
+  uint16_t param;
+};
+//                          0       1       2         3        4           5       6         7        8         9          10        11        12
+const char* runTokens[] = {"rem ", "key ", "delay ", "goto ", "waitfor ", "exit", "runfg ", "runbg ", "power ", "route ", "throw ", "close ", "sleep "};
 
 /*
  * Required by Throttle functionality to get loco, turnout and route data, but also useful debug tool for inspecting NVS

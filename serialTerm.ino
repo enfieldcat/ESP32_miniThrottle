@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -155,6 +155,7 @@ void processSerialCmd (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "font") == 0)          mt_set_font         (nparam, param);
   #endif
   else if (nparam<=2 && strcmp (param[0], "help") == 0)          help                (nparam, param);
+  else if (nparam==2 && strcmp (param[0], "kill") == 0)          runAutomation::killProc(param[1]);
   #ifdef USEWIFI
   else if (nparam<=2 && strcmp (param[0], "mdns") == 0)          set_mdns            (nparam, param);
   #endif
@@ -165,6 +166,7 @@ void processSerialCmd (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "ota") == 0)           mt_ota              (nparam, param);
   #endif
   else if (nparam==1 && strcmp (param[0], "pins")  == 0)         showPinConfig       ();
+  else if (nparam==1 && strcmp (param[0], "procs")  == 0)        runAutomation::listProcs ();
   #ifndef SERIALCTRL
   else if (nparam<=2 && strcmp (param[0], "protocol") == 0)      mt_set_protocol     (nparam, param);
   #endif
@@ -173,6 +175,7 @@ void processSerialCmd (uint8_t *inBuffer)
   #ifdef SCREENROTATE
   else if (nparam<=2 && strcmp (param[0], "rotatedisplay") == 0) mt_set_rotateDisp   (nparam, param);
   #endif
+  else if (nparam==2 && strcmp (param[0], "run") == 0)           runAutomation::runbg (param[1]);
   #ifndef SERIALCTRL
   else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
   #endif
@@ -2011,6 +2014,13 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    info only");
       }
     }
+    if (all || strcmp(param[1], "kill")==0 || strncmp(param[1], "auto", 4)==0) {
+      Serial.println ((const char*) "kill <proc-id>");
+      if (!summary) {
+        Serial.println ((const char*) "    signals an automation script to stop on reaching next step");
+        Serial.println ((const char*) "    also see \"run\" and \"procs\"");
+      }
+    }
     if (all || strcmp(param[1], "locos")==0 || strcmp(param[1], "turnouts")==0) {
       Serial.println ((const char*) "locos|turnouts");
       if (!summary) {
@@ -2072,6 +2082,13 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    info only");
       }
     }
+    if (all || strcmp(param[1], "procs")==0 || strncmp(param[1], "auto", 4)==0) {
+      Serial.println ((const char*) "procs");
+      if (!summary) {
+        Serial.println ((const char*) "    Lists running automation scripts");
+        Serial.println ((const char*) "    also see \"kill\" and \"run\"");
+      }
+    }
     #ifndef SERIALCTRL
     if (all || strcmp(param[1], "protocol")==0) {
       Serial.println ((const char*) "protocol {withrot|dccex}");
@@ -2102,6 +2119,13 @@ void help(int nparam, char **param)  // show help data
       if (!summary) {
         Serial.println ((const char*) "    Set interval between setting each turnout in a route");
         Serial.println ((const char*) "    permanent setting");
+      }
+    }
+    if (all || strcmp(param[1], "run")==0 || strncmp(param[1], "auto", 4)==0) {
+      Serial.println ((const char*) "run <file-name>");
+      if (!summary) {
+        Serial.println ((const char*) "    Starts an automation script");
+        Serial.println ((const char*) "    also see \"kill\" and \"procs\"");
       }
     }
     if (all || strcmp(param[1], "sendcmd")==0) {

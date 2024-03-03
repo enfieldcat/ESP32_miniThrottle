@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -219,29 +219,33 @@ void relayHandler(void *pvParameters)
     relayClientCount++;
     if (relayClientCount > maxRelayCount) maxRelayCount = relayClientCount;
     // Start up message
-    if (debuglevel>0 && xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.printf ("%s Relay client at %d.%d.%d.%d connecting\r\n", getTimeStamp(), thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
-        xSemaphoreGive(consoleSem);
-      }
-      xSemaphoreGive(relaySvrSem);
-    }
-    else semFailed ("relaySvrSem", __FILE__, __LINE__);
-    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (debuglevel>0 || diagIsRunning) {
       char t_buffer [90];
       sprintf (t_buffer, "--- Relay Client %d (%d.%d.%d.%d) connecting ---------------------------", thisRelay->id, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
-      diagEnqueue ('e', (char*) t_buffer, true);
-      xSemaphoreGive(diagPortSem);
+      if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("%s %s\r\n", getTimeStamp(), t_buffer);
+        xSemaphoreGive(consoleSem);
+      }
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('e', (char*) t_buffer, true);
+        xSemaphoreGive(diagPortSem);
+      }
     }
     // check if node is already connected, and take over from that handler
     // but only associate the new client with the old client IF the client is limited to one connection, otherwise treat it as a new unrelated connection.
     if (oneIPoneClient > 0) for (uint8_t n=0; n<maxRelayCount; n++) {
-      if (n!=thisRelay->id && remoteSys[n].active && thisRelay->address == remoteSys[n].address) {
-        if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (n!=thisRelay->id && remoteSys[n].id != 250 && remoteSys[n].active && thisRelay->address == remoteSys[n].address) {
+        if (debuglevel>0 || diagIsRunning) {
           char t_buffer [90];
           sprintf (t_buffer, "--- Relay Client %d take over from %d ----------------------------------", thisRelay->id, n);
-          diagEnqueue ('e', (char*) t_buffer, true);
-          xSemaphoreGive(diagPortSem);
+          if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("%s %s\r\n", getTimeStamp(), t_buffer);
+            xSemaphoreGive(consoleSem);
+          }
+          if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            diagEnqueue ('e', (char*) t_buffer, true);
+            xSemaphoreGive(diagPortSem);
+          }
         }
         if (remoteSys[n].nodeName[0] != '\0') strcpy (thisRelay->nodeName, remoteSys[n].nodeName);
         thisRelay->inPackets  = remoteSys[n].inPackets;
@@ -282,7 +286,7 @@ void relayHandler(void *pvParameters)
       if (readState==1) {
         if (inchar == '\r' || inchar == '\n') {
           if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            if (thisRelay->client->available()>0 && thisRelay->client->peek() == '\n') thisRelay->client->read();
+            if (thisRelay->client->available()>0 && thisRelay->client->peek() == '\n') thisRelay->client->read((uint8_t*) &inchar, 1);
             xSemaphoreGive(tcpipSem);
           }
           else semFailed ("tcpipSem", __FILE__, __LINE__);
@@ -328,15 +332,15 @@ void relayHandler(void *pvParameters)
     }
     if (trackKeepAlive && (esp_timer_get_time() - thisRelay->keepAlive) > maxRelayTimeOut) {
       keepAlive = false;
-      if (debuglevel>0 && xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          Serial.printf ("%s Relay client at %d.%d.%d.%d keep-alive time-out\r\n", getTimeStamp(), thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
+      if ((debuglevel>0 || diagIsRunning)&& xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        char t_buffer [90];
+        sprintf (t_buffer, "--- Relay Client %d (%d.%d.%d.%d) keep-alive timeout -------------------", thisRelay->id, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
+        xSemaphoreGive(relaySvrSem);
+        if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s %s\r\n", getTimeStamp(), t_buffer);
           xSemaphoreGive(consoleSem);
         }
-        xSemaphoreGive(relaySvrSem);
         if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          char t_buffer [90];
-          sprintf (t_buffer, "--- Relay Client %d (%d.%d.%d.%d) keep-alive timeout -------------------", thisRelay->id, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
           diagEnqueue ('e', (char*) t_buffer, true);
           xSemaphoreGive(diagPortSem);
         }
@@ -346,12 +350,25 @@ void relayHandler(void *pvParameters)
     delay(20);
   }
   // Tear down message
-  if ( debuglevel>0 && xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.printf ("%s Relay client at %d.%d.%d.%d stopping\r\n", getTimeStamp(), thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
+  if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    thisRelay->active = false;
+    xSemaphoreGive(relaySvrSem);
+  }
+  if ((diagIsRunning || debuglevel>0) && xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    char t_buffer [100];
+    if (thisRelay->active)
+      sprintf (t_buffer, "--- Relay Client %d %s (%d.%d.%d.%d) disconnecting ------------------------", thisRelay->id, thisRelay->nodeName, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
+    else
+      sprintf (t_buffer, "--- Relay Client %d (%d.%d.%d.%d) disconnected by another relay --------", thisRelay->id, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
+    xSemaphoreGive(relaySvrSem);
+    if (debuglevel > 0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s %s\r\n", getTimeStamp(), t_buffer);
       xSemaphoreGive(consoleSem);
     }
-    xSemaphoreGive(relaySvrSem);
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      diagEnqueue ('e', (char*) t_buffer, true);
+      xSemaphoreGive(diagPortSem);
+    }
   }
   else semFailed ("relaySvrSem", __FILE__, __LINE__);
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -359,15 +376,6 @@ void relayHandler(void *pvParameters)
     xSemaphoreGive(tcpipSem);
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
-  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    char t_buffer [100];
-    if (thisRelay->active)
-      sprintf (t_buffer, "--- Relay Client %d %s (%d.%d.%d.%d) disconnecting ------------------------", thisRelay->id, thisRelay->nodeName, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
-    else
-      sprintf (t_buffer, "--- Relay Client %d (%d.%d.%d.%d) disconnected by another relay --------", thisRelay->id, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
-    diagEnqueue ('e', (char*) t_buffer, true);
-    xSemaphoreGive(diagPortSem);
-  }
   // Stop and drop any owned locos
   for (uint16_t n=0; n<locomotiveCount+MAXCONSISTSIZE; n++) {
     inchar = 0;

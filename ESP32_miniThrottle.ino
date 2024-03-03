@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -72,6 +72,7 @@ static SemaphoreHandle_t tcpipSem     = xSemaphoreCreateMutex();
 static SemaphoreHandle_t fastClockSem = xSemaphoreCreateMutex();  // for sending/receiving/displaying fc messages
 static SemaphoreHandle_t shmSem       = xSemaphoreCreateMutex();  // shared memory for used for moved blocks of data between tasks/threads
 static SemaphoreHandle_t diagPortSem  = xSemaphoreCreateMutex();  // try to only enqueue one message at a time
+static SemaphoreHandle_t procSem      = xSemaphoreCreateMutex();  // Process control Semaphore
 #ifdef WEBLIFETIME
 static SemaphoreHandle_t webServerSem = xSemaphoreCreateMutex();  // used by different web server threads
 #endif
@@ -216,6 +217,7 @@ static bool enablePot         = true;    // potentiometer enable/disable while d
 #ifdef SCREENSAVER
 static bool inScreenSaver     = false;   // Has backlight been turned off?
 #endif
+static struct procTable_s procTable[PROCTABLESIZE];
 #ifdef FILESUPPORT
 static fs::File writeFile;
 static bool writingFile       = false;
@@ -277,6 +279,13 @@ const char *cssTemplate = {"* { font-family: system-ui; }\n" \
 ".Off { background-color: #DD0000 !important; padding: 0px; border-spacing: 0px; }\n" \
 };
 #endif  //  WEBLIFETIME
+const char *sampleAuto = {"# Sample automation of power and keypad tasks\n" \
+"# use for repetative testing and system set up\n# Rename as /auto.run to run automatically on start.\n\n" \
+"# delete exit line to allow rest of automation to run\nexit\n\n" \
+"# wait for connection and power on\nwaitfor connected\nrem connected proceeding with automation.\ndelay 1000\npower on\nwaitfor trackpower\n\n" \
+"# Now set up initial route\nroute initial\ndelay 5000\n\n" \
+"# Do some keypad setup\nkey L\ndelay 1000\nkey U\ndelay 500\nkey U\ndelay 500\nkey U\n" \
+};
 const char *sampleConfig = {"# Sample file for adding definitions to miniThrottle\n" \
 "#\nTypically this may be used to define a locomotive roster and turnouts for\n" \
 "# DCC-Ex or set configuration parameters which can be set at the console.\n\n" \
@@ -513,6 +522,12 @@ void setup()  {
   defaultCssFileExists(SPIFFS);
   #endif   //  WEBLIFETIME
   #endif   //  FILESUPPORT
+  // Process management for automations
+  for (uint8_t n=0; n<PROCTABLESIZE; n++) {
+    procTable[n].id = 0;
+    procTable[n].state = 11;
+    for (uint8_t j=0; j<PROCNAMELENGTH; j++) procTable[n].filename[j] = '\0';
+    }
   // Use tasks to process various input and output streams
   // micro controller has enough memory, that stack sizes can be generously allocated to avoid stack overflows
   xTaskCreate(serialConsole, "serialConsole", 8192, NULL, 4, NULL);
@@ -592,9 +607,10 @@ void setup()  {
   #endif   // keynone
   xTaskCreate(switchMonitor, "switchMonitor", 2048, NULL, 4, NULL);
   #endif   // NODISPLAY
-  //if (nvs_get_int("diagPortEnable", 0) == 1) {
-  //  startDiagPort();
-  //}
+  // Finally check for an auto run
+  if(SPIFFS.exists("/auto.run")) {
+    runInitialAuto();
+  }
 }
 
 /*

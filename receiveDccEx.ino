@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -142,8 +142,8 @@ void dccLocoStatus (char* locoStatus)
             if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               uint32_t mask     = 1;
               uint16_t t_id     = locoRoster[next].id;
-              int8_t t_type     = locoRoster[next].type;
-              int8_t t_relayIdx = locoRoster[next].relayIdx;;
+              uint8_t t_type     = locoRoster[next].type;
+              uint8_t t_relayIdx = locoRoster[next].relayIdx;;
               char t_throttleNr = locoRoster[next].throttleNr;
               char outBuffer[40];
               uint8_t state;
@@ -186,9 +186,9 @@ void dccSpeedChange (char* speedSet)
   uint8_t locoIndex = 0;
   #ifdef RELAYPORT
   uint16_t t_id;
-  int8_t t_direction;
-  int8_t t_type;
-  int8_t t_relayIdx;
+  uint8_t t_direction;
+  uint8_t t_type;
+  uint8_t t_relayIdx;
   char t_throttleNr;
   char outBuffer[40];
   bool t_owned = false;

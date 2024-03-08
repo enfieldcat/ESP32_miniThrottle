@@ -271,6 +271,9 @@ struct pinVar_s {
 #ifndef PROCNAMELENGTH
 #define PROCNAMELENGTH 29
 #endif
+#ifndef LIFO_SIZE
+#define LIFO_SIZE 10
+#endif
 // proc table structure
 struct procTable_s {
   uint16_t id;

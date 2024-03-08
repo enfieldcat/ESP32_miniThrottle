@@ -252,6 +252,30 @@ void sortRoute()
   }
 }
 
+// Convert degrees C to F
+float util_ctof (float celcius)
+{
+  return ((celcius * (9.00/5.00)) + 32);
+}
+
+// Convert degrees F to C
+float util_ftoc (float fahrenheit)
+{
+  return ((fahrenheit - 32) / 1.8);
+}
+
+// Convert radians to degrees
+float util_rtod (float radian)
+{
+  return (radian * 57.295779513);
+}
+
+// Convert degrees to radians
+float util_dtor (float degree)
+{
+  return (degree * 0.01745329252);
+}
+
 
 #ifdef FILESUPPORT
 // directory listing of SPiffs filesystem

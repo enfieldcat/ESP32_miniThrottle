@@ -175,6 +175,7 @@ void processSerialCmd (uint8_t *inBuffer)
   #ifdef SCREENROTATE
   else if (nparam<=2 && strcmp (param[0], "rotatedisplay") == 0) mt_set_rotateDisp   (nparam, param);
   #endif
+  else if (nparam>=2 && strcmp (param[0], "rpn") == 0)           (new runAutomation)->rpn  (nparam, param);
   else if (nparam==2 && strcmp (param[0], "run") == 0)           runAutomation::runbg (param[1]);
   #ifndef SERIALCTRL
   else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
@@ -195,7 +196,7 @@ void processSerialCmd (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "wifiscan") == 0)      mt_set_wifiscan     (nparam, param);
   #endif
   else if (nparam==1 && strcmp (param[0], "locos") == 0)         displayLocos        ();
-  else if (nparam==1 && strcmp (param[0], "turnouts") == 0)      displayTurnouts     ();
+  else if (nparam==2 && strcmp (param[0], "trace") == 0)         runAutomation::traceProc(param[1]);
   else if (nparam==1 && strcmp (param[0], "turnouts") == 0)      displayTurnouts     ();
   else if (nparam==1 && strcmp (param[0], "partitions") == 0)    displayPartitions   ();
   else if (nparam==1 && strcmp (param[0], "showpackets")     == 0) showPackets    = true;

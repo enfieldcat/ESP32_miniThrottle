@@ -139,6 +139,9 @@ private:
         temp = pop();
         if (temp >= pop()) return(1.00);
         return(0.00);
+      case '~':
+        if (pop() > 0.5) return (0.00);
+        else return(1.00);
       case 'a': return fabs(pop());
       case 's': return sin(pop());
       case 'c': return cos(pop());
@@ -199,6 +202,7 @@ private:
       case '>':
         return 2;
         break;
+      case '~':
       case '!':
       case 'v':
       case 'q':
@@ -213,6 +217,10 @@ private:
       case 'i':
       case 'I':
       case 'n':
+      case 'f':
+      case 'F':
+      case 'R':
+      case 'r':
         return 1;
         break;
       default:
@@ -220,7 +228,7 @@ private:
           Serial.printf ("%s Invalid rpn operand in line %d\r\n", getTimeStamp(), currentLine+1);
           xSemaphoreGive(consoleSem);
         }
-        return 0;
+        return 127;
     }
   }
 
@@ -422,13 +430,13 @@ private:
           if (showStack) doShowStack (' ');
         } else if (strcmp (token, "e") == 0) {
           push (M_E);
-          if (showStack) doShowStack (' ');
+          if (showStack) doShowStack ('#');
         } else if (strcmp (token, "pi") == 0) {
           push (M_PI);
-          if (showStack) doShowStack (' ');
+          if (showStack) doShowStack ('#');
         } else if (strcmp (token, "g") == 0) {
           push (9.80665);
-          if (showStack) doShowStack (' ');
+          if (showStack) doShowStack ('#');
         }
         else {
           if( strlen( token ) != 1 ) {

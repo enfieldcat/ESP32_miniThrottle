@@ -121,6 +121,7 @@ static int keepAliveTime    = 10;     // WiThrottle keepalive time
 static int brakePres        = 0;      // brake pressure register
 #endif
 static uint32_t fc_time = 36;         // in jmri mode we can receive fast clock, in relay mode we can send it, 36s past midnight => not updated
+static float sharedRegister[REGISTERCOUNT];
 static uint32_t defaultLatchVal     = 0;  // bit map of which functions latch
 static uint32_t defaultLeadVal      = 0;  // bit map of which functions are for lead loco only
 const  uint16_t routeDelay[]        = {0, 500, 1000, 2000, 3000, 4000}; // selectable delay times when setting route in DCCEX mode
@@ -528,6 +529,7 @@ void setup()  {
     procTable[n].state = 11;
     for (uint8_t j=0; j<PROCNAMELENGTH; j++) procTable[n].filename[j] = '\0';
     }
+  for (uint8_t i; i<REGISTERCOUNT; i++) sharedRegister[i] = 0.00;
   // Use tasks to process various input and output streams
   // micro controller has enough memory, that stack sizes can be generously allocated to avoid stack overflows
   xTaskCreate(serialConsole, "serialConsole", 8192, NULL, 4, NULL);

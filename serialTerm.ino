@@ -251,6 +251,18 @@ void mt_set (int nparam, char **param)
     }
     return;
   }
+  // we are setting something
+  // first check if it is a shared register
+  if (strncmp (param[1], "shreg", 3) == 0 && param[1][5]>='0' && param[1][5]<='9' && param[1][6] == '\0') {
+    float temp = (new runAutomation())->rpn (nparam-2, &param[2]);
+    int8_t i = param[1][5] - '0';
+    notFound = false;
+    if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      sharedRegister[i] = temp;
+      xSemaphoreGive(procSem);
+    }
+  }
+  // if not found it will be an eeprom setting
   for (uint8_t n=0; n<limit && notFound; n++) {
     if (strcmp (param[1], nvsVars[n].varName) == 0) {
       notFound = false;
@@ -2122,6 +2134,12 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    permanent setting");
       }
     }
+    if (all || strcmp(param[1], "rpn")==0 || strncmp(param[1], "auto", 4)==0) {
+      Serial.println ((const char*) "rpn <expression>");
+      if (!summary) {
+        Serial.println ((const char*) "    Evaluates a rpn expression displaying each step");
+      }
+    }
     if (all || strcmp(param[1], "run")==0 || strncmp(param[1], "auto", 4)==0) {
       Serial.println ((const char*) "run <file-name>");
       if (!summary) {
@@ -2147,10 +2165,11 @@ void help(int nparam, char **param)  // show help data
     #endif
     if (all || strcmp(param[1], "set")==0) {
       Serial.println ((const char*) "set [<variable> <value>]");
+      Serial.println ((const char*) "set shreg<0-9> <expression>");
       if (!summary) {
-	Serial.println ((const char*) "    Set most NVS variables to a value, use with care limited checking");
+	Serial.println ((const char*) "    Set most NVS variables to a value, use with care - limited checking");
         Serial.println ((const char*) "    Without parameters set will dump all settable settings");
-        Serial.println ((const char*) "    permanent setting");
+        Serial.println ((const char*) "    Can also be used to store a value in a shared register");
       }
     }
     #ifndef SERIALCTRL
@@ -2197,6 +2216,12 @@ void help(int nparam, char **param)  // show help data
       if (!summary) {
         Serial.println ((const char*) "    Set the speed change set be each thottle click");
         Serial.println ((const char*) "    permanent setting");
+      }
+    }
+    if (all || strcmp(param[1], "trace")==0) {
+      Serial.println ((const char*) "trace <Process-ID>");
+      if (!summary) {
+        Serial.println ((const char*) "    Traces the execuation of and automation script");
       }
     }
     #ifdef WARNCOLOR

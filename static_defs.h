@@ -274,13 +274,16 @@ struct pinVar_s {
 #ifndef LIFO_SIZE
 #define LIFO_SIZE 10
 #endif
+#ifndef REGISTERCOUNT
+#define REGISTERCOUNT 10
+#endif
 // proc table structure
 struct procTable_s {
   uint16_t id;
   uint8_t state;
   char filename[PROCNAMELENGTH];
 };
-enum procStates  { PROCFREE = 7 , PROCDIE = 13, PROCRUN = 17 };
+enum procStates  { PROCFREE = 7 , PROCDIE = 13, PROCRUN = 17, PROCTRACE = 29 };
 // structure for holding jump table info
 struct jumpTable_s {
   uint16_t jumpTo;
@@ -293,8 +296,8 @@ struct lineTable_s {
   uint8_t sec_token; // secondary tokens also ensure word alignment of pointers
   uint16_t param;
 };
-//                          0       1       2         3        4           5       6         7        8         9          10        11        12
-const char* runTokens[] = {"rem ", "key ", "delay ", "goto ", "waitfor ", "exit", "runfg ", "runbg ", "power ", "route ", "throw ", "close ", "sleep "};
+//                          0       1       2         3        4           5       6         7        8         9          10        11        12       13
+const char* runTokens[] = {"rem ", "key ", "delay ", "goto ", "waitfor ", "exit", "runfg ", "runbg ", "power ", "route ", "throw ", "close ", "sleep ", "set "};
 
 /*
  * Required by Throttle functionality to get loco, turnout and route data, but also useful debug tool for inspecting NVS

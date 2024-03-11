@@ -40,6 +40,7 @@ private:
   struct lineTable_s *lineTable = NULL;
   struct jumpTable_s *jumpTable = NULL;
   float lifoStack[LIFO_SIZE];
+  float localRegister[REGISTERCOUNT];
   uint16_t currentLine = 0;
   uint16_t numberOfLines = 0;
   uint16_t jumptableSize = 0;
@@ -361,6 +362,17 @@ private:
           xSemaphoreGive(velociSem);
         }
       }
+      else if (strncmp (varcopy, "reg", 3) == 0 && varcopy[3]>='0' && varcopy[3]<='9' && varcopy[4] == '\0') {
+        int8_t i = varcopy[3] - '0';
+        retval = localRegister[i];
+      }
+      else if (strncmp (varcopy, "shreg", 5) == 0 && varcopy[5]>='0' && varcopy[5]<='9' && varcopy[6] == '\0') {
+        int8_t i = varcopy[5] - '0';
+        if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          retval = sharedRegister[i];
+          xSemaphoreGive(procSem);
+        }
+      }
     }
     else if (strcmp (varcopy, "leadloco")==0) {
       if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -427,7 +439,7 @@ private:
           /* We have a valid number. */
           temp = util_str2float( token );
           push(temp);
-          if (showStack) doShowStack (' ');
+          if (showStack) doShowStack ('.');
         } else if (strcmp (token, "e") == 0) {
           push (M_E);
           if (showStack) doShowStack ('#');
@@ -462,7 +474,7 @@ private:
       }
       if( stackPtr > 1 ) {
         if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          Serial.printf ("%d too many arguments on stack.\r\n", stackPtr);
+          Serial.printf ("%d too many arguments on stack.\r\n", (stackPtr-1));
           xSemaphoreGive(consoleSem);
         }
       }
@@ -524,7 +536,12 @@ private:
             if (token == 2) delay (delayTime);
             else sleep (delayTime);
           }
-          else delay(1000);
+          else if (nparam == 1) delay(1000);
+          else {
+            int result = calc (nparam-1, &param[1]);
+            if (token == 2) delay (result);
+            else sleep (result);
+          }
           break;
         case 3 :   // goto
           if (jumpTable != NULL && nparam>1) {
@@ -624,6 +641,23 @@ private:
             else setTurnout (selected, 'C');
             }
           }
+          break;
+        case 13:    // set
+          if (nparam>2) {
+            if (strncmp (param[1], "reg", 3) == 0 && param[1][3]>='0' && param[1][3]<='9' && param[1][4] == '\0') {
+              int8_t i = param[1][3] - '0';
+              localRegister[i] =  calc (nparam-2, &param[2]);
+            }
+            else if (strncmp (param[1], "shreg", 3) == 0 && param[1][5]>='0' && param[1][5]<='9' && param[1][6] == '\0') {
+              float temp = calc (nparam-2, &param[2]);
+              int8_t i = param[1][5] - '0';
+              if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                sharedRegister[i] = temp;
+                xSemaphoreGive(procSem);
+              }
+            }
+          }
+          break;
         default:
           if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s Syntax error in line %d: %s\r\n", getTimeStamp(), lineNr+1, inLine);
@@ -658,6 +692,7 @@ private:
     automationData = util_loadFile(SPIFFS, fileName, &sizeOfFile);
     // count number of lines and labels in file
     if (automationData!=NULL) {
+      for (uint8_t i; i<REGISTERCOUNT; i++) localRegister[i] = 0.00;
       for (int n=0; n<sizeOfFile; ) {
         while ((automationData[n]=='\n' || automationData[n]=='\r' || automationData[n]== ' ' || automationData[n]== '\0') && n<sizeOfFile) {
           automationData[n++]='\0';
@@ -739,43 +774,43 @@ private:
     }
   }
 
-static void runbgThread(void *pvParameters)
+  static void runbgThread(void *pvParameters)
   {
-  uint8_t indexer = 0;
-  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf ("%s runbgThread(%s)\r\n", getTimeStamp(), (char*) pvParameters);
-    xSemaphoreGive(consoleSem);
-  }
-  indexer = allocateProc((char*) pvParameters);
-  if (indexer<PROCTABLESIZE) (new runAutomation)->runLoadFile (indexer);
-  vTaskDelete( NULL );
+    uint8_t indexer = 0;
+    if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s runbgThread(%s)\r\n", getTimeStamp(), (char*) pvParameters);
+      xSemaphoreGive(consoleSem);
+    }
+    indexer = allocateProc((char*) pvParameters);
+    if (indexer<PROCTABLESIZE) (new runAutomation)->runLoadFile (indexer);
+    vTaskDelete( NULL );
   }
 
-static uint8_t allocateProc(char *fileName)
-{
-static uint16_t lastProc = 0;
-uint8_t ptr = 0;
-
-lastProc+=9;
-if (lastProc>10000) lastProc = 1;
-if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-  for (int8_t n=0; n<PROCTABLESIZE; n++) if (procTable[n].state != 11 && lastProc == procTable[n].id) {
-    lastProc+=9;
-    n=-1;
+  static uint8_t allocateProc(char *fileName)
+  {
+  static uint16_t lastProc = 0;
+  uint8_t ptr = 0;
+  
+  lastProc+=9;
+  if (lastProc>10000) lastProc = 1;
+  if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    for (int8_t n=0; n<PROCTABLESIZE; n++) if (procTable[n].state != 11 && lastProc == procTable[n].id) {
+      lastProc+=9;
+      n=-1;
+      }
+    for (ptr=0; ptr<PROCTABLESIZE && procTable[ptr].state != 11; ptr++);
+    if (ptr > PROCTABLESIZE) ptr = 255;
+    else {
+      procTable[ptr].state = 17;
+      procTable[ptr].id = lastProc;
+      if (strlen(fileName)>sizeof (procTable[0].filename)) fileName[sizeof(procTable[0].filename)-1] = '\0';
+      strcpy (procTable[ptr].filename, fileName);
+      }
+    xSemaphoreGive(procSem);
     }
-  for (ptr=0; ptr<PROCTABLESIZE && procTable[ptr].state != 11; ptr++);
-  if (ptr > PROCTABLESIZE) ptr = 255;
-  else {
-    procTable[ptr].state = 17;
-    procTable[ptr].id = lastProc;
-    if (strlen(fileName)>sizeof (procTable[0].filename)) fileName[sizeof(procTable[0].filename)-1] = '\0';
-    strcpy (procTable[ptr].filename, fileName);
-    }
-  xSemaphoreGive(procSem);
+  else ptr = 255;
+  return (ptr);
   }
-else ptr = 255;
-return (ptr);
-}
 
   static void setProcState (char *param, uint8_t state)
   {
@@ -787,7 +822,8 @@ return (ptr);
     uint16_t value = util_str2int(param);
     if (value < 10000 && xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       for (uint8_t n=0; n<PROCTABLESIZE; n++) if (procTable[n].state != 11 && procTable[n].id == value) {
-        procTable[n].state = state;
+        if (state == 29 && procTable[n].state == state) procTable[n].state = 17;
+        else procTable[n].state = state;
         }
       xSemaphoreGive(procSem);
       }
@@ -886,9 +922,11 @@ static void listProcs()
   }
 
 
-  void rpn (int argc, char** argv)
+  float rpn (int argc, char** argv)
   {
+    for (uint8_t i; i<REGISTERCOUNT; i++) localRegister[i] = 0.00;
     float result = calc(argc, argv);
+    return (result);
   }
 };
 

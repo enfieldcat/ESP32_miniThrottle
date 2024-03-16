@@ -276,6 +276,31 @@ float util_dtor (float degree)
   return (degree * 0.01745329252);
 }
 
+char util_menuKeySwap(char inChar)
+{
+  char retval=inChar;
+  bool isMenu = false;
+
+  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (menuMode) isMenu = true;
+    xSemaphoreGive(shmSem);
+  }
+  if (isMenu) {   // when driving menus, use numbers as arrows
+    switch (inChar) {
+      case 'U': retval = 'D' ; break;  // transpose meaning of up and down
+      case 'D': retval = 'U' ; break;
+      case '2': retval = 'D' ; break;  // 2 acts as down
+      case '8': retval = 'U' ; break;  // 8 acts as up
+      case '4': retval = 'L' ; break;  // 4 as left
+      case '5': retval = 'S' ; break;  // 5 as select
+      case '6': retval = 'R' ; break;  // 6 as right
+      case '0': retval = 'E' ; break;  // 0 as escape
+      case '#': retval = 'S' ; break;  // # as select
+    }
+  }
+  return(retval);
+}
+
 
 #ifdef FILESUPPORT
 // directory listing of SPiffs filesystem
@@ -378,7 +403,7 @@ char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
   }
   if (!fs.exists(path)) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.printf ("  - File does not exist\r\n");
+      Serial.printf ("  %s - File does not exist\r\n", path);
       xSemaphoreGive(consoleSem);
     }
     return (retval);
@@ -386,14 +411,14 @@ char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
   File file = fs.open(path);
   if(!file){
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.printf ("  - failed to open file for reading\r\n");
+      Serial.printf ("  %s - failed to open file for reading\r\n", path);
       xSemaphoreGive(consoleSem);
     }
     return (retval);
   }
   if(file.isDirectory()){
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.printf ("  - Cannot open directory for reading\r\n");
+      Serial.printf ("  %s - Cannot open directory for reading\r\n", path);
       xSemaphoreGive(consoleSem);
       file.close();
     }
@@ -446,7 +471,7 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
 
   if (!fs.exists(path)) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println ("  - File does not exist");
+      Serial.printf ("  %s - File does not exist\r\n", path);
       xSemaphoreGive(consoleSem);
     }
     return;
@@ -454,14 +479,14 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
   File file = fs.open(path);
   if(!file){
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println("  - failed to open file for reading");
+      Serial.printf("  %s - failed to open file for reading\r\n", path);
       xSemaphoreGive(consoleSem);
     }
     return;
   }
   if(file.isDirectory()){
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println("  - Cannot open directory for reading");
+      Serial.printf("  %s - Cannot open directory for reading\r\n", path);
       xSemaphoreGive(consoleSem);
     }
     return;

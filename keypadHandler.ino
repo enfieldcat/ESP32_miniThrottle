@@ -55,7 +55,8 @@ void keypadMonitor(void *pvParameters)
         diagEnqueue ('k', (char *) &inChar, false);
         xSemaphoreGive(diagPortSem);
       }
-      if (menuMode) {   // when driving menus, use numbers as arrows
+      inChar =  util_menuKeySwap(inChar);
+      /* if (menuMode) {   // when driving menus, use numbers as arrows
         switch (inChar) {
           case 'U': inChar = 'D' ; break;  // transpose meaning of up and down
           case 'D': inChar = 'U' ; break;
@@ -67,7 +68,7 @@ void keypadMonitor(void *pvParameters)
           case '0': inChar = 'E' ; break;  // 0 as escape
           case '#': inChar = 'S' ; break;  // # as select
         }
-      }
+      } */
       xQueueSend (keyboardQueue, &inChar, 0);
       lastKey = inChar;
       if (lastKey >= '0' && lastKey <='9') { // for function keys in driving mode we want to know if they are released

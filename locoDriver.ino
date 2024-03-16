@@ -246,6 +246,11 @@ void locomotiveDriver()
         }
         else {
           if (locoRoster[initialLoco].steps > 0) {
+            #ifdef SCALEFONT
+            if (screenWidth > 240 && selFontWidth > 15)
+            sprintf (displayLine, "%s%3d%%", dirString[calcDirection], calcSpeed);
+            else
+            #endif
             sprintf (displayLine, "%s %3d%%", dirString[calcDirection], calcSpeed);
           }
           else {

@@ -350,12 +350,24 @@ private:
           xSemaphoreGive(shmSem);
         }
       }
-      else if (strcmp (varcopy, "freemem")  == 0) retval = ESP.getFreeHeap();
-      else if (strcmp (varcopy, "minfree")  == 0) retval = ESP.getMinFreeHeap();
-      else if (strcmp (varcopy, "memsize")  == 0) retval = ESP.getHeapSize();
-      else if (strcmp (varcopy, "uptime")   == 0) retval = esp_timer_get_time() / (uS_TO_S_FACTOR * 60.0);
-      else if (strcmp (varcopy, "cpufreq")  == 0) retval = ESP.getCpuFreqMHz();
-      else if (strcmp (varcopy, "xtalfreq") == 0) retval = getXtalFrequencyMhz();
+      else if (strcmp (varcopy, "freemem")      == 0) retval = ESP.getFreeHeap();
+      else if (strcmp (varcopy, "minfree")      == 0) retval = ESP.getMinFreeHeap();
+      else if (strcmp (varcopy, "memsize")      == 0) retval = ESP.getHeapSize();
+      else if (strcmp (varcopy, "uptime")       == 0) retval = esp_timer_get_time() / (uS_TO_S_FACTOR * 60.0);
+      else if (strcmp (varcopy, "cpufreq")      == 0) retval = ESP.getCpuFreqMHz();
+      else if (strcmp (varcopy, "xtalfreq")     == 0) retval = getXtalFrequencyMhz();
+      #ifndef NODISPLAY
+      else if (strcmp (varcopy, "screenwidth")  == 0) retval = screenWidth;
+      else if (strcmp (varcopy, "screenheight") == 0) retval = screenHeight;
+      else if (strcmp (varcopy, "fontwidth")    == 0) retval = selFontWidth;
+      else if (strcmp (varcopy, "fontheight")   == 0) retval = selFontHeight;
+      #ifdef BACKLIGHTPIN
+      else if (strcmp (varcopy, "backlight")    == 0) retval = backlightValue;
+      #ifdef BLANKINGTIME
+      else if (strcmp (varcopy, "blankingtime") == 0) retval = blankingTime;
+      #endif
+      #endif
+      #endif
       else if (strcmp (varcopy, "leadloco") == 0) {
         if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           retval = initialLoco;
@@ -399,6 +411,20 @@ private:
             if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               retval = locoRoster[initialLoco].steps;
               xSemaphoreGive(velociSem);
+            }
+          }
+          else if (strcmp (subvar, "function")==0) {
+            if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              retval = locoRoster[initialLoco].function;
+              xSemaphoreGive(velociSem);
+            }
+            if (subcnt == 2 && util_str_isa_int (indexer)) {
+              uint32_t mask = 1;
+              uint32_t funcNumber = util_str2int(indexer);
+              mask <<= funcNumber;
+              funcNumber = retval;
+              retval = funcNumber & mask;
+              if (retval != 0) retval = 1;
             }
           }
         }
@@ -526,6 +552,7 @@ private:
           break;
         case 1 :   // place keypad entry in queue  - key
           if (nparam==2) {
+            param[1][0]= util_menuKeySwap(param[1][0]);
             xQueueSend (keyboardQueue, param[1], 0);
           }
           break;
@@ -656,9 +683,17 @@ private:
                 xSemaphoreGive(procSem);
               }
             }
+            else if (strcmp (param[1], "bidirectional") == 0) {
+              float temp = calc (nparam-2, &param[2]);
+              if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                if (temp<0.5) bidirectionalMode = false;
+                else bidirectionalMode = true;
+                xSemaphoreGive(shmSem);
+              }
+            }
           }
           break;
-        default:
+        default:   // unknown instruction
           if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s Syntax error in line %d: %s\r\n", getTimeStamp(), lineNr+1, inLine);
             xSemaphoreGive(consoleSem);
@@ -851,6 +886,7 @@ static void runbg(char *fileName)
   sprintf (threadName, "runbg_%05d", serial++);
   if (serial > 65000) serial = 1;
   xTaskCreate(runbgThread, threadName, 8192, fileName, 4, NULL);
+  delay (500); // Set up time allowance - copy *fileName before the calling routine destroys it
   }
 
 static void runfg(char *fileName)

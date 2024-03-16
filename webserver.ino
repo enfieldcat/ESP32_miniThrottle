@@ -594,7 +594,7 @@ void mkWebEditor (WiFiClient *myClient, char *myUri, bool keepAlive, char *hostN
   }
   mkWebHeader (myClient, 200, 0, keepAlive);
   mkWebHtmlHeader (myClient, &myUri[5], 0);
-  myClient->printf ((const char*)"<form action=\"/save\" method=\"post\"><label for=\"fileName\">Save file as: </label><input id=\"fileName\" name=\"fileName\" value=\"%s\"><br><br>", &myUri[5]);
+  myClient->printf ((const char*)"<h2>File Contents</h2><form action=\"/save\" method=\"post\">");
   myClient->printf ((const char*)"<textarea id=\"editdata\" name=\"editdata\" rows=\"24\" cols=\"80\">");
   if(file){
     webDumpFile (myClient, &file, true);
@@ -603,7 +603,12 @@ void mkWebEditor (WiFiClient *myClient, char *myUri, bool keepAlive, char *hostN
   else {
     myClient->printf ((const char*)"File not found");
   }
-  myClient->printf ((const char*)"</textarea><br><br><input type=\"checkbox\" name=\"applyconfig\" id=\"applyconfig\"><label for=\"applyconfig\">Apply file as configuration after saving</label><br><input type=\"submit\" value=\"Save\"></form><br><p>To access file outside editor: <a href=\"http://");
+  myClient->printf ((const char*)"</textarea><br><h2>Save Options</h2>");
+  myClient->printf ((const char*)"<label for=\"fileName\">Save file as: </label><input id=\"fileName\" name=\"fileName\" value=\"%s\"><br>", &myUri[5]);
+  myClient->printf ((const char*)"<input type=\"radio\" id=\"applyStd\" name=\"applyconfig\" value=\"0\" checked=\"true\"><label for=\"applyStd\">Save and perform no further action</label><br>");
+  myClient->printf ((const char*)"<input type=\"radio\" id=\"applyConf\" name=\"applyconfig\" value=\"1\"><label for=\"applyConf\">Save and apply as configuration change</label><br>");
+  myClient->printf ((const char*)"<input type=\"radio\" id=\"applyAuto\" name=\"applyconfig\" value=\"2\"><label for=\"applyAuto\">Save and run as automation script</label><br>");
+  myClient->printf ((const char*)"<input type=\"submit\" value=\"Save\"></form><br><p>To access file outside editor: <a href=\"http://");
   if (hostName == NULL) {
     myClient->printf ((const char*)"%s.local%s\">http://%s.local%s</a></p>", tname, &myUri[5], tname, &myUri[5]);
   }
@@ -1127,14 +1132,20 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   resultPtr = webScanData (data, "fileName", dataSize);
   if (resultPtr != NULL && resultPtr[0]!='\0') {
     fs::FS fs = (fs::FS) SPIFFS;
+    char* action = NULL;
     char filename[strlen(resultPtr)+1];
     char inChar;
     bool unchanged = true;
     bool applyconfig = false;
+    bool runAsAuto = false;
 
     myClient->printf ((const char*)"<h2>Update File</h2><ul>");
     strcpy (filename, resultPtr);
-    if (webScanData (data, "applyconfig", dataSize)) applyconfig = true;;
+    action = webScanData (data, "applyconfig", dataSize);
+    if (action != NULL) {
+      if (action[0]=='1') applyconfig = true;
+      else if (action[0]=='2') runAsAuto = true;
+    }
     resultPtr = webScanData (data, "editdata", dataSize);
     File file = fs.open(filename);
     inputNum = 0;
@@ -1161,10 +1172,15 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     }
     else myClient->printf ((const char*)"<li>file %s is unchanged</li>", filename);
     if (applyconfig) myClient->printf ((const char*)"<li>apply %s as configuration data</li>", filename);
+    if (runAsAuto) myClient->printf ((const char*)"<li>run %s as automation script</li>", filename);
     myClient->printf ((const char*)"<li><a href=\"/\">Back to main page</a></li></ul><hr></body></html>\r\n");
     if (applyconfig) {
       myClient->flush();
       util_readFile (SPIFFS, filename, true);
+    }
+    else if (runAsAuto) {
+      myClient->flush();
+      runAutomation::runbg (filename);
     }
     return;
   }

@@ -997,7 +997,10 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
   for (uint8_t n=0; n<itemCount; n++) lineChanged[n] = true;
   if (selectedItem > itemCount) selectedItem = 0;
   display.clear();
-  menuMode = true;
+  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    menuMode = true;
+    xSemaphoreGive(shmSem);
+  }
   while (exitCode == 255) {
     if (hasChanged) {
       hasChanged = false;
@@ -1093,7 +1096,10 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
       #endif
     }
   }
-  menuMode = false;
+  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    menuMode = false;
+    xSemaphoreGive(shmSem);
+  }
   if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (exitCode==0) Serial.printf ("%s MENU: No selection / Back One Level\r\n", getTimeStamp());
     else Serial.printf ("%s MENU: Option %d: %s\r\n", getTimeStamp(), exitCode, menuItems[(exitCode-1)]);
@@ -1291,7 +1297,10 @@ bool displayYesNo (const char *question)
   uint8_t command = 255;
   bool option = true;
 
-  menuMode = true;
+  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    menuMode = true;
+    xSemaphoreGive(shmSem);
+  }
   while (command != 'S' && command != 'R' && command != 'L') {  // Select or left right to accept answer
     if (command == 255 || xQueueReceive(keyboardQueue, &command, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
       if (command == 255) command = 254;
@@ -1300,7 +1309,10 @@ bool displayYesNo (const char *question)
       displayScreenLine (" No",  baseLine+1, !option);
     }
   }
-  menuMode = false;
+  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    menuMode = false;
+    xSemaphoreGive(shmSem);
+  }
   if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s PROMPT: %s\r\n   YES/NO: ", getTimeStamp(), question);
     if (option) Serial.printf ("Yes\r\n");

@@ -193,6 +193,7 @@ static char dccLCD[4][21];               // DCC-Ex LCD messages
 static char diagMonitorMode   = ' ';     // mode of diag monitor
 static bool configHasChanged  = false;
 static bool showPackets       = false;   // debug setting: [no]showpackets
+static bool showNextPacket    = false;   // Show next packet - used for sendcmd responses
 static bool showKeepAlive     = false;   // debug setting: [no]showkeepalive
 static bool showKeypad        = false;   // debug setting: [no]showkeypad
 static bool showWebHeaders    = false;   // debug setting: [no]showweb
@@ -219,6 +220,7 @@ static bool enablePot         = true;    // potentiometer enable/disable while d
 static bool inScreenSaver     = false;   // Has backlight been turned off?
 #endif
 static struct procTable_s procTable[PROCTABLESIZE];
+static struct dccSensor_s    dccSensorTable[DCCSENSORCNT];	
 #ifdef FILESUPPORT
 static fs::File writeFile;
 static bool writingFile       = false;
@@ -530,6 +532,10 @@ void setup()  {
     for (uint8_t j=0; j<PROCNAMELENGTH; j++) procTable[n].filename[j] = '\0';
     }
   for (uint8_t i; i<REGISTERCOUNT; i++) sharedRegister[i] = 0.00;
+  for (uint8_t i; i<DCCSENSORCNT;  i++) {
+    dccSensorTable[i].id = 65500;
+    dccSensorTable[i].value = SENSORUNKNOWN;
+  }
   // Use tasks to process various input and output streams
   // micro controller has enough memory, that stack sizes can be generously allocated to avoid stack overflows
   xTaskCreate(serialConsole, "serialConsole", 8192, NULL, 4, NULL);

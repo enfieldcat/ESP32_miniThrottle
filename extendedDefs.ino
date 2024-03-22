@@ -224,6 +224,14 @@ SOFTWARE.
     #endif
     #ifndef keynone
     #endif
+    #if ESPMODEL == ESP32C3
+    { 20,           (char*)"Console - Tx" },
+    { 21,           (char*)"Console - Rx" }
+    #elif ESPMODEL == ESP32S3
+    { 43,           (char*)"Console - Tx" },
+    { 44,           (char*)"Console - Rx" }
+    #else
     { 1,            (char*)"Console - Tx" },
     { 3,            (char*)"Console - Rx" }
+    #endif
   }; 

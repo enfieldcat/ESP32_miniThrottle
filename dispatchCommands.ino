@@ -682,3 +682,10 @@ void invalidateRoutes (int8_t turnoutNr, char state)
     else semFailed ("routeSem", __FILE__, __LINE__);
   }
 }
+
+void dccexCheckInputs ()
+{
+  if (cmdProtocol == DCCEX) {
+    txPacket ("<Q>");
+  }
+}

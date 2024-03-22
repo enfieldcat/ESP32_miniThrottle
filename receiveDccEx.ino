@@ -46,7 +46,42 @@ void processDccPacket (char *packet)
   else if (strncmp (packet, "<jT ", 4) == 0) dccConfTurnout (&packet[4]);
   else if (strncmp (packet, "<jA ", 4) == 0) dccConfRoute   (&packet[4]);
   else if (strncmp (packet, "<jR ", 4) == 0) dccConfLoco    (&packet[4]);
+  else if (strncmp (packet, "<q ",  3) == 0 || strncmp (packet, "<Q ", 3) == 0) dccSensorIn (packet[1], &packet[3]);
 }
+
+
+/*
+ * sensor update
+ * <q 1408>
+ */
+void dccSensorIn(char op, char* idTxt)
+{
+  uint8_t lim = strlen(idTxt);
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s dccSensorIn(%c, %s)\r\n", getTimeStamp(), op, idTxt);
+    xSemaphoreGive(consoleSem);
+  }
+  if (idTxt[lim-1] == '>') idTxt[lim-1] = '\0';
+  if (util_str_isa_int(idTxt)) {
+    uint16_t index = util_str2int(idTxt);
+    uint8_t n= 0;
+    bool notFound=true;
+    if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      for (n=0; notFound && n<DCCSENSORCNT && dccSensorTable[n].id<40000; n++) if (dccSensorTable[n].id == index) {
+        notFound = false;                // update existing sensor
+        if (op=='q') dccSensorTable[n].value = SENSORON;
+        else dccSensorTable[n].value = SENSOROFF;
+      }
+      if (notFound && n<DCCSENSORCNT) {  // first time we have seen this id
+        dccSensorTable[n].id = index;
+        if (op=='q') dccSensorTable[n].value = SENSORON;
+        else dccSensorTable[n].value = SENSOROFF;
+      }
+      xSemaphoreGive(procSem);
+    }
+  }
+}
+
 
 /*
  * LocoStatus update

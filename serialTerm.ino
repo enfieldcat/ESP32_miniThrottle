@@ -1516,7 +1516,11 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
     uint16_t blk_size;
     uint16_t blk_count;
     char *blk_start;
-    if (strcmp (param[1], "loco") == 0) {
+    if (strcmp (param[1], "registers") == 0){
+      runAutomation::dumpRegisters();
+      return;
+    }
+    else if (strcmp (param[1], "loco") == 0) {
       blk_size = sizeof(struct locomotive_s);
       blk_count = locomotiveCount + MAXCONSISTSIZE;
       blk_start = (char*) locoRoster;
@@ -1811,6 +1815,7 @@ bool showPinConfig()  // Display pin out selection
 void pinEquiv(uint8_t pin)
 {
   switch (pin) {
+  #if ESPMODEL == ESP32
     case 1:
       Serial.printf (" (Txd)");
       break;
@@ -1829,6 +1834,21 @@ void pinEquiv(uint8_t pin)
     case 39:
       Serial.printf (" (SensVN)");
       break;
+  #elif ESPMODEL == ESP32C3
+    case 20:
+      Serial.printf (" (Txd)");
+      break;
+    case 21:
+      Serial.printf (" (Rxd)");
+      break;
+  #elif ESPMODEL == ESP32S3
+    case 43:
+      Serial.printf (" (Txd)");
+      break;
+    case 44:
+      Serial.printf (" (Rxd)");
+      break;
+  #endif
   }
 }
 

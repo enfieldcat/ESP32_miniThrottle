@@ -350,6 +350,7 @@ private:
           xSemaphoreGive(shmSem);
         }
       }
+      else if (strcmp (varcopy, "protocol")     == 0) retval = cmdProtocol;
       else if (strcmp (varcopy, "freemem")      == 0) retval = ESP.getFreeHeap();
       else if (strcmp (varcopy, "minfree")      == 0) retval = ESP.getMinFreeHeap();
       else if (strcmp (varcopy, "memsize")      == 0) retval = ESP.getHeapSize();
@@ -429,6 +430,20 @@ private:
           }
         }
         xSemaphoreGive(shmSem);
+      }
+    }
+    else if (strcmp (varcopy, "dccsensor")==0) {
+      if (subcnt == 1 && util_str_isa_int (subvar)) {
+        uint32_t id = util_str2int(subvar);
+        bool notFound = true;
+        if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          for (uint8_t n=0; notFound && n<DCCSENSORCNT; n++) if (dccSensorTable[n].id == id) {
+            notFound = false;
+            retval = dccSensorTable[n].value;
+          }	
+          xSemaphoreGive(procSem);
+          if (notFound) retval = SENSORUNKNOWN;
+        }
       }
     }
     return (retval);
@@ -691,6 +706,15 @@ private:
                 xSemaphoreGive(shmSem);
               }
             }
+          }
+          break;
+        case 14:   // sendcmd - send raw instruction to CS, not checking response
+          if (strlen(lineTable[lineNr].start) > 8) {
+            if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              showNextPacket = true;
+              xSemaphoreGive(shmSem);
+            }
+            txPacket (&(lineTable[lineNr].start[8]));
           }
           break;
         default:   // unknown instruction
@@ -957,6 +981,44 @@ static void listProcs()
     setProcState(param, 19);
   }
 
+  static void dumpRegisters()
+  {
+    if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s dumpRegisters()\r\n", getTimeStamp());
+      xSemaphoreGive(consoleSem);
+    }
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("\r\nShared Registers\r\n");
+      Serial.printf ("Register      Value\r\n");
+      xSemaphoreGive(consoleSem);
+    }
+    if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      for (uint8_t n; n<REGISTERCOUNT; n++) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf (" shreg%d   %9.4f\r\n", n, sharedRegister[n]);
+          xSemaphoreGive(consoleSem);
+        }
+      }
+      xSemaphoreGive(procSem);
+    }
+    delay(50);
+    if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (dccSensorTable[0].id<40000) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("\r\nDCC-EX Sensors\r\n");
+          Serial.printf ("Sensor-ID     Value\r\n");
+          xSemaphoreGive(consoleSem);
+        }
+        for (uint8_t n=0;n<DCCSENSORCNT && dccSensorTable[n].id<40000; n++) {
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("   %5d %9.4f\r\n", dccSensorTable[n].id, dccSensorTable[n].value);
+            xSemaphoreGive(consoleSem);
+          }
+        }	
+      }
+      xSemaphoreGive(procSem);
+    }
+  }
 
   float rpn (int argc, char** argv)
   {

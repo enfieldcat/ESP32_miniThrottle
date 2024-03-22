@@ -224,8 +224,19 @@ void processPacket (char *packet)
   }
   if (showPackets) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.print ("<-- ");
-      Serial.println (packet);
+      Serial.printf ("<-- %s\r\n", packet);
+      xSemaphoreGive(consoleSem);
+    }
+  }
+  else {
+    bool displayIt = false;
+    if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      displayIt = showNextPacket;
+      showNextPacket = false;
+      xSemaphoreGive(shmSem);
+    }
+    if (displayIt && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("<-- %s\r\n", packet);
       xSemaphoreGive(consoleSem);
     }
   }

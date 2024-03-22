@@ -173,6 +173,14 @@ SOFTWARE.
 #define FUNCTLATCH 483
 #define FUNCTLEADONLY 225
 
+// default model if not specified elsewhere
+#define ESP32 1
+#define ESP32C3 2
+#define ESP32S3 3
+#ifndef ESPMODEL
+#define ESPMODEL ESP32
+#endif
+
 /*
  * **********  ENUMERATIONS  *********************************************************************
  */
@@ -296,8 +304,17 @@ struct lineTable_s {
   uint8_t sec_token; // secondary tokens also ensure word alignment of pointers
   uint16_t param;
 };
-//                          0       1       2         3        4           5       6         7        8         9          10        11        12       13
-const char* runTokens[] = {"rem ", "key ", "delay ", "goto ", "waitfor ", "exit", "runfg ", "runbg ", "power ", "route ", "throw ", "close ", "sleep ", "set "};
+// structure of dcc-ex sensor data
+#ifndef DCCSENSORCNT
+#define DCCSENSORCNT 50
+#endif
+enum { SENSORON, SENSOROFF, SENSORUNKNOWN };
+struct dccSensor_s {
+  uint32_t id;
+  uint8_t  value;
+};
+//                          0       1       2         3        4           5       6         7        8         9          10        11        12       13      14
+const char* runTokens[] = {"rem ", "key ", "delay ", "goto ", "waitfor ", "exit", "runfg ", "runbg ", "power ", "route ", "throw ", "close ", "sleep ", "set ", "sendcmd "};
 
 /*
  * Required by Throttle functionality to get loco, turnout and route data, but also useful debug tool for inspecting NVS

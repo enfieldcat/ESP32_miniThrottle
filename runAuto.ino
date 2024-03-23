@@ -446,6 +446,27 @@ private:
         }
       }
     }
+    else if (strcmp (varcopy, "localpin")==0) {
+      if (subcnt == 1 && util_str_isa_int (subvar)) {
+        uint32_t pinNr = util_str2int(subvar);
+        bool notFound = true;
+        if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          for (uint8_t n=0; notFound && n<LOCALPINCNT && localPinTable[n].pinNr<255; n++) if (localPinTable[n].pinNr == pinNr) {
+            notFound = false;
+            if (localPinTable[n].assignment == DIN) retval = digitalRead(pinNr);
+            else if (localPinTable[n].assignment == AIN) {  // Average of 3 samples.
+              for (uint8_t multi=0 ; multi<3; multi++) { retval += analogRead(pinNr); delay (10); }
+              retval = retval / 3;
+            }
+            else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              Serial.printf ("%s Pin %d is not an input\r\n", getTimeStamp(), pinNr);
+              xSemaphoreGive(consoleSem);
+            }
+          }
+          xSemaphoreGive(procSem);
+        }
+      }
+    }
     return (retval);
   }
 
@@ -706,6 +727,50 @@ private:
                 xSemaphoreGive(shmSem);
               }
             }
+            else if (strncmp (param[1], "localpin.", 9) == 0) {
+              float temp = calc (nparam-2, &param[2]);
+              if (util_str_isa_int(&param[1][9])) {
+                uint8_t pinNr = util_str2int(&param[1][9]);
+                uint8_t assignment = 0;
+                uint8_t channel = 0;
+                bool notFound = true;
+                if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                  for (uint8_t i=0; notFound && localPinTable[i].pinNr<255; i++) if (pinNr == localPinTable[i].pinNr) {
+                    assignment = localPinTable[i].assignment;
+                    channel    = localPinTable[i].channel;
+                    notFound   = false;
+                  } 
+                  xSemaphoreGive(procSem);
+                  if (notFound) {
+                    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                      Serial.printf ("%s Pin %d is not defined\r\n", getTimeStamp());
+                      xSemaphoreGive(consoleSem);
+                    }
+                  }
+                  else switch (assignment) {
+                    case DOUT:
+                      if (temp < 0.5) digitalWrite(pinNr, LOW);
+                      else digitalWrite(pinNr, HIGH);
+                      break;
+                    #if ESPMODEL == ESP32
+                    case AOUT:
+                      dacWrite (pinNr, temp);
+                      break;
+                    #endif
+                    case PWM:
+                      if (temp < 0) temp = 0;
+                      else if (temp > 255) temp = 255;
+                      ledcWrite(channel, temp);
+                      break;
+                    default:
+                      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                        Serial.printf ("%s Pin %d is not an output\r\n", getTimeStamp());
+                        xSemaphoreGive(consoleSem);
+                      }
+                  }
+                }
+              }
+            }
           }
           break;
         case 14:   // sendcmd - send raw instruction to CS, not checking response
@@ -717,6 +782,31 @@ private:
             txPacket (&(lineTable[lineNr].start[8]));
           }
           break;
+        case 15:   // configpin
+          {
+            uint16_t initialVal = 0;
+            uint8_t function = 99;
+            uint8_t pinNr = 255;
+            if (nparam>2 && util_str_isa_int(param[1])) {
+              pinNr = util_str2int(param[1]);
+              if      (strcasecmp (param[2], "DIN")  == 0) function = DIN;
+              else if (strcasecmp (param[2], "DOUT") == 0) function = DOUT;
+              else if (strcasecmp (param[2], "AIN")  == 0) function = AIN;
+              else if (strcasecmp (param[2], "AOUT") == 0) function = AOUT;
+              else if (strcasecmp (param[2], "PWM")  == 0) function = PWM;
+              if (nparam>3) {
+                if (function = DIN || function == AIN) {
+                  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                    Serial.printf ("%s Ignoring redundant parameters for input pin in line %d\r\n", getTimeStamp(), lineNr+1);
+                    xSemaphoreGive(consoleSem);
+                  }
+                }
+                else initialVal = calc (nparam-3, &param[3]);
+               }
+              autoInitPin (pinNr, function, initialVal);
+            }
+          }
+          break;
         default:   // unknown instruction
           if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s Syntax error in line %d: %s\r\n", getTimeStamp(), lineNr+1, inLine);
@@ -726,6 +816,109 @@ private:
       }
     }
     free(buffer);
+  }
+
+
+  void autoInitPin (uint8_t pinNr, uint8_t function, uint16_t initVal)
+  {
+    bool ok = true;
+    uint8_t i = 0;
+    char* typeLabel[] = {"DIN", "DOUT", "AIN", "AOUT", "PWM" };
+    // Sanity check parameters
+    if (pinNr > MAXPINS) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("%s Pin %d out of range\r\n", getTimeStamp(), pinNr);
+        xSemaphoreGive(consoleSem);
+      }
+      return;
+    }
+    if (function >PWM) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("%s Pin %d assigned invalid function\r\n", getTimeStamp(), pinNr);
+        xSemaphoreGive(consoleSem);
+      }
+      return;
+    }
+    // https://docs.espressif.com/projects/esp-idf/en/v5.0/esp32s3/hw-reference/chip-series-comparison.html
+    #if ESPMODEL == ESP32
+    if (function == AIN  && pinNr < 32) ok = false;
+    if (function == AOUT && (pinNr < 25 || pinNr > 26)) ok = false;
+    if ((function == PWM || function == DOUT)  &&  pinNr > 33) ok = false;
+    #elif ESPMODEL == ESP32S3
+    if (function == AIN  && (pinNr < 3 || pinNr > 10)) ok = false;
+    if (function == AOUT) ok = false;
+    #else
+    if (function == AIN  && pinNr > 4) ok = false;
+    if (function == AOUT) ok = false;
+    #endif
+    if (!ok) {
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("%s Pin %d out of range for %s\r\n", getTimeStamp(), pinNr, typeLabel[function]);
+        xSemaphoreGive(consoleSem);
+      }
+      return;
+    }
+    // first check against hard coded pins
+    for (i=0; i<(sizeof(pinVars)/sizeof(pinVar_s)); i++) {
+      if (pinNr == pinVars[i].pinNr) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s Pin %d already in use by %s\r\n", getTimeStamp(), pinNr, pinVars[i].pinDesc);
+          xSemaphoreGive(consoleSem);
+        }
+        return;
+      }
+    }
+    // now check against previously defined pins
+    for (i=0; i<LOCALPINCNT && localPinTable[i].pinNr<255; i++) {
+      if (pinNr == localPinTable[i].pinNr) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s Pin %d already in use as %s\r\n", getTimeStamp(), pinNr, typeLabel[localPinTable[i].assignment]);
+          xSemaphoreGive(consoleSem);
+        }
+        return;
+      }
+    }
+    if (i<LOCALPINCNT) {
+      if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        localPinTable[i].pinNr = pinNr;
+        localPinTable[i].assignment = function;
+        xSemaphoreGive(procSem);
+        switch (function) {
+        case DIN:
+          pinMode(pinNr, INPUT);
+          break;
+        case DOUT:
+          pinMode(pinNr, OUTPUT);
+          if (initVal == 0) digitalWrite(pinNr, LOW);
+          else digitalWrite(pinNr, HIGH);
+          break;
+        case AIN:
+          analogReadResolution(10);
+          adcAttachPin(pinNr);
+          analogSetPinAttenuation(pinNr, ADC_11db);  // param 2 = attenuation, range 0-3 sets FSD: 0:ADC_0db=800mV, 1:ADC_2_5db=1.1V, 2:ADC_6db=1.35V, 3:ADC_11db=2.6V
+          break;
+#if ESPMODEL == ESP32
+        case AOUT:
+          dacWrite (pinNr, initVal);
+          break;
+#endif
+        case PWM:
+          if (ledChannel<15) {
+            ledChannel++;
+            if (initVal>255) initVal = 255;
+            localPinTable[i].channel = ledChannel;
+            ledcSetup(ledChannel, 5000, 8);
+            ledcAttachPin(pinNr, ledChannel);
+            ledcWrite(ledChannel, initVal);
+          }
+          break;
+        }
+      }
+    }
+    else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s No more slots available to define custom I/O\r\n", getTimeStamp());
+      xSemaphoreGive(consoleSem);
+    }
   }
   
 
@@ -1011,10 +1204,28 @@ static void listProcs()
         }
         for (uint8_t n=0;n<DCCSENSORCNT && dccSensorTable[n].id<40000; n++) {
           if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            Serial.printf ("   %5d %9.4f\r\n", dccSensorTable[n].id, dccSensorTable[n].value);
+            Serial.printf ("   %6d %9.4f\r\n", dccSensorTable[n].id, dccSensorTable[n].value);
             xSemaphoreGive(consoleSem);
           }
-        }	
+        }
+      }
+      xSemaphoreGive(procSem);
+    }
+    delay(50);
+    if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (localPinTable[0].pinNr<255) {
+        char* typeLabel[] = {"DIN", "DOUT", "AIN", "AOUT", "PWM" };
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("\r\nAssigned Pins\r\n");
+          Serial.printf ("Pin-Nr Type\r\n");
+          xSemaphoreGive(consoleSem);
+        }
+        for (uint8_t n=0;n<LOCALPINCNT && localPinTable[n].pinNr<255; n++) {
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("   %3d %s\r\n", localPinTable[n].pinNr, typeLabel[localPinTable[n].assignment]);
+            xSemaphoreGive(consoleSem);
+          }
+        }
       }
       xSemaphoreGive(procSem);
     }

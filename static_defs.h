@@ -58,7 +58,7 @@ SOFTWARE.
 #undef VERSION
 #endif
 #define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.7f"         // Version string
+#define VERSION     "0.7g"         // Version string
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.
@@ -174,11 +174,19 @@ SOFTWARE.
 #define FUNCTLEADONLY 225
 
 // default model if not specified elsewhere
+// https://docs.espressif.com/projects/esp-idf/en/v5.0/esp32s3/hw-reference/chip-series-comparison.html
 #define ESP32 1
 #define ESP32C3 2
 #define ESP32S3 3
 #ifndef ESPMODEL
 #define ESPMODEL ESP32
+#endif
+#if ESPMODEL == ESP32
+#define MAXPINS 40
+#elif ESPMODEL == ESPS3
+#define MAXPINS 50
+#else
+#define MAXPINS 22
 #endif
 
 /*
@@ -292,6 +300,7 @@ struct procTable_s {
   char filename[PROCNAMELENGTH];
 };
 enum procStates  { PROCFREE = 7 , PROCDIE = 13, PROCRUN = 17, PROCTRACE = 29 };
+enum pinTypes    { DIN = 0, DOUT = 1, AIN = 2, AOUT = 3, PWM = 4 };
 // structure for holding jump table info
 struct jumpTable_s {
   uint16_t jumpTo;
@@ -304,6 +313,15 @@ struct lineTable_s {
   uint8_t sec_token; // secondary tokens also ensure word alignment of pointers
   uint16_t param;
 };
+// structure for local Pins
+#ifndef LOCALPINCNT
+#define LOCALPINCNT 20
+#endif
+struct localpin_s {
+  uint8_t pinNr;
+  uint8_t assignment;
+  uint8_t channel;
+};
 // structure of dcc-ex sensor data
 #ifndef DCCSENSORCNT
 #define DCCSENSORCNT 50
@@ -313,8 +331,8 @@ struct dccSensor_s {
   uint32_t id;
   uint8_t  value;
 };
-//                          0       1       2         3        4           5       6         7        8         9          10        11        12       13      14
-const char* runTokens[] = {"rem ", "key ", "delay ", "goto ", "waitfor ", "exit", "runfg ", "runbg ", "power ", "route ", "throw ", "close ", "sleep ", "set ", "sendcmd "};
+//                          0       1       2         3        4           5       6         7        8         9          10        11        12       13      14          15
+const char* runTokens[] = {"rem ", "key ", "delay ", "goto ", "waitfor ", "exit", "runfg ", "runbg ", "power ", "route ", "throw ", "close ", "sleep ", "set ", "sendcmd ", "configpin " };
 
 /*
  * Required by Throttle functionality to get loco, turnout and route data, but also useful debug tool for inspecting NVS

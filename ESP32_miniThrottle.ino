@@ -219,8 +219,11 @@ static bool enablePot         = true;    // potentiometer enable/disable while d
 #ifdef SCREENSAVER
 static bool inScreenSaver     = false;   // Has backlight been turned off?
 #endif
-static struct procTable_s procTable[PROCTABLESIZE];
+// Automation related
+static struct procTable_s    procTable[PROCTABLESIZE];
 static struct dccSensor_s    dccSensorTable[DCCSENSORCNT];	
+static struct localpin_s     localPinTable[LOCALPINCNT];
+static int8_t ledChannel     = 0;
 #ifdef FILESUPPORT
 static fs::File writeFile;
 static bool writingFile       = false;
@@ -535,6 +538,10 @@ void setup()  {
   for (uint8_t i; i<DCCSENSORCNT;  i++) {
     dccSensorTable[i].id = 65500;
     dccSensorTable[i].value = SENSORUNKNOWN;
+  }
+  for (uint8_t i; i<LOCALPINCNT;   i++) {
+    localPinTable[i].pinNr = 255;
+    localPinTable[i].assignment = PWM + 10;
   }
   // Use tasks to process various input and output streams
   // micro controller has enough memory, that stack sizes can be generously allocated to avoid stack overflows

@@ -743,7 +743,7 @@ private:
                   xSemaphoreGive(procSem);
                   if (notFound) {
                     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-                      Serial.printf ("%s Pin %d is not defined\r\n", getTimeStamp());
+                      Serial.printf ("%s Pin %d is not defined\r\n", getTimeStamp(), pinNr);
                       xSemaphoreGive(consoleSem);
                     }
                   }
@@ -764,11 +764,15 @@ private:
                       break;
                     default:
                       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-                        Serial.printf ("%s Pin %d is not an output\r\n", getTimeStamp());
+                        Serial.printf ("%s Pin %d is not an output\r\n", getTimeStamp(), pinNr);
                         xSemaphoreGive(consoleSem);
                       }
                   }
                 }
+              }
+              else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                Serial.printf ("%s %s appears to have non numeric pin number\r\n", getTimeStamp(), param[1]);
+                xSemaphoreGive(consoleSem);
               }
             }
           }
@@ -794,8 +798,13 @@ private:
               else if (strcasecmp (param[2], "AIN")  == 0) function = AIN;
               else if (strcasecmp (param[2], "AOUT") == 0) function = AOUT;
               else if (strcasecmp (param[2], "PWM")  == 0) function = PWM;
+              else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                Serial.printf ("%s Unknown parameter %s for pin %d in line %d\r\n", getTimeStamp(), param[2], pinNr, lineNr+1);
+                xSemaphoreGive(consoleSem);
+                pinNr = 255;
+              }
               if (nparam>3) {
-                if (function = DIN || function == AIN) {
+                if (function == DIN || function == AIN) {
                   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                     Serial.printf ("%s Ignoring redundant parameters for input pin in line %d\r\n", getTimeStamp(), lineNr+1);
                     xSemaphoreGive(consoleSem);
@@ -803,7 +812,7 @@ private:
                 }
                 else initialVal = calc (nparam-3, &param[3]);
                }
-              autoInitPin (pinNr, function, initialVal);
+              if (pinNr!=255) autoInitPin (pinNr, function, initialVal);
             }
           }
           break;
@@ -824,6 +833,10 @@ private:
     bool ok = true;
     uint8_t i = 0;
     char* typeLabel[] = {"DIN", "DOUT", "AIN", "AOUT", "PWM" };
+    if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s autoInitPin(%d, %d, %d)\r\n", getTimeStamp(), pinNr, function, initVal);
+      xSemaphoreGive(consoleSem);
+    }
     // Sanity check parameters
     if (pinNr > MAXPINS) {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

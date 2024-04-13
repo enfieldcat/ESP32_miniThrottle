@@ -51,10 +51,12 @@ void keypadMonitor(void *pvParameters)
     char inChar = keypad.getKey();
     if (inChar != NO_KEY) {
       if (showKeypad) Serial.println (inChar);
+      #ifdef USEWIFI
       if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         diagEnqueue ('k', (char *) &inChar, false);
         xSemaphoreGive(diagPortSem);
       }
+      #endif
       inChar =  util_menuKeySwap(inChar);
       /* if (menuMode) {   // when driving menus, use numbers as arrows
         switch (inChar) {

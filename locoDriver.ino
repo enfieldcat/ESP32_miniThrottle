@@ -65,10 +65,12 @@ void locomotiveDriver()
     xSemaphoreGive(consoleSem);
   }
 
+  #ifdef USEWIFI
   if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     diagEnqueue ('e', (char *) "### Starting loco driving session -----------------------------------------", true);
     xSemaphoreGive(diagPortSem);
   }
+  #endif
   potVal[0] = '\0';
   funVal[0] = '\0';
   speedStep = nvs_get_int ("speedStep", 4);
@@ -616,10 +618,12 @@ void locomotiveDriver()
     Serial.printf ("%s Ending locoDriver session\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
+  #ifdef USEWIFI
   if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     diagEnqueue ('e', (char *) "### Stopping loco driving session -----------------------------------------", true);
     xSemaphoreGive(diagPortSem);
   }
+  #endif
 }
 
 #ifdef BRAKEPRESPIN

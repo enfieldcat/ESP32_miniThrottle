@@ -144,7 +144,7 @@ void connectionManager(void *pvParameters)
           }
         }
         // Preference is to access access-points by order of signal strength preference
-        else {
+        else if (numberOfNetworks > 0) {
           int entryNum[numberOfNetworks];
           int strength[numberOfNetworks];
           int limit = numberOfNetworks - 1;
@@ -208,6 +208,14 @@ void connectionManager(void *pvParameters)
             if (strcmp (stapass, "none") == 0) WiFi.begin(stassid, NULL);
             else WiFi.begin(stassid, stapass);
             xSemaphoreGive(tcpipSem);
+            if ((nvs_get_int("WiFiMode", defaultWifiMode) & 2) == 0) {
+              #ifdef WEBLIFETIME
+              startWeb = true;
+              #endif
+              #ifdef RELAYPORT
+              startRelay = true;
+              #endif
+            }
           }
           if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             diagEnqueue ('e', (char*) "### connecting to WiFi ", false);
@@ -224,7 +232,7 @@ void connectionManager(void *pvParameters)
         // Warn if no candidates found
         else {
           if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            Serial.printf ("%s WiFi Station mode: no access point found.\r\n", getTimeStamp());
+            Serial.printf ("%s WiFi Station mode: no known access point found.\r\n", getTimeStamp());
             xSemaphoreGive (consoleSem);
           }
           if ((nvs_get_int("WiFiMode", defaultWifiMode) & 2) == 0) {
@@ -361,11 +369,15 @@ else wifi_scanNetworks (false);
 void wifi_scanNetworks(bool echo)
 {
   numberOfNetworks = WiFi.scanNetworks();
+  if (numberOfNetworks > 65500) numberOfNetworks = 0;
   if (echo && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf("Number of networks found: %d\r\n", numberOfNetworks);
-    Serial.printf("%-16s %8s %-17s Channel Type\r\n", "Name", "Strength", "Address");
-    for (int i = 0; i < numberOfNetworks; i++) {
-      Serial.printf ("%-16s %8d %-17s %7d %s\r\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.channel(i), wifi_EncryptionType(WiFi.encryptionType(i)));
+    if (numberOfNetworks == 0) Serial.printf ("No networks found.\r\n");
+    else {
+      Serial.printf("Number of networks found: %d\r\n", numberOfNetworks);
+      Serial.printf("%-16s %8s %-17s Channel Type\r\n", "Name", "Strength", "Address");
+      for (int i = 0; i < numberOfNetworks; i++) {
+        Serial.printf ("%-16s %8d %-17s %7d %s\r\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.channel(i), wifi_EncryptionType(WiFi.encryptionType(i)));
+      }
     }
     xSemaphoreGive(consoleSem);
   }
@@ -598,6 +610,7 @@ void txPacket (const char *header, const char *pktData)
     serial_dev.write ((const uint8_t*)pktData, strlen(pktData));
     serial_dev.write ((const uint8_t*)"\r\n", 2);
     xSemaphoreGive(serialSem);
+    #ifdef USEWIFI
     if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       diagEnqueue ('p', (char *) "--> ", false);
       if (header!=NULL) {
@@ -606,6 +619,7 @@ void txPacket (const char *header, const char *pktData)
       diagEnqueue ('p', (char*) pktData, true);
       xSemaphoreGive(diagPortSem);
     }
+    #endif
     if (showPackets) {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print ("--> ");

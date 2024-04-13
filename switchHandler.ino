@@ -155,10 +155,12 @@ void switchMonitor(void *pvParameters)
             case ENCODE_SW:
               if (readChar==0) {
                 if (showKeypad) Serial.println (submitKey);
+                #ifdef USEWIFI
                 if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                   diagEnqueue ('k', (char *) "S", false);
                   xSemaphoreGive(diagPortSem);
                 }
+                #endif
                 xQueueSend (keyboardQueue, &submitKey, 0);
               }
               break;
@@ -176,18 +178,22 @@ void switchMonitor(void *pvParameters)
       if (++detentCount >= nvs_get_int ("detentCount", 2)) {
         if (encodeValue > 100) {
           if (showKeypad) Serial.println (downKey);
+          #ifdef USEWIFI
           if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             diagEnqueue ('k', (char *) "D", false);
             xSemaphoreGive(diagPortSem);
           }
+          #endif
           xQueueSend (keyboardQueue, &downKey, 0);
         }
         else {
           if (showKeypad) Serial.println (upKey);
+          #ifdef USEWIFI
           if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             diagEnqueue ('k', (char *) "U", false);
             xSemaphoreGive(diagPortSem);
           }
+          #endif
           xQueueSend (keyboardQueue, &upKey, 0);
         }
         encoder.setCount (100);
@@ -261,6 +267,7 @@ void sendDirChange (uint8_t fwdPin, uint8_t revPin)
   }
   if (showKeypad) Serial.println (directionCode);
   xQueueSend (keyboardQueue, &directionCode, 0);
+  #ifdef USEWIFI
   if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     char tmpStr[2];
     tmpStr[0] = directionCode;
@@ -268,6 +275,7 @@ void sendDirChange (uint8_t fwdPin, uint8_t revPin)
     diagEnqueue ('k', (char *) tmpStr, false);
     xSemaphoreGive(diagPortSem);
   }
+  #endif
 }
 
 

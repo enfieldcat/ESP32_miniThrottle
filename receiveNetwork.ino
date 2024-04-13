@@ -60,10 +60,12 @@ void receiveNetData(void *pvParameters)
     }
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
+  #ifdef USEWIFI
   if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     diagEnqueue ('e', (char *) "### Starting network/serial receiver service ------------------------------", true);
     xSemaphoreGive(diagPortSem);
   }
+  #endif
   wiCliConnected = true;
   setInitialData();
   #ifdef SERIALCTRL
@@ -120,11 +122,13 @@ void receiveNetData(void *pvParameters)
             #endif
             if (cmdProtocol==DCCEX && inChar=='>') inBuffer[bufferPtr++] = '>';
             inBuffer[bufferPtr] = '\0';
+            #ifdef USEWIFI
             if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               diagEnqueue ('p', (char *) "<-- ", false);
               diagEnqueue ('p', inBuffer, true);
               xSemaphoreGive(diagPortSem);
             }
+            #endif
             processPacket (inBuffer);
             bufferPtr = 0;
           }
@@ -153,10 +157,12 @@ void receiveNetData(void *pvParameters)
             Serial.printf ("%s Missed keepalive packet - unresponsive connection\r\n", getTimeStamp());
             xSemaphoreGive(consoleSem);
           }
+          #ifdef USEWIFI
           if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             diagEnqueue ('e', (char *) "### Missed keepalive packet - unresponsive connection ---------------------", true);
             xSemaphoreGive(diagPortSem);
           }
+          #endif
         }
         else xSemaphoreGive(shmSem);
       }
@@ -164,8 +170,8 @@ void receiveNetData(void *pvParameters)
     }
     #endif
   }
-  client.stop();
   #ifndef SERIALCTRL
+  client.stop();
   #ifdef TRACKPWR
   digitalWrite(TRACKPWR, LOW);
   #endif
@@ -184,10 +190,12 @@ void receiveNetData(void *pvParameters)
     xSemaphoreGive(tcpipSem);
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
+  #ifdef USEWIFI
   if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     diagEnqueue ('e', (char *) "### Stopping network/serial receiver service ------------------------------", true);
     xSemaphoreGive(diagPortSem);
   }
+  #endif
   vTaskDelete( NULL );
 }
 

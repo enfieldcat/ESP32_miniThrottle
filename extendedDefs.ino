@@ -227,11 +227,23 @@ SOFTWARE.
     #if ESPMODEL == ESP32C3
     { 20,           (char*)"Console - Tx" },
     { 21,           (char*)"Console - Rx" }
+    #elif ESPMODEL == ESP32C2
+    { 20,           (char*)"Console - Tx" },
+    { 19,           (char*)"Console - Rx" }
     #elif ESPMODEL == ESP32S3
+    { 43,           (char*)"Console - Tx" },
+    { 44,           (char*)"Console - Rx" }
+    #elif ESPMODEL == ESP32S2
     { 43,           (char*)"Console - Tx" },
     { 44,           (char*)"Console - Rx" }
     #else
     { 1,            (char*)"Console - Tx" },
-    { 3,            (char*)"Console - Rx" }
+    { 3,            (char*)"Console - Rx" },
+    { 6,            (char*)"Internal Flash - sdclk" },
+    { 7,            (char*)"Internal Flash - data0" },
+    { 8,            (char*)"Internal Flash - data1" },
+    { 9,            (char*)"Internal Flash - data2" },
+    { 10,           (char*)"Internal Flash - data3" },
+    { 11,           (char*)"Internal Flash - sdcmd" }
     #endif
   }; 

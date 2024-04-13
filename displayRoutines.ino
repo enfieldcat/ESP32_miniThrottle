@@ -872,6 +872,7 @@ void displayInfo()
   }
   if (currentOpt == 3) {
     currentOpt++;
+    #ifdef USEWIFI
     if (ssid[0]!='\0') {
       IPAddress ip = WiFi.localIP();
       if (charsPerLine < 20)
@@ -884,6 +885,7 @@ void displayInfo()
       displayScreenLine (outData, lineNr++, false);
     }
     if (lineNr >= linesPerScreen) return;
+    #endif
   }
   if (currentOpt == 4) {
     currentOpt++;

@@ -47,6 +47,7 @@ private:
   uint16_t myProcID = 0;
   int8_t stackPtr = 0;
   bool runnableAuto = true;
+  bool evalRGB = false;
 
   void push (float value)
   {
@@ -357,6 +358,18 @@ private:
       else if (strcmp (varcopy, "uptime")       == 0) retval = esp_timer_get_time() / (uS_TO_S_FACTOR * 60.0);
       else if (strcmp (varcopy, "cpufreq")      == 0) retval = ESP.getCpuFreqMHz();
       else if (strcmp (varcopy, "xtalfreq")     == 0) retval = getXtalFrequencyMhz();
+      else if (strcmp (varcopy, "psram")        == 0) retval = ESP.getPsramSize();
+      else if (strcmp (varcopy, "psramfree")    == 0) retval = ESP.getFreePsram();
+      else if (strcmp (varcopy, "flashsize")    == 0) retval = (spi_flash_get_chip_size() / (1024 * 1024));
+      #ifdef LED_BUILTIN
+      else if (strcmp (varcopy, "ledbuiltin")   == 0) retval = LED_BUILTIN;
+      #endif
+      #ifdef RGB_BUILTIN
+      else if (strcmp (varcopy, "rgbbuiltin")   == 0) retval = RGB_BUILTIN;
+      #endif
+      #ifdef RGB_BRIGHTNESS
+      else if (strcmp (varcopy, "rgbbrightness") == 0) retval = RGB_BRIGHTNESS;
+      #endif
       #ifndef NODISPLAY
       else if (strcmp (varcopy, "screenwidth")  == 0) retval = screenWidth;
       else if (strcmp (varcopy, "screenheight") == 0) retval = screenHeight;
@@ -534,10 +547,21 @@ private:
           }
         }
       }
-      if( stackPtr > 1 ) {
-        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          Serial.printf ("%d too many arguments on stack.\r\n", (stackPtr-1));
-          xSemaphoreGive(consoleSem);
+      if (evalRGB) {
+        evalRGB = false;
+        if( stackPtr != 3 ) {
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("Found %d arguments on stack, need 3 to set RGB.\r\n", stackPtr);
+            xSemaphoreGive(consoleSem);
+          }
+        }
+      }
+      else {
+        if( stackPtr > 1 ) {
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("%d too many arguments on stack.\r\n", (stackPtr-1));
+            xSemaphoreGive(consoleSem);
+          }
         }
       }
       return (lifoStack[0]);
@@ -608,6 +632,7 @@ private:
           break;
         case 3 :   // goto
           if (jumpTable != NULL && nparam>1) {
+            /*
             bool notFound = true;
             for (uint16_t j=0; notFound && j<jumptableSize; j++) {
               if (strcmp (jumpTable[j].label, param[1]) == 0) {
@@ -619,6 +644,8 @@ private:
               Serial.printf ("%s Unrecognised label in line %d: %s\r\n", getTimeStamp(), lineNr+1, inLine);
               xSemaphoreGive(consoleSem);
             }
+            */
+            if (nparam == 2 || calc (nparam-2, &param[2]) > 0.5) currentLine = lineTable[lineNr].param;
           }
           break;
         case 4 :   // waitfor  - break from loop if killed during wait
@@ -728,51 +755,57 @@ private:
               }
             }
             else if (strncmp (param[1], "localpin.", 9) == 0) {
-              float temp = calc (nparam-2, &param[2]);
-              if (util_str_isa_int(&param[1][9])) {
-                uint8_t pinNr = util_str2int(&param[1][9]);
-                uint8_t assignment = 0;
-                uint8_t channel = 0;
-                bool notFound = true;
-                if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-                  for (uint8_t i=0; notFound && localPinTable[i].pinNr<255; i++) if (pinNr == localPinTable[i].pinNr) {
-                    assignment = localPinTable[i].assignment;
-                    channel    = localPinTable[i].channel;
-                    notFound   = false;
-                  } 
-                  xSemaphoreGive(procSem);
-                  if (notFound) {
-                    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-                      Serial.printf ("%s Pin %d is not defined\r\n", getTimeStamp(), pinNr);
-                      xSemaphoreGive(consoleSem);
-                    }
-                  }
-                  else switch (assignment) {
-                    case DOUT:
-                      if (temp < 0.5) digitalWrite(pinNr, LOW);
-                      else digitalWrite(pinNr, HIGH);
-                      break;
-                    #if ESPMODEL == ESP32
-                    case AOUT:
-                      dacWrite (pinNr, temp);
-                      break;
-                    #endif
-                    case PWM:
-                      if (temp < 0) temp = 0;
-                      else if (temp > 255) temp = 255;
-                      ledcWrite(channel, temp);
-                      break;
-                    default:
-                      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-                        Serial.printf ("%s Pin %d is not an output\r\n", getTimeStamp(), pinNr);
-                        xSemaphoreGive(consoleSem);
-                      }
+              uint8_t pinNr = 0;
+              uint8_t assignment = 0;
+              uint8_t channel = 0;
+              bool notFound = true;
+              float temp = 0.00;
+              if (util_str_isa_int(&param[1][9]))
+                pinNr = util_str2int(&param[1][9]);
+              else
+                pinNr = ((int) getvar (&param[1][9])) & 255;
+              if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                for (uint8_t i=0; notFound && localPinTable[i].pinNr<255; i++) if (pinNr == localPinTable[i].pinNr) {
+                  assignment = localPinTable[i].assignment;
+                  channel    = localPinTable[i].channel;
+                  notFound   = false;
+                } 
+                xSemaphoreGive(procSem);
+                if (assignment == RGB) evalRGB = true;
+                temp = calc (nparam-2, &param[2]);
+                if (notFound) {
+                  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                    Serial.printf ("%s Pin %d is not defined\r\n", getTimeStamp(), pinNr);
+                    xSemaphoreGive(consoleSem);
                   }
                 }
-              }
-              else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-                Serial.printf ("%s %s appears to have non numeric pin number\r\n", getTimeStamp(), param[1]);
-                xSemaphoreGive(consoleSem);
+                else if (pinNr>0 || strcmp(&param[1][9], "0") == 0) switch (assignment) {
+                case DOUT:
+                  if (temp < 0.5) digitalWrite(pinNr, LOW);
+                  else digitalWrite(pinNr, HIGH);
+                  break;
+                #if ESPMODEL == ESP32
+                case AOUT:
+                  dacWrite (pinNr, temp);
+                  break;
+                #endif
+                case PWM:
+                  if (temp < 0) temp = 0;
+                  else if (temp > 255) temp = 255;
+                  ledcWrite(channel, temp);
+                  break;
+                #ifdef USENEOPIXEL
+                case RGB:
+                  if (stackPtr == 3)
+                    neopixelWrite(pinNr, lifoStack[0], lifoStack[1], lifoStack[2]);
+                  break;
+                #endif
+                default:
+                  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                    Serial.printf ("%s Pin %d is not an output\r\n", getTimeStamp(), pinNr);
+                    xSemaphoreGive(consoleSem);
+                  }
+                }
               }
             }
           }
@@ -791,13 +824,17 @@ private:
             uint16_t initialVal = 0;
             uint8_t function = 99;
             uint8_t pinNr = 255;
-            if (nparam>2 && util_str_isa_int(param[1])) {
-              pinNr = util_str2int(param[1]);
+            if (nparam>2) {
+              if (util_str_isa_int(param[1]))
+                pinNr = util_str2int(param[1]);
+              else
+                pinNr = ((int) getvar (param[1])) & 255;
               if      (strcasecmp (param[2], "DIN")  == 0) function = DIN;
               else if (strcasecmp (param[2], "DOUT") == 0) function = DOUT;
               else if (strcasecmp (param[2], "AIN")  == 0) function = AIN;
               else if (strcasecmp (param[2], "AOUT") == 0) function = AOUT;
               else if (strcasecmp (param[2], "PWM")  == 0) function = PWM;
+              else if (strcasecmp (param[2], "RGB")  == 0) function = RGB;
               else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 Serial.printf ("%s Unknown parameter %s for pin %d in line %d\r\n", getTimeStamp(), param[2], pinNr, lineNr+1);
                 xSemaphoreGive(consoleSem);
@@ -810,9 +847,16 @@ private:
                     xSemaphoreGive(consoleSem);
                   }
                 }
-                else initialVal = calc (nparam-3, &param[3]);
+                else {
+                  if (function == RGB) evalRGB = true;
+                  initialVal = calc (nparam-3, &param[3]);
+                  }
                }
-              if (pinNr!=255) autoInitPin (pinNr, function, initialVal);
+              if (pinNr!=255 && (pinNr!=0 || strcmp (param[1], "0") == 0)) autoInitPin (pinNr, function, initialVal);
+              else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                Serial.printf ("%s Cannot assign %d pin in line %d\r\n", getTimeStamp(), pinNr, lineNr+1);
+                xSemaphoreGive(consoleSem);
+              }
             }
           }
           break;
@@ -832,20 +876,24 @@ private:
   {
     bool ok = true;
     uint8_t i = 0;
-    char* typeLabel[] = {"DIN", "DOUT", "AIN", "AOUT", "PWM" };
+    char* typeLabel[] = {"DIN", "DOUT", "AIN", "AOUT", "PWM", "RGB" };
     if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s autoInitPin(%d, %d, %d)\r\n", getTimeStamp(), pinNr, function, initVal);
       xSemaphoreGive(consoleSem);
     }
     // Sanity check parameters
-    if (pinNr > MAXPINS) {
+    if (pinNr >= MAXPINS
+      #ifdef LED_BUILTIN
+      && pinNr != LED_BUILTIN
+      #endif
+      ) {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf ("%s Pin %d out of range\r\n", getTimeStamp(), pinNr);
         xSemaphoreGive(consoleSem);
       }
       return;
     }
-    if (function >PWM) {
+    if (function > RGB) {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.printf ("%s Pin %d assigned invalid function\r\n", getTimeStamp(), pinNr);
         xSemaphoreGive(consoleSem);
@@ -856,7 +904,12 @@ private:
     #if ESPMODEL == ESP32
     if (function == AIN  && pinNr < 32) ok = false;
     if (function == AOUT && (pinNr < 25 || pinNr > 26)) ok = false;
-    if ((function == PWM || function == DOUT)  &&  pinNr > 33) ok = false;
+    if ((function == PWM || function == DOUT || function == RGB)  &&  pinNr > 33) ok = false;
+    #elif ESPMODEL == ESP32S2
+    if (function == AIN  && pinNr > 10) ok = false;
+    if (function == DOUT && pinNr > 45) ok = false;
+    if (function == AOUT && (pinNr < 17 || pinNr > 18)) ok = false;
+    if ((function == PWM || function == DOUT || function == RGB)  &&  pinNr > 45) ok = false;
     #elif ESPMODEL == ESP32S3
     if (function == AIN  && (pinNr < 3 || pinNr > 10)) ok = false;
     if (function == AOUT) ok = false;
@@ -925,6 +978,12 @@ private:
             ledcWrite(ledChannel, initVal);
           }
           break;
+        #ifdef USENEOPIXEL
+        case RGB:
+          if (stackPtr == 3)
+            neopixelWrite(pinNr, lifoStack[0], lifoStack[1], lifoStack[2]);
+          break;
+        #endif
         }
       }
     }
@@ -970,11 +1029,13 @@ private:
       }
       // now build table of lines and jump table
       {
+        // Create a jump table and clear contents
         uint32_t mallocSize = 1+(jumptableSize*sizeof(jumpTable_s));
         if (mallocSize > 0) {
           jumpTable = (jumpTable_s*) malloc (mallocSize);
           for (uint32_t z=0; z<mallocSize; z++) ((char*)jumpTable)[z]='\0';
         }
+        // Create a line table and clear contents
         mallocSize = 1+(numberOfLines*sizeof(lineTable_s));
         if (mallocSize > 0) {
           lineTable = (lineTable_s*) malloc (mallocSize);
@@ -982,8 +1043,10 @@ private:
         }
         if (lineTable != NULL) {
           for (int n=0; n<sizeOfFile; n++) {
+            // Split the automation into lines starting with text
             while (automationData[n] == '\0' && n<sizeOfFile) n++;  // move to start of text
             lineTable[lineNr].start = &(automationData[n]);         // save table of line starts
+            // propulate the jump table if it is a jump
             if (automationData[n] == ':') {
                 if (strlen(&automationData[n]) >= LABELSIZE) {      // truncate oversized labels
                 int j = n + (LABELSIZE - 1);
@@ -992,15 +1055,53 @@ private:
               jumpTable[labelNr].jumpTo = lineNr;                   // save jump table data
               strcpy (jumpTable[labelNr++].label, &(automationData[n]));
             }
+            // find the token of each line
             lineTable[lineNr].token = 250;
             for (uint8_t z=0; z<sizeof(runTokens)/sizeof(char*) && lineTable[lineNr].token==250; z++) {
               tPtr = (char*) runTokens[z];
               if (strlen(lineTable[lineNr].start)>=strlen(tPtr) && strncmp(lineTable[lineNr].start, tPtr, strlen(tPtr)) == 0)
                 lineTable[lineNr].token = z;
             }
+            if (lineTable[lineNr].token == 250) {
+              runnableAuto = false;
+              if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                Serial.printf ("%s Unrecognised keyword in line %d, automation is unrunnable\r\n", getTimeStamp(), (n+1));
+                xSemaphoreGive(consoleSem);
+              }
+            }
             while (automationData[n] != '\0' && n<sizeOfFile) n++;  // move to end of text
             lineNr++;
           }
+          // Scan for jumps and update the line they should jump to
+          // wait to the tables are built and do on a second pass, so we know where to find forward jumps.
+          for (uint16_t n=0; n<numberOfLines; n++) if (lineTable[n].token == 3) {
+            uint8_t z=0;
+            bool notFound = true;
+            char myLabel[LABELSIZE];
+            char *tPtr = lineTable[n].start + 5;
+            while (*tPtr == ' ' && *tPtr != '\0') tPtr++;
+            while (*tPtr != ' ' && *tPtr != '\0') {
+              myLabel[z] = *tPtr;
+              z++;
+              tPtr++;
+            }
+            myLabel[z] = '\0';
+            for (uint16_t j=0; notFound && j<jumptableSize; j++) {
+              if (strcmp (jumpTable[j].label, myLabel) == 0) {
+                notFound = false;
+                lineTable[n].param = jumpTable[j].jumpTo;
+              }
+            }
+            if (notFound) {
+              runnableAuto = false;
+              if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                Serial.printf ("%s Label %s references nothing in line %d, automation is unrunnable\r\n", getTimeStamp(), myLabel, (n+1));
+                xSemaphoreGive(consoleSem);
+              }
+            }
+          }
+          // Now ready to run
+          //
           //mt_dump ((char*)automationData, sizeOfFile);
           //mt_dump ((char*)lineTable, (numberOfLines*sizeof(lineTable_s)));
           //mt_dump ((char*)jumpTable, (jumptableSize*sizeof(jumpTable_s)));

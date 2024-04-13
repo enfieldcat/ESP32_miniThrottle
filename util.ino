@@ -501,7 +501,7 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
         Serial.print('\r');
         if (replay || bufPtr == BUFFSIZE){
           cmdBuffer[bufPtr] = '\0';
-          if (cmdBuffer[0] != '#') processSerialCmd(cmdBuffer); // if 1st char in line is a '#' it is a comment
+          if (cmdBuffer[0] != '#') processSerialCmd((char*) cmdBuffer); // if 1st char in line is a '#' it is a comment
           bufPtr = 0;
         }
       }

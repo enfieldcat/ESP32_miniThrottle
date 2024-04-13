@@ -1699,7 +1699,7 @@ void mkWebFunctionMap (WiFiClient *myClient, char *postData, uint16_t dataSize, 
 \* --------------------------------------------------------------------------- */
 void mkWebDeviceDescript (WiFiClient *myClient)
 {
-  esp_chip_info_t chip_info;
+  // esp_chip_info_t chip_info;
   uint32_t throt_time = 36;
   uint16_t mins  = esp_timer_get_time() / (uS_TO_S_FACTOR * 60.0);
   uint16_t hours = mins / 60;
@@ -1715,7 +1715,7 @@ void mkWebDeviceDescript (WiFiClient *myClient)
   }
   
   hours = hours - (days * 24);
-  esp_chip_info(&chip_info);
+  // esp_chip_info(&chip_info);
 
   if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (fc_time != throt_time) {
@@ -1734,11 +1734,11 @@ void mkWebDeviceDescript (WiFiClient *myClient)
   if (APrunning) {
     myClient->printf (" (192.168.4.1)");
   }
-  myClient->printf ((const char*)"</td></tr><tr><td align=\"right\">Hardware:</td><td>%d core ESP32 revision %d, flash = %d MB %s</td></tr>", \
-     chip_info.cores, \
+  myClient->printf ((const char*)"</td></tr><tr><td align=\"right\">Hardware:</td><td>%d core %s revision %d, flash = %d MB</td></tr>", \
+     coreCount, \
+     ESP.getChipModel(), \
      ESP.getChipRevision(), \
-     spi_flash_get_chip_size() / (1024 * 1024), \
-     (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
+     spi_flash_get_chip_size() / (1024 * 1024));
   myClient->printf ((const char*)"<tr><td align=\"right\">Software:</td><td>%s %s</td></tr>", PRODUCTNAME, VERSION);
   myClient->printf ((const char*)"<tr><td align=\"right\">Compile time:</td><td>%s %s</td></tr>", __DATE__, __TIME__);
   myClient->printf ((const char*)"<tr><td align=\"right\">Uptime:</td><td>");
@@ -1748,6 +1748,10 @@ void mkWebDeviceDescript (WiFiClient *myClient)
   myClient->printf ((const char*)"%s%%)</td></tr>", util_ftos ((ESP.getFreeHeap()*100.0)/ESP.getHeapSize(), 1));
   myClient->printf ((const char*)"<tr><td align=\"right\">Min Free Memory:</td><td>%s bytes (", util_ftos (ESP.getMinFreeHeap(), 0));
   myClient->printf ((const char*)"%s%%)</td></tr>", util_ftos ((ESP.getMinFreeHeap()*100.0)/ESP.getHeapSize(), 1));
+  if (ESP.getPsramSize() > 0) {
+    myClient->printf ((const char*)"<tr><td align=\"right\">Free PSRAM:</td><td>%s bytes (", util_ftos (ESP.getFreePsram(), 0));
+    myClient->printf ((const char*)"%s%%)</td></tr>", util_ftos ((ESP.getFreePsram()*100.0)/ESP.getPsramSize(), 1));
+  }
   myClient->printf ((const char*)"<tr><td align=\"right\">Non Volatile Storage:</td><td>%d x 32 byte blocks</td></tr>", nvs_get_freeEntries());
   myClient->printf ((const char*)"<tr><td align=\"right\">CPU Frequency:</td><td>%s MHz</td></tr>", util_ftos (ESP.getCpuFreqMHz(), 0));
   if (strlen(ssid) > 0) {

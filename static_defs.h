@@ -36,7 +36,9 @@ SOFTWARE.
 #ifndef NODISPLAY
 #include "lcdgfx.h"
 #include <Keypad.h>
+#ifdef ENCODE_UP
 #include <ESP32Encoder.h>
+#endif
 #endif
 // Used for hardware inspection
 #include "esp_system.h"
@@ -58,7 +60,7 @@ SOFTWARE.
 #undef VERSION
 #endif
 #define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.7g"         // Version string
+#define VERSION     "0.7h"         // Version string
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.
@@ -159,6 +161,10 @@ SOFTWARE.
 // Divisor for converting uSeconds to Seconds
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 
+// command history buffer size in bytes
+#ifndef COMMAND_HISTORY
+#define COMMAND_HISTORY 1024
+#endif
 // automation data
 #define LABELSIZE 16
 
@@ -175,16 +181,24 @@ SOFTWARE.
 
 // default model if not specified elsewhere
 // https://docs.espressif.com/projects/esp-idf/en/v5.0/esp32s3/hw-reference/chip-series-comparison.html
+//
+// Primary target is ESP32 / ESP32-DOWD
+// ESP32-C3: Encoder library won't work, issues with LCDGFX - may have limited application
+// ESP32-S2: Untested
+// ESP32-S3: Limited testing, seems OK
 #define ESP32 1
 #define ESP32C3 2
-#define ESP32S3 3
+#define ESP32S2 3
+#define ESP32S3 4
 #ifndef ESPMODEL
 #define ESPMODEL ESP32
 #endif
 #if ESPMODEL == ESP32
 #define MAXPINS 40
 #elif ESPMODEL == ESPS3
-#define MAXPINS 50
+#define MAXPINS 49
+#elif ESPMODEL == ESPS2
+#define MAXPINS 47
 #else
 #define MAXPINS 22
 #endif
@@ -300,7 +314,7 @@ struct procTable_s {
   char filename[PROCNAMELENGTH];
 };
 enum procStates  { PROCFREE = 7 , PROCDIE = 13, PROCRUN = 17, PROCTRACE = 29 };
-enum pinTypes    { DIN = 0, DOUT = 1, AIN = 2, AOUT = 3, PWM = 4 };
+enum pinTypes    { DIN = 0, DOUT = 1, AIN = 2, AOUT = 3, PWM = 4 , RGB = 5};
 // structure for holding jump table info
 struct jumpTable_s {
   uint16_t jumpTo;

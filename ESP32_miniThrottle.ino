@@ -71,7 +71,9 @@ static SemaphoreHandle_t routeSem     = xSemaphoreCreateMutex();  // used for se
 static SemaphoreHandle_t tcpipSem     = xSemaphoreCreateMutex();
 static SemaphoreHandle_t fastClockSem = xSemaphoreCreateMutex();  // for sending/receiving/displaying fc messages
 static SemaphoreHandle_t shmSem       = xSemaphoreCreateMutex();  // shared memory for used for moved blocks of data between tasks/threads
+#ifdef USEWIFI
 static SemaphoreHandle_t diagPortSem  = xSemaphoreCreateMutex();  // try to only enqueue one message at a time
+#endif
 static SemaphoreHandle_t procSem      = xSemaphoreCreateMutex();  // Process control Semaphore
 #ifdef WEBLIFETIME
 static SemaphoreHandle_t webServerSem = xSemaphoreCreateMutex();  // used by different web server threads
@@ -97,7 +99,9 @@ static QueueHandle_t dccLocoRefQueue  = xQueueCreate (10, sizeof(uint8_t));  // 
 static QueueHandle_t dccTurnoutQueue  = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc turnout data
 static QueueHandle_t dccRouteQueue    = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc route data
 static QueueHandle_t dccOffsetQueue   = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc array offsets for setup of data
+#ifdef USEWIFI
 static QueueHandle_t diagQueue        = xQueueCreate (256, sizeof(char));    // diagnostic data queue.
+#endif
 static struct locomotive_s   *locoRoster   = (struct locomotive_s*) malloc (sizeof(struct locomotive_s) * MAXCONSISTSIZE);
 static struct turnoutState_s *turnoutState = NULL;  // table of turnout states
 static struct turnout_s      *turnoutList  = NULL;  // table of turnouts
@@ -207,12 +211,16 @@ static bool funcChange        = true;    // in locomotive driving mode, have fun
 static bool speedChange       = false;   // in locomotive driving mode, has speed changed?
 static bool netReceiveOK      = false;
 static bool diagReceiveOK     = false;   // flag to ensure only one cpy is running
+#ifdef USEWIFI
 static bool diagIsRunning     = false;   // run state indicator
+#endif
 static bool APrunning         = false;   // are we running as an access point?
 static bool wiCliConnected    = false;   // manage our own wifi client connected state
 static bool inConfigMenu      = false;   // in config menu flag - config menu can run without server connection
 static bool resetKeepAliveInd = false;   // is the keep alive timer reset if other oackets are sent?
+#ifdef USEWIFI
 static WiFiServer *diagServer = NULL;    // the diagnostic server wifi service
+#endif
 #ifdef POTTHROTPIN
 static bool enablePot         = true;    // potentiometer enable/disable while driving
 #endif
@@ -353,11 +361,8 @@ const char txtWarning[] = { "Warning" };
  * * Start subtasks to handle I/O
  */
 void setup()  {
-  esp_chip_info_t chip_info;
-  //  printf("This is ESP32 chip with %d CPU cores, WiFi%s%s, ",
-  //          chip_info.cores,
-  //          (chip_info.features & CHIP_FEATURE_BT) ? "/BT" : "",
-  //          (chip_info.features & CHIP_FEATURE_BLE) ? "/BLE" : "");
+  // esp_chip_info_t chip_info;
+  bool cpuOK = true;
   Serial.begin(115200);
   #ifdef STARTDELAY
     Serial.printf ("Waiting %d seconds:", STARTDELAY);
@@ -365,7 +370,7 @@ void setup()  {
       Serial.printf (" #");
       delay (1000);
     }
-    printf (" Starting\r\n");
+    Serial.printf (" Starting\r\n");
   #endif
   for (uint8_t n=0; n<MAXCONSISTSIZE; n++) {
     strcpy (locoRoster[n].name, "Void");
@@ -377,37 +382,79 @@ void setup()  {
   nvs_init();
   nvs_get_string ("tname", tname, NAME, sizeof(tname));
   // Print a diagnostic to the console, Prior to starting tasks no semaphore required
-  esp_chip_info(&chip_info);
-  coreCount = chip_info.cores;
-  // Serial.printf  ("\r\n----------------------------------------\r\n");
-  mt_ruler (NULL);
-  Serial.printf  ("Hardware Vers: %d core ESP32 (rev %d) %dMHz, Xtal: %dMHz, %d MB %s flash\r\n", \
-     chip_info.cores, \
+  //esp_chip_info(&chip_info);
+  coreCount = ESP.getChipCores();
+  #if ESPMODEL == ESP32C3
+  printf  ("Hardware Vers: %d core %s (rev %d) %dMHz, Xtal: %dMHz, %d MB flash\r\n", \
+     coreCount, \
+     ESP.getChipModel(), \
      ESP.getChipRevision(), \
      ESP.getCpuFreqMHz(), \
      getXtalFrequencyMhz(), \
-     spi_flash_get_chip_size() / (1024 * 1024), \
-     (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
-  // Optional define in miniThrottle.h - not everyone cares about BogoMips
-  // do test before starting too many other threads, ideally we have a core to ourselves.
+     spi_flash_get_chip_size() / (1024 * 1024));
+  printf ("  Heap Memory: %d bytes\r\n", ESP.getHeapSize());
+  printf ("Console Tx and Rx ports switch to I/O pins %d and %d respectively\r\n", TX, RX);
+  #endif
+  mt_ruler (NULL);
+  Serial.printf  ("Hardware Vers: %d core %s (rev %d) %dMHz, Xtal: %dMHz, %d MB flash\r\n", \
+     coreCount, \
+     ESP.getChipModel(), \
+     ESP.getChipRevision(), \
+     ESP.getCpuFreqMHz(), \
+     getXtalFrequencyMhz(), \
+     spi_flash_get_chip_size() / (1024 * 1024));
+  Serial.printf  ("  Heap Memory: %d bytes\r\n", ESP.getHeapSize());
   Serial.printf  ("Software Vers: %s %s\r\n", PRODUCTNAME, VERSION);
   Serial.printf  (" Compile Time: %s %s\r\n", __DATE__, __TIME__);
   #ifndef NODISPLAY
   Serial.printf  (" Display Type: %s\r\n", DISPLAYNAME);
+  #else
+  Serial.printf  (" Display Type: No Display\r\n");
   #endif   //  NODISPLAY
   Serial.printf  ("Throttle Name: %s\r\n", tname);
   // Optional define in miniThrottle.h, not critical to check partitions on each reboot
-  // Serial.printf  ("----------------------------------------\r\n\r\n");
   mt_ruler (NULL);
   for (uint8_t n=0; n<coreCount; n++) print_reset_reason(n, rtc_get_reset_reason(n));
-  // Serial.printf  ("----------------------------------------\r\n\r\n");
   mt_ruler (NULL);
+  if (nvs_get_int ("bidirectional", 0) == 1) bidirectionalMode = true;
+  #if ESPMODEL == ESP32
+  if (strcmp (ESP.getChipModel(), "ESP32") != 0 && strncmp (ESP.getChipModel(), "ESP32-D", 7) != 0) cpuOK = false;
+  #elif ESPMODEL == ESP32S2
+  if (strcmp (ESP.getChipModel(), "ESP32-S2") != 0) cpuOK = false;
+  #elif ESPMODEL == ESP32S3
+  if (strcmp (ESP.getChipModel(), "ESP32-S3") != 0) cpuOK = false;
+  #elif ESPMODEL == ESP32C2
+  if (strcmp (ESP.getChipModel(), "ESP32-C2") != 0) cpuOK = false;
+  #elif ESPMODEL == ESP32C2
+  if (strcmp (ESP.getChipModel(), "ESP32-C3") != 0) cpuOK = false;
+  #endif
+  if (!cpuOK) {
+    char* cpuName = (char*) ESP.getChipModel();
+    Serial.printf ("CPU type mismatch, requires miniThrottle.h line: #define ESPMODEL ");
+    if      (strcmp (cpuName, "ESP32")    == 0 || strncmp (ESP.getChipModel(), "ESP32-D", 7) == 0) Serial.printf ("ESP32");
+    else if (strcmp (cpuName, "ESP32-S2") == 0) Serial.printf ("ESP32S2");
+    else if (strcmp (cpuName, "ESP32-S3") == 0) Serial.printf ("ESP32S3");
+    else if (strcmp (cpuName, "ESP32-C2") == 0) Serial.printf ("ESP32C2");
+    else                                        Serial.printf ("ESP32C3");
+    Serial.printf ("\r\nInitialisation halted, please define and recompile.\r\n");
+    while (1 == 1) sleep (3600);
+  }
+  #ifdef SHOWPARTITIONS
+  displayPartitions();
+  #endif    // SHOWPARTITIONS
+  if (showPinConfig()) Serial.printf ("%s Basic hardware check passed.\r\n", getTimeStamp());
+  else {
+    Serial.printf ("%s Basic hardware check failed.\r\n", getTimeStamp());
+    Serial.printf ("%s Some I/O pins may have more than one assignment.\r\n", getTimeStamp());
+    Serial.printf ("%s Reconfigure and recompile required to proceed.\r\n", getTimeStamp());
+    Serial.printf ("%s System initialisation aborted.\r\n", getTimeStamp());
+    while (true) delay (10000);
+  }
   #ifdef SHOWPACKETSONSTART
   showPackets = true;
   #endif    //  SHOWPACKETSONSTART
   debounceTime = nvs_get_int ("debounceTime", DEBOUNCEMS);
   screenRotate = nvs_get_int ("screenRotate", 0);
-  if (nvs_get_int ("bidirectional", 0) == 1) bidirectionalMode = true;
   // Also change CPU speed before starting wireless comms
   #ifndef NOCPUSPEED
   {
@@ -423,17 +470,6 @@ void setup()  {
     }
   }
   #endif
-  #ifdef SHOWPARTITIONS
-  displayPartitions();
-  #endif    // SHOWPARTITIONS
-  if (showPinConfig()) Serial.printf ("%s Basic hardware check passed.\r\n", getTimeStamp());
-  else {
-    Serial.printf ("%s Basic hardware check failed.\r\n", getTimeStamp());
-    Serial.printf ("%s Some I/O pins may have more than one assignment.\r\n", getTimeStamp());
-    Serial.printf ("%s Reconfigure and recompile required to proceed.\r\n", getTimeStamp());
-    Serial.printf ("%s System initialisation aborted.\r\n", getTimeStamp());
-    while (true) delay (10000);
-  }
   debuglevel      = nvs_get_int ("debuglevel",    DEBUGLEVEL);
   dccPowerFunc    = nvs_get_int ("dccPower",      DCCPOWER);
   defaultLatchVal = nvs_get_int ("FLatchDefault", FUNCTLATCH);

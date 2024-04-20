@@ -1062,10 +1062,10 @@ private:
               if (strlen(lineTable[lineNr].start)>=strlen(tPtr) && strncmp(lineTable[lineNr].start, tPtr, strlen(tPtr)) == 0)
                 lineTable[lineNr].token = z;
             }
-            if (lineTable[lineNr].token == 250) {
+            if (lineTable[lineNr].token == 250 && lineTable[lineNr].start[0] != ':' && lineTable[lineNr].start[0] != '#') {
               runnableAuto = false;
               if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-                Serial.printf ("%s Unrecognised keyword in line %d, automation is unrunnable\r\n", getTimeStamp(), (n+1));
+                Serial.printf ("%s Unrecognised keyword in line %d, automation is unrunnable\r\n", getTimeStamp(), (lineNr+1));
                 xSemaphoreGive(consoleSem);
               }
             }

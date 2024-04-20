@@ -100,8 +100,8 @@ void switchMonitor(void *pvParameters)
   // deal with the encoder first
   #ifdef ENCODE_UP
   #ifdef ENCODE_DN
-  ESP32Encoder::useInternalWeakPullResistors=UP;
-  encoder.attachFullQuad(ENCODE_UP, ENCODE_DN);
+  ESP32Encoder::useInternalWeakPullResistors = puType::up;
+  encoder.attachHalfQuad(ENCODE_UP, ENCODE_DN);
   encoder.setFilter(1023);
   encoder.setCount (100);
   #endif

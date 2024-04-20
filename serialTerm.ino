@@ -1611,16 +1611,22 @@ void startDiagPort()
 void displayLocos()  // display locomotive data
 {
   const static char dirIndic[3][5] = { "Fwd", "Stop", "Rev" };
+  char owned[7];
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf   ("Locomotive Count = %d\r\n", locomotiveCount);
     if (locomotiveCount > 0 && locomotiveCount<255 && locoRoster!=NULL) {
-      Serial.printf ("+--------+----------------------------------+------+-------+\r\n");
-      Serial.printf ("| %6s | %-32s | %-4s | %s |\r\n", "ID", "Name", "Dir", "Speed");
-      Serial.printf ("+--------+----------------------------------+------+-------+\r\n");
+      Serial.printf ("+--------+----------------------------------+------+-------+-------+\r\n");
+      Serial.printf ("| %6s | %-32s | %-4s | %s | %s |\r\n", "ID", "Name", "Dir", "Speed", "Owned");
+      Serial.printf ("+--------+----------------------------------+------+-------+-------+\r\n");
       for (uint8_t n=0; n<locomotiveCount; n++) {
-        Serial.printf ("| %5d%c | %-32s | %-4s | %5d |\r\n", locoRoster[n].id, locoRoster[n].type, locoRoster[n].name, dirIndic[locoRoster[n].direction], locoRoster[n].speed);
+        if (locoRoster[n].owned) strcpy (owned, "Yes");
+        else owned[0] = '\0';
+        #ifdef RELAYPORT
+        if (locoRoster[n].relayIdx < 10) sprintf (owned, "Rly-%d", locoRoster[n].relayIdx);
+        #endif
+        Serial.printf ("| %5d%c | %-32s | %-4s | %5d | %5s |\r\n", locoRoster[n].id, locoRoster[n].type, locoRoster[n].name, dirIndic[locoRoster[n].direction], locoRoster[n].speed, owned);
       }
-      Serial.printf ("+--------+----------------------------------+------+-------+\r\n");
+      Serial.printf ("+--------+----------------------------------+------+-------+-------+\r\n");
     }
     else Serial.printf ("No locomotives defined.\r\n");
     xSemaphoreGive(consoleSem);
@@ -2509,7 +2515,7 @@ void help(int nparam, char **param)  // show help data
     if (all || strcmp(param[1], "speedstep")==0) {
       Serial.println ((const char*) "speedstep [<1-9>]");
       if (!summary) {
-        Serial.println ((const char*) "    Set the speed change set be each thottle click");
+        Serial.println ((const char*) "    Set the speed change set be each throttle click");
       }
     }
     if (all || strcmp(param[1], "trace")==0) {

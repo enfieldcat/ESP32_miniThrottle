@@ -73,6 +73,7 @@ static SemaphoreHandle_t fastClockSem = xSemaphoreCreateMutex();  // for sending
 static SemaphoreHandle_t shmSem       = xSemaphoreCreateMutex();  // shared memory for used for moved blocks of data between tasks/threads
 #ifdef USEWIFI
 static SemaphoreHandle_t diagPortSem  = xSemaphoreCreateMutex();  // try to only enqueue one message at a time
+static SemaphoreHandle_t rescanSem    = xSemaphoreCreateMutex();  // only one scan of wifi networks at any time
 #endif
 static SemaphoreHandle_t procSem      = xSemaphoreCreateMutex();  // Process control Semaphore
 #ifdef WEBLIFETIME
@@ -294,10 +295,10 @@ const char *cssTemplate = {"* { font-family: system-ui; }\n" \
 };
 #endif  //  WEBLIFETIME
 const char *sampleAuto = {"# Sample automation of power and keypad tasks\n" \
-"# use for repetative testing and system set up\n# Rename as /auto.run to run automatically on start.\n\n" \
-"# delete exit line to allow rest of automation to run\nexit\n\n" \
-"# wait for connection and power on\nwaitfor connected\nrem connected proceeding with automation.\ndelay 1000\npower on\nwaitfor trackpower\n\n" \
-"# Now set up initial route\nroute initial\ndelay 5000\n\n" \
+"# use for repetative testing and system set up\n# Rename as /auto.run to run automatically on start.\n#\n" \
+"# delete exit line to allow rest of automation to run\nexit\n#\n" \
+"# wait for connection and power on\nwaitfor connected\nrem connected proceeding with automation.\ndelay 1000\npower on\nwaitfor trackpower\n#\n" \
+"# Now set up initial route\nroute initial\ndelay 5000\n#\n" \
 "# Do some keypad setup\nkey L\ndelay 1000\nkey U\ndelay 500\nkey U\ndelay 500\nkey U\n" \
 };
 const char *sampleConfig = {"# Sample file for adding definitions to miniThrottle\n" \
@@ -362,6 +363,7 @@ const char txtWarning[] = { "Warning" };
  */
 void setup()  {
   // esp_chip_info_t chip_info;
+  char commandKey = '.';
   bool cpuOK = true;
   Serial.begin(115200);
   #ifdef STARTDELAY
@@ -478,6 +480,12 @@ void setup()  {
   inventoryTurn   = nvs_get_int ("inventoryTurn", LOCALINV);
   inventoryRout   = nvs_get_int ("inventoryRout", LOCALINV);
   for (uint8_t n=0;n<4;n++) dccLCD[n][0] = '\0'; // store empty string in dccLCD array
+  // initialise queues
+  commandKey = '.'; // initialise queue to start
+  xQueueSend (keyboardQueue, &commandKey, 0);
+  xQueueSend (keyReleaseQueue, &commandKey, 0);
+  // xQueueSend (locoUpdateQueue, &commandKey, 0);
+  xQueueSend (dccAckQueue, &commandKey, 0);
   #ifdef RELAYPORT
   relayPort = nvs_get_int ("relayPort", RELAYPORT);
   relayServer = new WiFiServer(relayPort);
@@ -554,6 +562,7 @@ void setup()  {
     SPIFFS.begin (true);
     Serial.printf ("%s SPIFFS filesystem formatted OK.\r\n", getTimeStamp());
   }
+  delay (250);
   sampleConfigExists(SPIFFS);
   #ifdef CERTFILE
   defaultCertExists(SPIFFS);
@@ -582,6 +591,7 @@ void setup()  {
   // Use tasks to process various input and output streams
   // micro controller has enough memory, that stack sizes can be generously allocated to avoid stack overflows
   xTaskCreate(serialConsole, "serialConsole", 8192, NULL, 4, NULL);
+  delay (250);
   #ifdef SERIALCTRL
   cmdProtocol = DCCEX;    // expect it always to be this!
   #else

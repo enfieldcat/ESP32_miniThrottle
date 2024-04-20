@@ -25,6 +25,11 @@
 #define DEBUGLEVEL 1
 
 /* ***********************************************************************\
+ * Newer compilers can support NEO-Pixel hardware
+\*********************************************************************** */
+#define USENEOPIXEL 1
+
+/* ***********************************************************************\
  * SUPPORT HTTP CLIENT
 \*********************************************************************** */
 // On the version 1 of ESP for Arduino the display and http client were compatible

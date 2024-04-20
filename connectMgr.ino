@@ -49,6 +49,8 @@ void connectionManager(void *pvParameters)
   uint8_t index     = 0;
   uint8_t scanIndex = 0;
   uint8_t staPref   = 0;
+  uint8_t bumpCount = 0;
+  uint8_t mywifimode= 0;
   bool networkFound = false;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -57,13 +59,20 @@ void connectionManager(void *pvParameters)
   }
 
   // Scan networks at startup just for the record
-  if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
+  /* if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
     wifi_scanNetworks(true);
     xSemaphoreGive(tcpipSem);
   }
-  else semFailed ("tcpipSem", __FILE__, __LINE__);
+  else semFailed ("tcpipSem", __FILE__, __LINE__); */
+  mywifimode = nvs_get_int("WiFiMode", defaultWifiMode);
+  switch (mywifimode) {
+    case 1: WiFi.mode(WIFI_STA);    break;
+    case 2: WiFi.mode(WIFI_AP);     break;
+    case 3: WiFi.mode(WIFI_AP_STA); break;
+  }
+  WiFi.setMinSecurity(WIFI_AUTH_OPEN);
   // Start AP if required
-  if ((nvs_get_int("WiFiMode", defaultWifiMode) & 2) > 0) {
+  if ((mywifimode & 2) > 0) {
     nvs_get_string ("APname", apssid, tname,  sizeof(apssid));
     nvs_get_string ("APpass", appass, "none", sizeof(appass));
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -79,7 +88,7 @@ void connectionManager(void *pvParameters)
   }
   while (true) {
     // Check if WiFi station mode needs to be connected and is connected
-    if ((nvs_get_int("WiFiMode", defaultWifiMode) & 1) > 0) {
+    if ((mywifimode & 1) > 0) {
       if (WiFi.status() != WL_CONNECTED) {
         if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
           wifi_scanNetworks();
@@ -205,6 +214,7 @@ void connectionManager(void *pvParameters)
           }
           if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
             strcpy (ssid, stassid);
+            WiFi.disconnect();
             if (strcmp (stapass, "none") == 0) WiFi.begin(stassid, NULL);
             else WiFi.begin(stassid, stapass);
             xSemaphoreGive(tcpipSem);
@@ -223,8 +233,24 @@ void connectionManager(void *pvParameters)
             diagEnqueue ('e', (char*) "-------------------------------------------", true);
             xSemaphoreGive(diagPortSem);
           }
-          delay (TIMEOUT);
-          if ((!APrunning) && xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
+          for (uint8_t n=0; n<30 && WiFi.status()!=WL_CONNECTED; n++) delay (TIMEOUT);
+          if (WiFi.status() != WL_CONNECTED) {
+            if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              Serial.printf ("%s WiFi Status = ", getTimeStamp());
+              switch (WiFi.status()) {
+                case WL_IDLE_STATUS:     Serial.printf ("WL_IDLE_STATUS");     break;
+                case WL_NO_SSID_AVAIL:   Serial.printf ("WL_NO_SSID_AVAIL");   break;
+                case WL_SCAN_COMPLETED:  Serial.printf ("WL_SCAN_COMPLETED");  break;
+                case WL_CONNECT_FAILED:  Serial.printf ("WL_CONNECT_FAILED");  break;
+                case WL_CONNECTION_LOST: Serial.printf ("WL_CONNECTION_LOST"); break;
+                case WL_DISCONNECTED:    Serial.printf ("WL_DISCONNECTED");    break;
+                default: Serial.printf ("Unknown"); break;
+              }
+              Serial.printf ("\r\n");
+              xSemaphoreGive (consoleSem);
+            }
+          }
+          if ((!APrunning) && WiFi.status() == WL_CONNECTED && xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
             MDNS.begin(tname);
             xSemaphoreGive(tcpipSem);
           }
@@ -330,6 +356,14 @@ void connectionManager(void *pvParameters)
     }
     #endif // NOT SERIALCTRL
     delay (10000);
+    // rescan networks at minute intervals
+    if (bumpCount++ > 5) {
+      bumpCount = 0;
+      // if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
+        wifi_scanNetworks(false);
+        // xSemaphoreGive(tcpipSem);
+      // }
+    }
   }
   vTaskDelete( NULL );
 }
@@ -368,18 +402,27 @@ else wifi_scanNetworks (false);
 
 void wifi_scanNetworks(bool echo)
 {
-  numberOfNetworks = WiFi.scanNetworks();
-  if (numberOfNetworks > 65500) numberOfNetworks = 0;
-  if (echo && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    if (numberOfNetworks == 0) Serial.printf ("No networks found.\r\n");
-    else {
-      Serial.printf("Number of networks found: %d\r\n", numberOfNetworks);
-      Serial.printf("%-16s %8s %-17s Channel Type\r\n", "Name", "Strength", "Address");
-      for (int i = 0; i < numberOfNetworks; i++) {
-        Serial.printf ("%-16s %8d %-17s %7d %s\r\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.channel(i), wifi_EncryptionType(WiFi.encryptionType(i)));
+  static bool firstRun = true;
+
+  if (WiFi.status() != WL_CONNECTED && xSemaphoreTake(rescanSem, pdMS_TO_TICKS(TIMEOUT/10)) == pdTRUE) {   // one at a time
+    WiFi.disconnect();
+    if (firstRun) firstRun = false;
+    else WiFi.scanDelete();
+    numberOfNetworks = WiFi.scanNetworks();
+    if (numberOfNetworks > 65500) numberOfNetworks = 0;
+    if (echo && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (numberOfNetworks == 0) Serial.printf ("No networks found.\r\n");
+      else {
+        Serial.printf("Number of networks found: %d\r\n", numberOfNetworks);
+        Serial.printf("%-16s %8s %-17s Channel Type\r\n", "Name", "Strength", "Address");
+        for (int i = 0; i < numberOfNetworks; i++) {
+          Serial.printf ("%-16s %8d %-17s %7d %s\r\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.channel(i), wifi_EncryptionType(WiFi.encryptionType(i)));
+        }
       }
+      xSemaphoreGive(consoleSem);
     }
-    xSemaphoreGive(consoleSem);
+    delay (TIMEOUT/10); // avoid back 2 back scans
+    xSemaphoreGive(rescanSem);
   }
 }
 

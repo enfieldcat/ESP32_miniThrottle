@@ -109,7 +109,7 @@ void processWiThrotPacket (char *packet)
     #ifndef SERIALCTRL
     {
       // set to no tracking
-      uint8_t maxMissedKeepAlive = nvs_get_int ("missedKeepAlive", 0);
+      uint8_t maxMissedKeepAlive = nvs_get_int ("missedKeepAlive", 3);
       if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         if (maxMissedKeepAlive > 0) {
           if (maxMissedKeepAlive > 20) maxMissedKeepAlive = 20;
@@ -117,6 +117,10 @@ void processWiThrotPacket (char *packet)
         }
         else maxKeepAliveTO = 0;
         xSemaphoreGive(shmSem);
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s Max misded Keep Alive packets set to %d\r\n", getTimeStamp(), maxMissedKeepAlive);
+          xSemaphoreGive(consoleSem);
+        }
       }
     }
     #endif

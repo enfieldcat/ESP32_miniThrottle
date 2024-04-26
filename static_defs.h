@@ -59,8 +59,8 @@ SOFTWARE.
 #ifdef VERSION
 #undef VERSION
 #endif
-#define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.7i"         // Version string
+#define PRODUCTNAME "miniThrottle" // Branding name
+#define VERSION     "0.7j"         // Version string
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.

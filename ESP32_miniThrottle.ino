@@ -214,6 +214,7 @@ static bool netReceiveOK      = false;
 static bool diagReceiveOK     = false;   // flag to ensure only one cpy is running
 #ifdef USEWIFI
 static bool diagIsRunning     = false;   // run state indicator
+static bool obsessive         = false;   // obsessive connectivity checks
 #endif
 static bool APrunning         = false;   // are we running as an access point?
 static bool wiCliConnected    = false;   // manage our own wifi client connected state
@@ -617,6 +618,8 @@ void setup()  {
   }
   #endif   // DELAYONSTART
   #ifdef USEWIFI
+  if (nvs_get_int ("obsessive", 0) == 1) obsessive = true;
+  else obsessive = false;
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Starting WiFi network services\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);

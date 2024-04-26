@@ -79,7 +79,7 @@ void receiveNetData(void *pvParameters)
   #else
   if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     // set to no tracking
-    uint8_t maxMissedKeepAlive = nvs_get_int ("missedKeepAlive", 0);
+    uint8_t maxMissedKeepAlive = nvs_get_int ("missedKeepAlive", 3);
     if (cmdProtocol == WITHROT && maxMissedKeepAlive > 0) {
       uint16_t keepAliveInterval = nvs_get_int ("relayKeepAlive", 60);
       if (maxMissedKeepAlive < 1 || maxMissedKeepAlive > 20) maxMissedKeepAlive = 20;
@@ -92,7 +92,14 @@ void receiveNetData(void *pvParameters)
   while (netConnState (1)) {
     if (++connChkCount > 20) {  // Reduce calls to connected check, and cache in wiCliConnected variable
       connChkCount = 0;
-      if (!client.connected()) wiCliConnected = false;
+      // if using obsessive checks, require 3 connection failures to declare connection dead
+      if (obsessive && (!client.connected()) && (!client.connected()) && (!client.connected()) && wiCliConnected) {
+        wiCliConnected = false;
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s connection closed to server\r\n", getTimeStamp());
+          xSemaphoreGive(consoleSem);
+        }
+      }
     }
     while (netConnState(2)) {
       checkVar = 0;
@@ -182,6 +189,7 @@ void receiveNetData(void *pvParameters)
   initialDataSent = false;
   #endif
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (WiFi.status() != WL_CONNECTED) Serial.printf ("%s WiFi signal lost\r\n", getTimeStamp());
     Serial.printf ("%s Network connection closed (disconnect)\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
@@ -216,7 +224,7 @@ bool netConnState (uint8_t chkmode)
   }
   else {
     semFailed ("tcpipSem", __FILE__, __LINE__);
-    retval = true;   ///need to assume something else is holding the semaphore and all is actually OK
+    if (chkmode == 1) retval = true;   ///need to assume something else is holding the semaphore and all is actually OK
   }
   return (retval);
 }
@@ -260,7 +268,7 @@ void processPacket (char *packet)
       char relayPacket[packetLength];
       strcpy (relayPacket, packet);
       strcat (relayPacket, "\r\n");
-      for (uint8_t n=0; n<maxRelay; n++) if (remoteSys != NULL && remoteSys[n].client != NULL && remoteSys[n].client->connected()) {
+      for (uint8_t n=0; n<maxRelay; n++) if (remoteSys != NULL && remoteSys[n].client != NULL && ((!obsessive) || remoteSys[n].client->connected() || remoteSys[n].client->connected() || remoteSys[n].client->connected())) {
         reply2relayNode (&remoteSys[n], relayPacket);
       }
     }

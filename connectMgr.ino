@@ -328,8 +328,8 @@ void connectionManager(void *pvParameters)
             xSemaphoreGive (consoleSem);
           }
           connect2server (server, port);
-          delay (TIMEOUT);
-          if ((!wiCliConnected) && client.connected()) wiCliConnected = true;
+          delay (TIMEOUT * 5);
+          if ((!wiCliConnected) && (client.connected() || client.connected())) wiCliConnected = true;
         }
         else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("%s MDNS look up: no services found.\r\n", getTimeStamp());
@@ -349,8 +349,8 @@ void connectionManager(void *pvParameters)
             xSemaphoreGive (consoleSem);
           }
           connect2server (server, port);
-          delay(TIMEOUT);
-          if ((!wiCliConnected) && client.connected()) wiCliConnected = true;
+          delay(TIMEOUT * 5);
+          if ((!wiCliConnected) && (client.connected() || client.connected())) wiCliConnected = true;
         }
       }
     }

@@ -128,7 +128,7 @@ void fc_sendUpdate()
       sprintf (outPacket, "PFT%d<;>%4.2f\r\n", fc_time, fc_multiplier);
       xSemaphoreGive(fastClockSem);
       for (uint8_t n=0; n<maxRelay ; n++) {
-        if (remoteSys[n].client->connected()) {
+        if (remoteSys[n].active && ((!obsessive) || remoteSys[n].client->connected() || remoteSys[n].client->connected())) {
           reply2relayNode (&remoteSys[n], outPacket);
         }
       }

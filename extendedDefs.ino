@@ -62,7 +62,7 @@ SOFTWARE.
     { (char*)"mainMenuMask",   INTEGER,    0,            15,            0,       (char*)   "", (char*)"Main Menu Mask"},
     { (char*)"clientTimeout",  INTEGER,   20,       TIMEOUT,    TIMEOUT/4,       (char*)   "", (char*)"WiFi client timeout"},
     #ifndef SERIALCTRL
-    { (char*)"missedKeepAlive",INTEGER,    0,            20,            0,       (char*)   "", (char*)"Max missed keepalive responses"},
+    { (char*)"missedKeepAlive",INTEGER,    0,            20,            3,       (char*)   "", (char*)"Max missed keepalive responses"},
     { (char*)"resetKeepAlive", INTEGER,    0,             1,            0,       (char*)   "", (char*)"Reset keepalive timer if other traffic sent"},
     #endif
     #ifdef DELAYONSTART
@@ -136,6 +136,7 @@ SOFTWARE.
     { (char*)"dccRtError",     INTEGER,    0,             1,            0,       (char*)   "", (char*)"Stop route setup on error" },
     { (char*)"dccRmLoco",      INTEGER,    0,             1,            0,       (char*)   "", (char*)"Delete locos on DCC-Ex when not in use" },
     { (char*)"staConnect",     INTEGER,    0,             3,            2,       (char*)   "", (char*)"Wifi Station selection criteria" },
+    { (char*)"obsessive",      INTEGER,    0,             1,            0,       (char*)   "", (char*)"Obsessive connection checking" },
     { (char*)"APname",         STRING,     4,            32,            0,      (char*)  NAME, (char*)"Access point name" },
     { (char*)"APpass",         STRING,     4,            32,            0,     (char*) "none", (char*)"Access point password" },
     { (char*)"apChannel",      INTEGER,    1,            13,            6,       (char*)   "", (char*)"Access point channel" },

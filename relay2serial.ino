@@ -68,6 +68,7 @@ void relayListener(void *pvParameters)
     diagEnqueue ('e', (char *) "### Starting relay service ------------------------------------------------", true);
     xSemaphoreGive(diagPortSem);
   }
+  while (remoteSys != NULL) delay (500); // wait for last process tear down to complete
   remoteSys = (relayConnection_s*) malloc (sizeof (relayConnection_s) * maxRelay);
   {
     char* tptr = (char*) remoteSys;
@@ -139,7 +140,13 @@ void relayListener(void *pvParameters)
     }
 
     if (remoteSys!=NULL) {
-      free (remoteSys);
+      bool activeChildren = false;     // flag any active child procs as inactive
+      for (int8_t n=0; n<maxRelay; n++) if (remoteSys[n].active) {
+        activeChildren = true;
+        remoteSys[n].active = false;
+      }
+      if (activeChildren) delay(500);  // give child procs time to die
+      free (remoteSys);                // free up relay data
       remoteSys = NULL;
     }
   }
@@ -350,14 +357,10 @@ void relayHandler(void *pvParameters)
     delay(20);
   }
   // Tear down message
-  if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    thisRelay->active = false;
-    xSemaphoreGive(relaySvrSem);
-  }
   if ((diagIsRunning || debuglevel>0) && xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     char t_buffer [100];
     if (thisRelay->active)
-      sprintf (t_buffer, "--- Relay Client %d %s (%d.%d.%d.%d) disconnecting ------------------------", thisRelay->id, thisRelay->nodeName, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
+      sprintf (t_buffer, "--- Relay Client %d %s (%d.%d.%d.%d) disconnected by network loss ---------", thisRelay->id, thisRelay->nodeName, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
     else
       sprintf (t_buffer, "--- Relay Client %d (%d.%d.%d.%d) disconnected by another relay --------", thisRelay->id, thisRelay->address[0], thisRelay->address[1], thisRelay->address[2], thisRelay->address[3]);
     xSemaphoreGive(relaySvrSem);
@@ -371,6 +374,10 @@ void relayHandler(void *pvParameters)
     }
   }
   else semFailed ("relaySvrSem", __FILE__, __LINE__);
+  if (xSemaphoreTake(relaySvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    thisRelay->active = false;
+    xSemaphoreGive(relaySvrSem);
+  }
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     thisRelay->client->stop();
     xSemaphoreGive(tcpipSem);
@@ -414,15 +421,19 @@ bool relayConnState (struct relayConnection_s *thisRelay, uint8_t chkmode)
   bool retval = false;
 
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    // if in obsessive mode require 3 failures to declare connection dead
     switch (chkmode) {
-    case 1: retval = (APrunning || WiFi.status() == WL_CONNECTED) && thisRelay->client->connected();
+    case 1: retval = (APrunning || WiFi.status() == WL_CONNECTED) && thisRelay->active && ((!obsessive) || thisRelay->client->connected() || thisRelay->client->connected() || thisRelay->client->connected());
             break;
-    case 2: retval = (APrunning || WiFi.status() == WL_CONNECTED) && thisRelay->client->connected() && thisRelay->client->available()>0;
+    case 2: retval = (APrunning || WiFi.status() == WL_CONNECTED) && thisRelay->active && thisRelay->client->connected() && thisRelay->client->available()>0;
             break;
     }
     xSemaphoreGive(tcpipSem);
   }
-  else semFailed ("tcpipSem", __FILE__, __LINE__);
+  else {
+    semFailed ("tcpipSem", __FILE__, __LINE__);
+    if (chkmode == 1) retval = true;
+  }
   return (retval);
 }
 
@@ -460,7 +471,8 @@ void reply2relayNode (struct relayConnection_s *thisRelay, const char *outPacket
     xSemaphoreGive(consoleSem);
   }
   // Only send it to a valid destination or we'll crash the system!
-  if (thisRelay != NULL && thisRelay->client!=NULL && thisRelay->active && thisRelay->client->connected()) {
+  // obsessive check requires a triple failure not to send message
+  if (thisRelay != NULL && thisRelay->client!=NULL && thisRelay->active && ((!obsessive) || thisRelay->client->connected() || thisRelay->client->connected() || thisRelay->client->connected())) {
     // send if the packet looks valid and can go out
     if (outPacket != NULL && strlen(outPacket)>0 && xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       thisRelay->client->write (outPacket, strlen(outPacket));
@@ -928,7 +940,7 @@ void relay2WiThrot (char *outBuffer)
     if (chk < 2) return;                       // relay not initialised or running
   }
   if (outBuffer[0]!='\0') {
-    for (uint8_t n=0; n<maxRelay; n++) if (remoteSys != NULL && remoteSys[n].client!=NULL && remoteSys[n].client->connected()) {
+    for (uint8_t n=0; n<maxRelay; n++) if (remoteSys != NULL && remoteSys[n].client!=NULL && remoteSys[n].active && ((!obsessive) || remoteSys[n].client->connected() || remoteSys[n].client->connected() || remoteSys[n].client->connected())) {
       reply2relayNode (&remoteSys[n], outBuffer);
     }
   }

@@ -59,7 +59,7 @@ void diagPortMonitor (void *pvParameters)
       return;
     }
   }
-  else semFailed ("tcpipSem", __FILE__, __LINE__);
+  else semFailed ("shmSem", __FILE__, __LINE__);
   while ((!APrunning) && WiFi.status() != WL_CONNECTED) delay (1000);
   delay (TIMEOUT);
  

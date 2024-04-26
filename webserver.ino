@@ -1025,7 +1025,7 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   myClient->printf ((const char*)"><label for=\"defProtoDCC\">DCC-Ex</label></td></tr>");
   compInt = nvs_get_int ("clientTimeout", TIMEOUT/4);
   myClient->printf ((const char*)"<tr><td>TCP/IP Timeout</td><td><input type=\"number\" name=\"clientTimeout\" value=\"%d\" min=\"20\" max=\"120000\" size=\"8\"> mS</td></tr>", compInt);
-  compInt = nvs_get_int ("missedKeepAlive", 0);
+  compInt = nvs_get_int ("missedKeepAlive", 3);
   myClient->printf ((const char*)"<tr><td>Max Missed Keepalive</td><td><input type=\"number\" name=\"missedKeepAlive\" value=\"%d\" min=\"0\" max=\"20\" size=\"8\"> missed responses, 0 => ignore WiThrottle keepalive response</td></tr>", compInt);
   compInt = nvs_get_int ("resetKeepAlive", 0);
   myClient->printf ((const char*)"<tr><td>Keepalive timer</td><td><input type=\"radio\" name=\"resetKeepAlive\" id=\"resetKA0\" value=\"0\"");
@@ -1089,6 +1089,13 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   myClient->printf ((const char*)"<input type=\"radio\" id=\"yesPwrTurnout\" name=\"noPwrTurnouts\" value=\"1\"");
   if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"yesPwrTurnout\">Turnouts work without track power</label></td></tr>");
+  compInt = nvs_get_int ("obsessive", 0);
+  myClient->printf ((const char*)"<tr><td>Connectivity Checking</td><td><input type=\"radio\" id=\"noObsessive\" name=\"obsessive\" value=\"0\"");
+  if (compInt == 0) myClient->printf((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"noObsessive\">Rely on keep alive packets</label><br>");
+  myClient->printf ((const char*)"<input type=\"radio\" id=\"yesObsessive\" name=\"obsessive\" value=\"1\"");
+  if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"yesObsessive\">Use obsessive connectivity checks</label></td></tr>");
   myClient->printf ((const char*)"<tr><td>Diagnotics Port</td><td>");
   compInt = nvs_get_int ("diagPort", 23);
   myClient->printf ((const char*)"<input type=\"checkbox\" name=\"diagEnable\" value=\"1\"> enable temporary diagnostics port<br>Port <input name=\"diagPort\" value=\"%d\" type=\"number\" min=\"1\" max=\"65534\" size=\"7\"> (telnet/raw)", compInt);

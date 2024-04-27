@@ -118,7 +118,7 @@ void processWiThrotPacket (char *packet)
         else maxKeepAliveTO = 0;
         xSemaphoreGive(shmSem);
         if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-          Serial.printf ("%s Max misded Keep Alive packets set to %d\r\n", getTimeStamp(), maxMissedKeepAlive);
+          Serial.printf ("%s Max missed Keep Alive packets set to %d\r\n", getTimeStamp(), maxMissedKeepAlive);
           xSemaphoreGive(consoleSem);
         }
       }

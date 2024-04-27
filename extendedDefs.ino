@@ -232,9 +232,17 @@ SOFTWARE.
     { 20,           (char*)"Console - Tx" },
     { 19,           (char*)"Console - Rx" }
     #elif ESPMODEL == ESP32S3
+    { 22,           (char*)"Not Usable" },
+    { 23,           (char*)"Not Usable" },
+    { 24,           (char*)"Not Usable" },
+    { 25,           (char*)"Not Usable" },
     { 43,           (char*)"Console - Tx" },
     { 44,           (char*)"Console - Rx" }
     #elif ESPMODEL == ESP32S2
+    { 22,           (char*)"Not Usable" },
+    { 23,           (char*)"Not Usable" },
+    { 24,           (char*)"Not Usable" },
+    { 25,           (char*)"Not Usable" },
     { 43,           (char*)"Console - Tx" },
     { 44,           (char*)"Console - Rx" }
     #else

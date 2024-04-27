@@ -38,7 +38,7 @@
 #ifdef USEWIFI
 // default location for over the air update, comment out if not required
 // only works if WiFi enabled
-//#define OTAUPDATE   "https://conferre.cf/projects/miniThrottle/"
+//#define OTAUPDATE   "https://camelthorn.cloud/projects/miniThrottle/"
 #endif
 
 /* ***********************************************************************\

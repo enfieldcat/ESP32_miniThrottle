@@ -12,7 +12,7 @@ The unit supports up to 8 concurrent connections when relaying. ie total of rela
 
 Status:
 -------
-More documentation at https://conferre.cf/miniThrottle/miniIntro.php
+More documentation at https://camelthorn.cloud/miniThrottle/miniIntro.php
 
 Description:
 ------------

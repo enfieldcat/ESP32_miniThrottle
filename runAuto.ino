@@ -788,6 +788,10 @@ private:
                 case AOUT:
                   dacWrite (pinNr, temp);
                   break;
+                #elif ESPMODEL == ESP32C2
+                case AOUT:
+                  dacWrite (pinNr, temp);
+                  break;
                 #endif
                 case PWM:
                   if (temp < 0) temp = 0;
@@ -964,6 +968,10 @@ private:
           analogSetPinAttenuation(pinNr, ADC_11db);  // param 2 = attenuation, range 0-3 sets FSD: 0:ADC_0db=800mV, 1:ADC_2_5db=1.1V, 2:ADC_6db=1.35V, 3:ADC_11db=2.6V
           break;
 #if ESPMODEL == ESP32
+        case AOUT:
+          dacWrite (pinNr, initVal);
+          break;
+#elif ESPMODEL == ESP32C2
         case AOUT:
           dacWrite (pinNr, initVal);
           break;

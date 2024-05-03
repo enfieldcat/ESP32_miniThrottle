@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -25,19 +25,172 @@ SOFTWARE.
 */
 
 
+static char* consCmdHistory = NULL;  // ring buffer for command history
+static int consCmdHistoryStart = 0;  // First (oldest) byte in command history
+static int consCmdHistoryEnd = 0;    // Next (newest) byte in command history
+//static int consCmdHistoryReq = 0 ;   // requested command relative to latest in history. 0 = none requested, 1 = previous, 2 = one prior, etc
+
+
+void saveCursorPosition()
+{
+  const char command[] = { 27, '7', '\0' };
+  Serial.printf ((char*) command);
+} 
+ 
+ 
+void restoreCursorPosition()
+{
+  const char command[] = { 27, '8', '\0' };
+  Serial.printf ((char*) command);
+} 
+ 
+ 
+void erase2eol()
+{
+  static char command[] = { 27, '[', '0', 'K', '\0' };
+  Serial.printf ((char*) command);
+} 
+ 
+ 
+ 
+/*
+ * List all command line history
+ */
+void cmdGetHistory ()
+{
+  char outBuffer[BUFFSIZE];
+  uint16_t srcPtr = consCmdHistoryStart;
+  uint16_t dstPtr = 0;
+ 
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s cmdGetHistory()\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
+  while (srcPtr != consCmdHistoryEnd)
+  {
+    outBuffer[dstPtr] = consCmdHistory[srcPtr];
+    if (outBuffer[dstPtr] == '\0') {
+      dstPtr = 0;
+      if (outBuffer[0] != '\0') Serial.printf ("%s\r\n", outBuffer);
+    }
+    else dstPtr++;
+    if (++srcPtr == COMMAND_HISTORY) srcPtr = 0;
+  }
+}
+ 
+ 
+/*
+ * Pull a prior command from the command history stack
+ */
+char* cmdGetHistoryLine (int8_t direction, bool reset)
+{ 
+  static int16_t depth = 0;
+  int16_t curptr;
+  uint16_t backCount;
+  uint16_t n = 0;
+  static char histBuffer[BUFFSIZE];
+  char msgBuffer[5];
+ 
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s cmdGetHistoryLine(%d, bool)\r\n", getTimeStamp(), direction);
+    xSemaphoreGive(consoleSem);
+  }
+  // reset
+  if (reset) {
+    depth = 0;
+    histBuffer[0] = '\0';
+    return (histBuffer);
+  }
+  // no history
+  if (consCmdHistoryStart == consCmdHistoryEnd) {
+    histBuffer[0] = '\0';
+  }
+  else {
+    // work out direction
+    if (direction>0) {
+      depth++;
+      }
+    else {
+      depth--;
+      if (depth <  0) depth = 0;
+      if (depth == 0) return (NULL);
+      }
+    // find start of command
+    curptr = consCmdHistoryEnd-2;
+    if (curptr<0) curptr = COMMAND_HISTORY + curptr;
+    for (backCount=0; curptr!=consCmdHistoryStart && backCount!=depth; curptr--) {
+      if (curptr<0) curptr = COMMAND_HISTORY -1;
+      if (consCmdHistory[curptr] == '\0') backCount++;
+      }
+    if (curptr != consCmdHistoryStart) curptr = curptr + 2;
+    if (consCmdHistory[curptr] == '\0') {
+      curptr++;
+      if (curptr==COMMAND_HISTORY) curptr = 0;
+      }
+    if (depth > backCount) depth = backCount;
+    // copy it to the buffer
+    for (n=0; consCmdHistory[curptr]!='\0'; curptr++, n++) {
+      if (curptr == COMMAND_HISTORY) curptr = 0;
+      histBuffer[n] = consCmdHistory[curptr];
+    }
+    histBuffer[n] = '\0';
+  }
+  return (histBuffer);
+} 
+ 
+ 
+void cmdAppendHistory (char* command)
+{ 
+  static bool wrapped = false;              // is end expected to be < start
+  uint16_t cmdLimit = strlen(command) + 1;  // include the null terminator
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s cmdAppendHistory(%s)\r\n", getTimeStamp(), command);
+    xSemaphoreGive(consoleSem);
+  }
+  if (cmdLimit <= 1 || strcmp(command, "history") == 0) return;
+  for (uint16_t inPtr=0; inPtr<cmdLimit; inPtr++) {
+    consCmdHistory[consCmdHistoryEnd++] = command[inPtr];
+    if (consCmdHistoryEnd >= COMMAND_HISTORY) {
+      consCmdHistoryEnd = 0;
+      wrapped = true;
+      }
+    if (consCmdHistoryEnd == consCmdHistoryStart) {
+      while (consCmdHistory[consCmdHistoryStart] != '\0' || ((wrapped && consCmdHistoryStart <= consCmdHistoryEnd) || ((!wrapped) && consCmdHistoryStart >= consCmdHistoryEnd))) {
+        consCmdHistoryStart++;
+        if (consCmdHistoryStart == COMMAND_HISTORY) {
+          consCmdHistoryStart = 0;
+          wrapped = false;
+        }
+      }
+    }
+  }
+} 
+ 
+
+
 void serialConsole(void *pvParameters)
 // This is the console task.
 {
   (void) pvParameters;
+  char* oldCommand = NULL;
   uint8_t inChar;
-  uint8_t bufferPtr = 0;
-  uint8_t inBuffer[BUFFSIZE];
+  uint8_t escapeMode = 0;
+  //uint8_t bufferPtr = 0;
+  uint8_t inpPtr = 0;
+  uint8_t endPtr = 0;
+  char inBuffer[BUFFSIZE];
+  char onHoldBuffer[BUFFSIZE];
+  static char telnetOffer[] = { 255, 251, 1, 255, 251, 3}; // will echo, will suppress go-ahead, default other settings to won't / dn't
+  uint8_t histDepth=0;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s serialConsole(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
-
+ 
+  if (consCmdHistory == NULL) {
+    consCmdHistory = (char*) malloc (COMMAND_HISTORY);
+    }
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Console ready\r\n", getTimeStamp());
     Serial.printf ("Type \"help\" or \"help summary\" or \"help <command>\" for more information.\r\n\r\n");
@@ -47,41 +200,126 @@ void serialConsole(void *pvParameters)
   while ( true ) {
     if (Serial.available()) {
       inChar = Serial.read();
-      if (inChar == 8 || inChar == 127) {
-        if (bufferPtr > 0) {
-          bufferPtr--;
-          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            Serial.print ((char)0x08);
-            Serial.print ((char) ' ');
-            Serial.print ((char)0x08);
-            xSemaphoreGive(consoleSem);
-          }
+      if (escapeMode == 0 && (inChar==8 || inChar == 127)) {
+        if (inpPtr > 0) {
+          inpPtr--;
+          endPtr--;
+          for (int n=inpPtr; n<endPtr; n++) inBuffer[n] = inBuffer[n+1];
+          // inBuffer[endPtr] = '\0';
+          Serial.printf ("%c", (char) 8);
+          saveCursorPosition();
+          for (int n=inpPtr; n<endPtr; n++) Serial.printf("%c", inBuffer[n]);
+          Serial.printf (" ");
+          restoreCursorPosition();
         }
       }
       else {
         if (inChar == '\n' || inChar == '\r') {
+          inBuffer[endPtr] = '\0'; // Terminate string
+          cmdGetHistoryLine (0, true);
           if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.println ("");
             xSemaphoreGive(consoleSem);
           }
-          if (bufferPtr>0) {
-            inBuffer[bufferPtr] = '\0';
+          if (endPtr>0) {
+            inBuffer[endPtr] = '\0';
+            cmdAppendHistory (inBuffer);
             processSerialCmd (inBuffer);
-            bufferPtr = 0;
+            //bufferPtr = 0;
+            inpPtr = 0;
+            endPtr = 0;
           }
           // Serial.print ("> ");
         }
-        else if (bufferPtr < BUFFSIZE-1) {
-          inBuffer[bufferPtr++] = inChar;
-          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            Serial.print ((char)inChar);
-            xSemaphoreGive(consoleSem);
+        if (inChar == 27 || escapeMode > 0) {
+          //
+          // process escape chars before displaying anything
+          //
+          if (inChar == 27) escapeMode = 1;
+          else if (inChar == 0x9b) escapeMode = 2; // CSI code = same as ESC [
+          else if (escapeMode == 1 && inChar == '[') escapeMode = 2;
+          else if (escapeMode == 2 || (escapeMode == 1 && (inChar=='h' || inChar=='j' || inChar=='k' || inChar=='l'))) {
+            escapeMode = 0;
+            switch (inChar) {
+              case 'A':   // back 1 command
+              case 'k':
+                if (histDepth == 0) {
+                  inBuffer[endPtr] = '\0';
+                  strcpy (onHoldBuffer, inBuffer);
+                }
+                histDepth++;
+                oldCommand = cmdGetHistoryLine (1, false);
+                strcpy (inBuffer, oldCommand);
+                for (uint16_t n=0; n< inpPtr; n++) Serial.printf("%c", (char) 8);
+                Serial.printf ("%s", inBuffer);
+                erase2eol();
+                inpPtr = strlen (inBuffer);
+                endPtr = inpPtr;
+                break;
+              case 'B':  // forward 1 command
+              case 'j':
+                if (histDepth > 0) {
+                  histDepth--;
+                  oldCommand = cmdGetHistoryLine (-1, false);
+                  if (oldCommand == NULL || histDepth < 0) histDepth = 0;
+                  if (histDepth == 0) strcpy (inBuffer, onHoldBuffer);
+                  else strcpy (inBuffer, oldCommand);
+                  for (uint16_t n=0; n< inpPtr; n++) Serial.printf("%c", (char) 8);
+                  Serial.printf ("%s", inBuffer);
+                  erase2eol();
+                  inpPtr = strlen (inBuffer);
+                  endPtr = inpPtr;
+                  }
+                break;
+              case 'C':   // cursor right
+              case 'l':
+                if (inpPtr<endPtr) {
+                  Serial.printf("%c", (char) inBuffer[inpPtr]);
+                  inpPtr++;
+                  }
+                break;
+              case 'D':   // cursor left
+              case 'h':
+                if (inpPtr>0) {
+                  Serial.printf ("%c", (char) 8);
+                  inpPtr--;
+                  }
+                break;
+              case 'H':   // home
+              case '~':
+                for (uint16_t n = 0; n<inpPtr; n++) Serial.printf ("%c", (char) 8);
+                inpPtr = 0;
+                break;
+              case 'F':   // end
+                 for (;inpPtr < endPtr; inpPtr++) Serial.printf("%c", (char) inBuffer[inpPtr]);
+                 break;
+              default:
+                break;
+              }
+            }
+          else escapeMode = 0;
+          //
+          // Write to terminal
+          //
           }
-        }
-      }
-    }
+        else if (endPtr < (BUFFSIZE - 1) && inChar>= ' ' && inChar < 127) {
+          for (int n=endPtr; n>inpPtr; n--) inBuffer[n]=inBuffer[n-1];
+          inBuffer[inpPtr++] = inChar;
+          endPtr++;
+          Serial.printf ("%c", inChar);
+          if (endPtr != inpPtr) {
+            saveCursorPosition();
+            if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              for (int n=inpPtr; n<endPtr; n++) Serial.printf("%c", inBuffer[n]);
+              xSemaphoreGive(consoleSem);
+            }
+            restoreCursorPosition();
+          }
+        }  // end of write to terminal
+      } 
+    }  // end of char avail
     delay(10);
-  }
+  }    // end of while true
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s All console services stopping\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
@@ -89,7 +327,7 @@ void serialConsole(void *pvParameters)
   vTaskDelete( NULL );
 }
 
-void processSerialCmd (uint8_t *inBuffer)
+void processSerialCmd (char *inBuffer)
 {
   char   *param[MAXPARAMS];
   uint8_t nparam;
@@ -136,7 +374,9 @@ void processSerialCmd (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "debug") == 0)         mt_set_debug        (nparam, param);
   else if (nparam==3 && (strcmp (param[0], "del") == 0 || strcmp (param[0], "delete") == 0)) mt_del_gadget (nparam, param);
   else if (nparam<=2 && strcmp (param[0], "detentcount") == 0)   mt_set_detentCount  (nparam, param);
+  #ifdef USEWIFI
   else if (nparam==1 && strcmp (param[0], "diag") == 0)          startDiagPort();
+  #endif
   else if (nparam<=2 && strcmp (param[0], "dump") == 0)          mt_dump_data        (nparam, (const char**) param);
   else if (nparam==1 && strcmp (param[0], "export") == 0)        mt_export           ();
   #ifdef FILESUPPORT
@@ -147,12 +387,16 @@ void processSerialCmd (uint8_t *inBuffer)
   else if (nparam==3 && strcmp (param[1], "write") == 0 && strcmp (param[0], "file") == 0) util_writeFile  (SPIFFS, param[2]);
   #endif
   #ifdef USEWIFI
+  #ifndef NOHTTPCLIENT
   else if (nparam==4 && strcmp (param[1], "download") == 0 && strcmp (param[0], "file") == 0) getHttp2File (SPIFFS, param[2], param[3]);
+  #endif
   #endif
   #ifndef NODISPLAY
   else if (nparam<=2 && strcmp (param[0], "font") == 0)          mt_set_font         (nparam, param);
   #endif
   else if (nparam<=2 && strcmp (param[0], "help") == 0)          help                (nparam, param);
+  else if (nparam==1 && strcmp (param[0], "history") == 0)       cmdGetHistory       ();
+  else if (nparam==2 && strcmp (param[0], "kill") == 0)          runAutomation::killProc(param[1]);
   #ifdef USEWIFI
   else if (nparam<=2 && strcmp (param[0], "mdns") == 0)          set_mdns            (nparam, param);
   #endif
@@ -163,6 +407,7 @@ void processSerialCmd (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "ota") == 0)           mt_ota              (nparam, param);
   #endif
   else if (nparam==1 && strcmp (param[0], "pins")  == 0)         showPinConfig       ();
+  else if (nparam==1 && strcmp (param[0], "procs")  == 0)        runAutomation::listProcs ();
   #ifndef SERIALCTRL
   else if (nparam<=2 && strcmp (param[0], "protocol") == 0)      mt_set_protocol     (nparam, param);
   #endif
@@ -171,6 +416,8 @@ void processSerialCmd (uint8_t *inBuffer)
   #ifdef SCREENROTATE
   else if (nparam<=2 && strcmp (param[0], "rotatedisplay") == 0) mt_set_rotateDisp   (nparam, param);
   #endif
+  else if (nparam>=2 && strcmp (param[0], "rpn") == 0)           (new runAutomation)->rpn  (nparam, param);
+  else if (nparam==2 && strcmp (param[0], "run") == 0)           runAutomation::runbg (param[1]);
   #ifndef SERIALCTRL
   else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
   #endif
@@ -190,8 +437,9 @@ void processSerialCmd (uint8_t *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "wifiscan") == 0)      mt_set_wifiscan     (nparam, param);
   #endif
   else if (nparam==1 && strcmp (param[0], "locos") == 0)         displayLocos        ();
+  else if (nparam==2 && strcmp (param[0], "trace") == 0)         runAutomation::traceProc(param[1]);
   else if (nparam==1 && strcmp (param[0], "turnouts") == 0)      displayTurnouts     ();
-  else if (nparam==1 && strcmp (param[0], "routes") == 0)        displayRoutes       ();
+  else if (nparam==1 && strcmp (param[0], "partitions") == 0)    displayPartitions   ();
   else if (nparam==1 && strcmp (param[0], "showpackets")     == 0) showPackets    = true;
   else if (nparam==1 && strcmp (param[0], "noshowpackets")   == 0) showPackets    = false;
   #ifndef SERIALCTRL
@@ -244,6 +492,18 @@ void mt_set (int nparam, char **param)
     }
     return;
   }
+  // we are setting something
+  // first check if it is a shared register
+  if (strncmp (param[1], "shreg", 3) == 0 && param[1][5]>='0' && param[1][5]<='9' && param[1][6] == '\0') {
+    float temp = (new runAutomation())->rpn (nparam-2, &param[2]);
+    int8_t i = param[1][5] - '0';
+    notFound = false;
+    if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      sharedRegister[i] = temp;
+      xSemaphoreGive(procSem);
+    }
+  }
+  // if not found it will be an eeprom setting
   for (uint8_t n=0; n<limit && notFound; n++) {
     if (strcmp (param[1], nvsVars[n].varName) == 0) {
       notFound = false;
@@ -678,20 +938,13 @@ void mt_dump_nvs (int nparam, char **param)
 
 void mt_sys_config()   // display all known configuration data
 {
-  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.println("--- Throttle config -------------------------");
-    xSemaphoreGive(consoleSem);
-  }
+  mt_ruler ("Throttle Hardware");
   mt_set_name         (1, NULL);
-  #ifndef SERIALCTRL
-  mt_set_server       (1, NULL);
-  mt_set_wifi         (1, NULL);
-  #endif
-  mt_set_debounceTime (1, NULL);
-  mt_set_detentCount  (1, NULL);
+  showMemory          ();
+  displayPartitions   ();
   showPinConfig       ();
+  mt_ruler ("Server Data");
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.println("--- Server side data ------------------------");
     if (strlen(remServerType)>0) {
       Serial.print   ("   Server Type: ");
       Serial.println (remServerType);      
@@ -707,30 +960,89 @@ void mt_sys_config()   // display all known configuration data
       Serial.print   ("Server Message: ");
       Serial.println (lastMessage);
     }
-    Serial.println("--- Local mode data -------------------------");
+    for (uint8_t n=0; n<4; n++) {
+      if (dccLCD[n][0] != '\0') Serial.printf ("          LCD%d: %s\r\n", n, dccLCD[n]);
+    }
+    xSemaphoreGive(consoleSem);
+  }
+  #ifndef SERIALCTRL
+  mt_set_server       (2, NULL);
+  #endif
+  mt_ruler ("Local Data");
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print  (" Bidirectional: O");
     if (bidirectionalMode) Serial.println ("n");
     else Serial.println ("ff");
     Serial.print  ("Sort Menu Data: ");
     if (nvs_get_int ("sortData", SORTDATA) == 1) Serial.println ("Yes");
     else Serial.println ("No");
-    Serial.print ("Enc Button-Stop: ");
+    Serial.print ("  Enc Btn-Stop: ");
     if (nvs_get_int ("buttonStop", 1) == 1) Serial.println ("Yes");
     else Serial.println ("No");    
+    #ifndef NODISPLAY
+    if (display.width() > 0) {
+      uint8_t fontIndex = nvs_get_int ("fontIndex", 1);
+      Serial.printf ("       Display: %s (Pixels: %d wide x %d high)\r\n", DISPLAYNAME, display.width(), display.height());
+      Serial.printf ("  Current Font: %s (%d x %d chars)\r\n", fontLabel[fontIndex], (screenWidth/fontWidth[fontIndex]), (screenHeight/fontHeight[fontIndex]));
+    }
+    #endif
     xSemaphoreGive(consoleSem);
   }
+  #ifndef SERIALCTRL
+  mt_set_wifi         (2, NULL);
+  #endif
+  mt_set_debounceTime (1, NULL);
+  mt_set_detentCount  (1, NULL);
   #ifndef SERIALCTRL
   mt_set_protocol (1, NULL);
   #endif
   mt_set_speedStep (1, NULL);
+  mt_ruler (NULL);
+}
+
+// draw a line 75 chars wide
+void mt_ruler (char* title)
+{
+  uint8_t cntr = 75;
+
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.println("---------------------------------------------");
+    Serial.printf ("\r\n");
+    if (title != NULL) {
+      cntr = 70 - strlen(title);
+      Serial.printf ("--- %s ", title);
+      }
+    for (uint8_t n=0; n<cntr; n++) Serial.printf ("-");
+    Serial.printf ("\r\n");
     xSemaphoreGive(consoleSem);
   }
-  for (uint8_t n=0; n<4; n++) {
-    if (dccLCD[n][0] != '\0') Serial.printf ("LCD%d: %s\r\n", n, dccLCD[n]);
+}
+
+void displayPartitions()
+{
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    printf("Mem Partitions:\r\n");
+    Serial.printf("+------+-----+----------+----------+------------------+\r\n");
+    Serial.printf("| Type | Sub | Offset   | Size     | Label            |\r\n");
+    Serial.printf("+------+-----+----------+----------+------------------+\r\n");
+    for (uint8_t part_type=0 ; part_type<2; part_type++) {
+      const char descr[][4] = {"APP", "DAT"};
+      const esp_partition_type_t ptype[] = { ESP_PARTITION_TYPE_APP, ESP_PARTITION_TYPE_DATA };
+      // esp_partition_iterator_t pi = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
+      esp_partition_iterator_t pi = esp_partition_find (ptype[part_type], ESP_PARTITION_SUBTYPE_ANY, NULL);
+      // esp_partition_find(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, NULL);
+      if (pi != NULL) {
+        do {
+          const esp_partition_t* p = esp_partition_get(pi);
+          Serial.printf("| %-4s | %02x  | 0x%06X | 0x%06X | %-16s |\r\n",
+            descr[part_type], p->subtype, p->address, p->size, p->label);
+        } while (pi = (esp_partition_next(pi)));
+      }
+    }
+  Serial.printf("+------+-----+----------+----------+------------------+\r\n");
+    xSemaphoreGive(consoleSem);
   }
 }
+
 
 void mt_sys_restart (const char *reason) // restart the throttle
 {
@@ -744,12 +1056,23 @@ void mt_sys_restart (const char *reason) // restart the throttle
   for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
     setLocoSpeed (n, 0, STOP);
     setLocoOwnership (n, false);
-    if (cmdProtocol==DCCEX) locoRoster[n].owned = false;
+    if (cmdProtocol==DCCEX) {
+      locoRoster[n].owned = false;
+    }
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("-> Stopping loco: %s\r\n", locoRoster[n].name);
       xSemaphoreGive(consoleSem);
     }
   }
+  #ifdef USEWIFI
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    diagEnqueue ('e', (char*) "### Restart: ", false);
+    if (reason!=NULL) diagEnqueue ('e', (char*) reason, true);
+    else diagEnqueue ('e', (char*) "Unknown cause.", true);
+    xSemaphoreGive(diagPortSem);
+    delay(1000); // allow time for message to be processed
+  }
+  #endif
   esp_restart();  
 }
 
@@ -847,7 +1170,7 @@ void mt_set_font (int nparam, char **param)  // set font
   if (nparam == 1) {
     fontIndex = nvs_get_int ("fontIndex", 1);
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.printf ("Current font %d: %s\n", fontIndex, fontLabel[fontIndex]);
+      Serial.printf ("Current font %d: %s\r\n", fontIndex, fontLabel[fontIndex]);
       Serial.println ("Font options are:");
       for (uint8_t n=0; n<sizeof(fontWidth); n++) {
         Serial.printf ("%d: %s (%dx%d chars)\r\n", n, fontLabel[n], (screenWidth/fontWidth[n]), (screenHeight/fontHeight[n]));
@@ -920,8 +1243,7 @@ void mt_set_name (int nparam, char **param)   // Set name of throttle
 {
   if (nparam == 1) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.print ("Throttle Name: ");
-      Serial.println (tname);
+      Serial.printf (" Throttle Name: %s\r\n", tname);
       xSemaphoreGive(consoleSem);
     }
   }
@@ -1015,9 +1337,10 @@ void mt_set_wifi (int nparam, char **param)  // set WiFi parameters
   
   if (nparam<=2) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println ("WiFi Network table");
-      sprintf (outBuffer, "%5s | %-32s | %s", "Idx", "SSID", "Password");
-      Serial.println (outBuffer);
+      Serial.printf ("WiFi Network table\r\n");
+      Serial.printf ("+------+----------------------------------+----------------------------------+\r\n");
+      Serial.printf ("|%5s | %-32s | %-32s |\r\n", "Idx", "SSID", "Password");
+      Serial.printf ("+------+----------------------------------+----------------------------------+\r\n");
       for (uint8_t index=0; index<WIFINETS; index++) {
         sprintf (paramName, "wifissid_%d", index);
         if (index==0) nvs_get_string (paramName, myssid, MYSSID, sizeof(myssid));
@@ -1027,10 +1350,12 @@ void mt_set_wifi (int nparam, char **param)  // set WiFi parameters
           nvs_get_string (paramName, passwd, "", sizeof(passwd));
         }
         else strcpy (passwd, "");
-        if (strcmp (passwd, "none")==0) passwd[0] = '\0';
-        sprintf (outBuffer, "%5d | %-32s | %s", index, myssid, passwd);
-        Serial.println (outBuffer);
+        if (nparam<2 || strcmp (myssid, "none") != 0) {
+          if (strcmp (passwd, "none")==0) passwd[0] = '\0';
+          Serial.printf ("|%5d | %-32s | %-32s |\r\n", index, myssid, passwd);
+        }
       }
+      Serial.printf ("+------+----------------------------------+----------------------------------+\r\n");
       if (WiFi.status() == WL_CONNECTED) {
         Serial.print ("Connected to SSID: ");
         Serial.print (ssid);
@@ -1041,9 +1366,12 @@ void mt_set_wifi (int nparam, char **param)  // set WiFi parameters
       if (APrunning) {
         Serial.println ("WiFi running in access point mode: IP address 192.168.4.1");
       }
-      Serial.println ("Checking for SSIDs");
       xSemaphoreGive(consoleSem);
-      wifi_scanNetworks(true);
+      if (nparam<2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.println ("Checking for SSIDs");
+        xSemaphoreGive(consoleSem);
+        wifi_scanNetworks(true);
+      }
     }
     return;
     }
@@ -1169,8 +1497,10 @@ void mt_set_server (int nparam, char **param)  // set details about remote serve
   
   if (nparam<=2) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println ("DCC Server Table");
-      Serial.println ("  Idx | Server");
+      Serial.printf ("  Server Table:\r\n");
+      Serial.printf ("+------+----------------------------------+-------+\r\n");
+      Serial.printf ("|  Idx | Server                           |  Port |\r\n");
+      Serial.printf ("+------+----------------------------------+-------+\r\n");
       for (uint8_t index=0; index<WIFINETS; index++) {
         sprintf (paramName, "server_%d", index);
         if (index==0) nvs_get_string (paramName, host, HOST, sizeof(host));
@@ -1178,13 +1508,13 @@ void mt_set_server (int nparam, char **param)  // set details about remote serve
         if (strcmp (host, "none") != 0) {
           sprintf (paramName, "port_%d", index);
           port = nvs_get_int (paramName, PORT);
-          sprintf (outBuffer, "%5d | %s:%d", index, host, port);
+          Serial.printf ("|%5d | %-32s | %5d |\r\n", index, host, port);
         }
-        else sprintf (outBuffer, "%5d | none", index);
-        Serial.println (outBuffer);
+        else if (nparam<2) Serial.printf ("|%5d | %-32s |       |\r\n", index, "none");
       }
-      if (!client.connected()) {
-        Serial.println ("--- Server not connected ---");
+      Serial.printf ("+------+----------------------------------+-------+\r\n");
+      if (!wiCliConnected) {
+        Serial.printf ("--- Server not connected ---\r\n");
       }
       xSemaphoreGive(consoleSem);
     }
@@ -1271,58 +1601,68 @@ void mt_set_wifimode(int nparam, char **param)
 
 #endif
 
+#ifdef USEWIFI
 void startDiagPort()
 {
    xTaskCreate(diagPortMonitor, "diagPortMonitor", 4096, NULL, 4, NULL);
 }
+#endif
 
 void displayLocos()  // display locomotive data
 {
   const static char dirIndic[3][5] = { "Fwd", "Stop", "Rev" };
-  char outBuffer[80];
+  char owned[7];
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.print   ("Locomotive Count = ");
-    Serial.println (locomotiveCount);
+    Serial.printf   ("Locomotive Count = %d\r\n", locomotiveCount);
     if (locomotiveCount > 0 && locomotiveCount<255 && locoRoster!=NULL) {
-      sprintf (outBuffer, "%6s | %-16s | %-4s | %s", "ID", "Name", "Dir", "Speed");
-      Serial.println (outBuffer);
+      Serial.printf ("+--------+----------------------------------+------+-------+-------+\r\n");
+      Serial.printf ("| %6s | %-32s | %-4s | %s | %s |\r\n", "ID", "Name", "Dir", "Speed", "Owned");
+      Serial.printf ("+--------+----------------------------------+------+-------+-------+\r\n");
       for (uint8_t n=0; n<locomotiveCount; n++) {
-        sprintf (outBuffer, "%5d%c | %-16s | %-4s | %d", locoRoster[n].id, locoRoster[n].type, locoRoster[n].name, dirIndic[locoRoster[n].direction], locoRoster[n].speed);
-        Serial.println (outBuffer);
+        if (locoRoster[n].owned) strcpy (owned, "Yes");
+        else owned[0] = '\0';
+        #ifdef RELAYPORT
+        if (locoRoster[n].relayIdx < 10) sprintf (owned, "Rly-%d", locoRoster[n].relayIdx);
+        #endif
+        Serial.printf ("| %5d%c | %-32s | %-4s | %5d | %5s |\r\n", locoRoster[n].id, locoRoster[n].type, locoRoster[n].name, dirIndic[locoRoster[n].direction], locoRoster[n].speed, owned);
       }
+      Serial.printf ("+--------+----------------------------------+------+-------+-------+\r\n");
     }
+    else Serial.printf ("No locomotives defined.\r\n");
     xSemaphoreGive(consoleSem);
   }
 }
 
 void displayTurnouts()  // display known data about switches / points
 {
-  char outBuffer[80];
   char stateBuffer[10];
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.print   ("TurnOut (switch/point) statuses = ");
-    Serial.println (turnoutStateCount);
+    Serial.printf  ("Turnout (switch/point) statuses = %d\r\n", turnoutStateCount);
     if (turnoutStateCount>0 && turnoutStateCount<255) {
-      Serial.println ("   ID        | State");
+      Serial.printf ("+------------+------------------+\r\n");
+      Serial.printf ("|  ID        | State            |\r\n");
+      Serial.printf ("+------------+------------------+\r\n");
       for (uint8_t n=0; n<turnoutStateCount; n++) {
         if (turnoutState[n].state <= 32 || turnoutState[n].state >= 127) sprintf (stateBuffer, "(0x%02x)", turnoutState[n].state);
         else sprintf (stateBuffer, "(%c)", turnoutState[n].state);
-        sprintf (outBuffer, "  %3d %-6s | %s", turnoutState[n].state, stateBuffer, turnoutState[n].name);
-        Serial.println (outBuffer);
+        Serial.printf ("| %3d %-6s | %-16s |\r\n", turnoutState[n].state, stateBuffer, turnoutState[n].name);
       }
+      Serial.printf ("+------------+------------------+\r\n\n");
     }
-    Serial.print   ("Turnout (switch/point) count = ");
-    Serial.println (turnoutCount);
+    else Serial.printf ("No turnout statuses defined\r\n\n");
+    Serial.printf  ("Turnout (switch/point) count = %d\r\n", turnoutCount);
     if (turnoutCount > 0 && turnoutCount<255 && turnoutList!=NULL) {
-      sprintf (outBuffer, "%-16s | %-16s | %s", "System-Name", "User-Name", "State");
-      Serial.println (outBuffer);
+      Serial.printf ("+------------------+------------------+------------+\r\n");
+      Serial.printf ("| %-16s | %-16s | %-10s |\r\n", "System-Name", "User-Name", "State");
+      Serial.printf ("+------------------+------------------+------------+\r\n");
       for (uint8_t n=0; n<turnoutCount; n++) {
         if (turnoutList[n].state <= 32 || turnoutList[n].state >= 127) sprintf (stateBuffer, "(0x%02x)", turnoutList[n].state);
         else sprintf (stateBuffer, "(%c)", turnoutList[n].state);
-        sprintf (outBuffer, "%-16s | %-16s | %d %s", turnoutList[n].sysName, turnoutList[n].userName, turnoutList[n].state, stateBuffer);
-        Serial.println (outBuffer);
+        Serial.printf ("| %-16s | %-16s | %3d %-6s |\r\n", turnoutList[n].sysName, turnoutList[n].userName, turnoutList[n].state, stateBuffer);
       }
+      Serial.printf ("+------------------+------------------+------------+\r\n");
     }
+    else Serial.printf ("No turnouts defined\r\n");
     xSemaphoreGive(consoleSem);
   }
 }
@@ -1427,12 +1767,21 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
     uint16_t blk_size;
     uint16_t blk_count;
     char *blk_start;
-    if (strcmp (param[1], "loco") == 0) {
+    if (strcmp (param[1], "registers") == 0){
+      runAutomation::dumpRegisters();
+      return;
+    }
+    else if (strcmp (param[1], "loco") == 0) {
       blk_size = sizeof(struct locomotive_s);
       blk_count = locomotiveCount + MAXCONSISTSIZE;
       blk_start = (char*) locoRoster;
       sprintf (message, "%d additional slots allocated for ad-hoc loco IDs", MAXCONSISTSIZE);
-      if (diagIsRunning) diagEnqueue ('m', (char*) message, true);
+      #ifdef USEWIFI
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('m', (char*) message, true);
+        xSemaphoreGive(diagPortSem);
+      }
+      #endif
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println (message);
         xSemaphoreGive(consoleSem);
@@ -1476,7 +1825,12 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
     }
     if (blk_start == NULL || blk_count == 0) {
       sprintf (message, "%s: No data available to dump", param[1]);
-      if (diagIsRunning) diagEnqueue ('m', (char*) message, true);
+      #ifdef USEWIFI
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('m', (char*) message, true);
+        xSemaphoreGive(diagPortSem);
+      }
+      #endif
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println (message);
         xSemaphoreGive(consoleSem);
@@ -1484,7 +1838,12 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
       return;
     }
     sprintf (message, "--- %s (n=%d) ---", param[1], blk_count);
-    if (diagIsRunning) diagEnqueue ('m', (char*) message, true);
+    #ifdef USEWIFI
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      diagEnqueue ('m', (char*) message, true);
+      xSemaphoreGive(diagPortSem);
+    }
+    #endif
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println (message);
       for (uint16_t n=0; n<blk_count; n++) {
@@ -1495,11 +1854,14 @@ void mt_dump_data (int nparam, const char **param)  // set details about remote 
       Serial.println ("---");
       xSemaphoreGive(consoleSem);
     }
-    if (diagIsRunning) {
+    #ifdef USEWIFI
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       strcpy (message, "---");
       for (uint8_t n = 0; n<15; n++) strcat (message, "-----");
       diagEnqueue ('m', (char*) message, true);
+      xSemaphoreGive(diagPortSem);
     }
+    #endif
   }
 }
 
@@ -1518,11 +1880,21 @@ void mt_dump (char* memblk, int memsize)
     sprintf (message, "--- Address 0x%08x, Size %d bytes ", (uint32_t) memblk, memsize);
     for (rowoffset=strlen(message); rowoffset<77; rowoffset++) strcat (message, "-");
     Serial.println (message);
-    if (diagIsRunning) diagEnqueue ('m', (char*) message, true);
+    #ifdef USEWIFI
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      diagEnqueue ('m', (char*) message, true);
+      xSemaphoreGive(diagPortSem);
+    }
+    #endif
     for (memoffset=0; memoffset<memsize; ) {
       sprintf (message, "0x%04x ", memoffset);
       Serial.print (message);
-      if (diagIsRunning) diagEnqueue ('m', (char*) message, false);
+      #ifdef USEWIFI
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('m', (char*) message, false);
+        xSemaphoreGive(diagPortSem);
+      }
+      #endif
       message[0] = '\0';
       for (rowoffset=0; rowoffset<16 && memoffset<memsize; rowoffset++) {
         if (memblk[memoffset]>=' ' && memblk[memoffset]<='z') postfix[rowoffset] = memblk[memoffset];
@@ -1538,11 +1910,14 @@ void mt_dump (char* memblk, int memsize)
       Serial.print   (message);
       Serial.print   ("   ");
       Serial.println (postfix);
-      if (diagIsRunning) {
+      #ifdef USEWIFI
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         diagEnqueue ('m', (char*) message, false);
         diagEnqueue ('m', (char*) "   ",   false);
         diagEnqueue ('m', (char*) postfix, true);
+        xSemaphoreGive(diagPortSem);
       }
+      #endif
     }
 }
 
@@ -1628,14 +2003,15 @@ bool showPinConfig()  // Display pin out selection
   uint8_t maxWidth = 0;
   bool retVal = true;
 
-  for (uint8_t n=0; n<limit; n++) if (maxWidth<strlen(pinVars[n].pinDesc)) maxWidth = strlen(pinVars[n].pinDesc);
+  for (uint8_t n=0; n<limit; n++) if (maxWidth<strlen(pinVars[n].pinDesc) && strncmp(pinVars[n].pinDesc, "Internal ", 9)!=0) maxWidth = strlen(pinVars[n].pinDesc);
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.println ((char*) "Hardware configuration check:");
+    Serial.println ((char*) "Pin Reservation check:");
     sprintf (prtTemplate, "\t%%-%ds = EN\r\n", maxWidth);
     Serial.printf (prtTemplate, "Reset");
     sprintf (prtTemplate, "\t%%-%ds = %%2d", maxWidth);
-    for (uint8_t n=0; n<limit; n++) {
+    for (uint8_t n=0; n<limit; n++) if (strncmp(pinVars[n].pinDesc, "Internal ", 9)!=0) {
       Serial.printf (prtTemplate, pinVars[n].pinDesc, pinVars[n].pinNr);
+      pinEquiv (pinVars[n].pinNr);
       for (uint8_t i=0; i<limit; i++) {
         if (i!=n && pinVars[n].pinNr == pinVars[i].pinNr && pinVars[n].pinNr!=-1) {
           retVal = false;
@@ -1665,6 +2041,7 @@ bool showPinConfig()  // Display pin out selection
     for (uint8_t n=0; n<sizeof(rows); n++) {
       if (n>0) Serial.print (", ");
       Serial.printf ("%2d", rows[n]);
+      pinEquiv (rows[n]);
     }
     for (uint8_t n=0; n<sizeof(rows); n++) {
       for (uint8_t i=0; i<sizeof(rows); i++) if (i!=n && rows[i] == rows[n]) {
@@ -1681,6 +2058,7 @@ bool showPinConfig()  // Display pin out selection
     for (uint8_t n=0; n<sizeof(cols); n++) {
       if (n>0) Serial.print (", ");
       Serial.printf ("%2d", cols[n]);
+      pinEquiv (cols[n]);
     }
     for (uint8_t n=0; n<sizeof(cols); n++) {
       for (uint8_t i=0; i<sizeof(cols); i++) if (i!=n && cols[i] == cols[n]) {
@@ -1694,9 +2072,77 @@ bool showPinConfig()  // Display pin out selection
     }
     Serial.println ("");
     #endif
+    #ifdef LED_BUILTIN
+    Serial.printf ("LED built in reported as: %d\r\n", LED_BUILTIN);
+    #if LED_BUILTIN > MAXPINS
+    #if ESPMODEL == ESP32S3
+    Serial.printf ("LED built expected to be combo of: 48 + %d\r\n", (LED_BUILTIN - 48));
+    #elif ESPMODEL == ESP32C3
+    Serial.printf ("LED built expected to be combo of: 8 + %d\r\n", (LED_BUILTIN - 8));
+    #else
+    #ifdef SOC_GPIO_PIN_COUNT
+    Serial.printf ("LED built expected to be combo of: %d + %d\r\n", SOC_GPIO_PIN_COUNT, (LED_BUILTIN - SOC_GPIO_PIN_COUNT));
+    #endif    // SOC_GPIO_PIN_COUNT
+    #endif    // ESPMODEL == ESP32S3
+    #endif    // RLEDRGB_BUILTIN > MAXPINS
+    #endif    // LED_BUILTIN
     xSemaphoreGive(consoleSem);
   }
   return (retVal);
+}
+
+void pinEquiv(uint8_t pin)
+{
+  switch (pin) {
+  #if ESPMODEL == ESP32
+    case 1:
+      Serial.printf (" (Txd)");
+      break;
+    case 3:
+      Serial.printf (" (Rxd)");
+      break;
+    case 17:
+      Serial.printf (" (Txd2)");
+      break;
+    case 16:
+      Serial.printf (" (Rxd2)");
+      break;
+    case 36:
+      Serial.printf (" (SensVP)");
+      break;
+    case 39:
+      Serial.printf (" (SensVN)");
+      break;
+  #elif ESPMODEL == ESP32C2
+    case 20:
+      Serial.printf (" (Txd)");
+      break;
+    case 19:
+      Serial.printf (" (Rxd)");
+      break;
+  #elif ESPMODEL == ESP32C3
+    case 20:
+      Serial.printf (" (Txd)");
+      break;
+    case 21:
+      Serial.printf (" (Rxd)");
+      break;
+  #elif ESPMODEL == ESP32S2
+    case 43:
+      Serial.printf (" (Txd)");
+      break;
+    case 44:
+      Serial.printf (" (Rxd)");
+      break;
+  #elif ESPMODEL == ESP32S3
+    case 43:
+      Serial.printf (" (Txd)");
+      break;
+    case 44:
+      Serial.printf (" (Rxd)");
+      break;
+  #endif
+  }
 }
 
 
@@ -1706,10 +2152,17 @@ void showMemory()
     Serial.print   ("     Free Heap: "); Serial.print (util_ftos (ESP.getFreeHeap(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getFreeHeap()*100.0)/ESP.getHeapSize(), 1)); Serial.println ("%");
     Serial.print   (" Min Free Heap: "); Serial.print (util_ftos (ESP.getMinFreeHeap(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getMinFreeHeap()*100.0)/ESP.getHeapSize(), 1)); Serial.println ("%");
     Serial.print   ("     Heap Size: "); Serial.print (util_ftos (ESP.getHeapSize(), 0)); Serial.println (" bytes");
+    if (ESP.getPsramSize() > 0) {
+      Serial.print   ("    PSRAM Size: "); Serial.print (util_ftos (ESP.getPsramSize(), 0)); Serial.println (" bytes");
+      Serial.print   ("    Free PSRAM: "); Serial.print (util_ftos (ESP.getFreePsram(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getFreePsram()*100.0)/ESP.getPsramSize(), 1)); Serial.println ("%");
+    }
     Serial.print   ("NVS Free Space: "); Serial.print (nvs_get_freeEntries()); Serial.println (" x 32 byte blocks");
     Serial.print   ("        Uptime: "); Serial.print (util_ftos (esp_timer_get_time() / (uS_TO_S_FACTOR * 60.0), 2)); Serial.println (" mins");
     Serial.print   ("      CPU Freq: "); Serial.print (util_ftos (ESP.getCpuFreqMHz(), 0)); Serial.println (" MHz");
     Serial.print   ("  Crystal Freq: "); Serial.print (util_ftos (getXtalFrequencyMhz(), 0)); Serial.println (" MHz");
+    #ifdef FILESUPPORT
+    Serial.printf  ("   File System: %d bytes used of %d available (%s%% used)\r\n", SPIFFS.usedBytes(), SPIFFS.totalBytes(), util_ftos((float)(SPIFFS.usedBytes()*100)/(float)SPIFFS.totalBytes(), 2));
+    #endif
     xSemaphoreGive(consoleSem);
   }
 }
@@ -1744,7 +2197,7 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    And where for routes, turn-out state is one of:");
         Serial.println ((const char*) "       C - Closed");
         Serial.println ((const char*) "       T - Thrown");
-        Serial.println ((const char*) "    permanent setting, DCC-Ex only, restart required");
+        Serial.println ((const char*) "    DCC-Ex only, restart required");
       }
     }
     #ifdef BACKLIGHTPIN
@@ -1753,7 +2206,6 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "backlight [0-255]");
       if (!summary) {
         Serial.println ((const char*) "    Display backlight intensity setting");
-        Serial.println ((const char*) "    permanent setting, default 200");
       }
     }
     #endif
@@ -1762,7 +2214,6 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "[no]bidirectional");
       if (!summary) {
         Serial.println ((const char*) "    turn bidirectional (AKA \"train set\") mode on/off as default setting");
-        Serial.println ((const char*) "    permanent setting, default nobidirectional");
       }
     }
     #ifdef BRAKEPRESPIN
@@ -1772,7 +2223,6 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    Set \"brake pressure\" increase and decrease");
         Serial.println ((const char*) "    Increase is constant rate over time");
         Serial.println ((const char*) "    Decrease is (1/n * pressure) per step decrease in speed");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
     #endif
@@ -1780,14 +2230,12 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "[no]buttonstop");
       if (!summary) {
         Serial.println ((const char*) "    permit/prevents encoder button doing a stop operation when driving locos");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
     if (all || strcmp(param[1], "config")==0) {
       Serial.println ((const char*) "config");
       if (!summary) {
         Serial.println ((const char*) "    Show current configuration settings");
-        Serial.println ((const char*) "    info only");
       }
     }
     if (all || strcmp(param[1], "cpuspeed")==0) {
@@ -1808,7 +2256,6 @@ void help(int nparam, char **param)  // show help data
       if (!summary) {
         Serial.println ((const char*) "    Set CPU speed in MHz, lower speeds conserve power but are less responsive");
         Serial.println ((const char*) "    Use zero to use speed selected at install time");
-        Serial.println ((const char*) "    permanent setting, restart required");
       }
     }
     if (all || strcmp(param[1], "debug")==0) {
@@ -1821,16 +2268,16 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "del {loco|turnout|route} <dcc-address|name>");
       if (!summary) {
         Serial.println ((const char*) "    Delete a locomotive or turnout from DCC-Ex roster");
-        Serial.println ((const char*) "    permanent setting, DCC-Ex only, restart required");
+        Serial.println ((const char*) "    DCC-Ex only, restart required");
       }
     }
     if (all || strcmp(param[1], "detentcount")==0) {
       Serial.println ((const char*) "detentcount [<n>]");
       if (!summary) {
         Serial.println ((const char*) "    Set the number or rotary encoder clicks per up/down movement");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
+    #ifdef USEWIFI
     if (all || strcmp(param[1], "diag")==0) {
       Serial.println ((const char*) "diag");
       if (!summary) {
@@ -1838,18 +2285,17 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    temporary setting");
       }
     }
+    #endif
     if (all || strcmp(param[1], "dump")==0) {
       Serial.println ((const char*) "dump {loco|turnout|turnoutstate|route|routestate}");
       if (!summary) {
         Serial.println ((const char*) "    Dump memory structures of objects");
-        Serial.println ((const char*) "    info only");
       }
     }
     if (all || strcmp(param[1], "export")==0) {
       Serial.println ((const char*) "export");
       if (!summary) {
         Serial.println ((const char*) "    export commands required to replicate this throttle's configuration");
-        Serial.println ((const char*) "    info only");
       }
     }
     #ifdef FILESUPPORT
@@ -1880,7 +2326,6 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "font [index]");
       if (!summary) {
         Serial.println ((const char*) "    Display or set font");
-        Serial.println ((const char*) "    Permanent setting");
       }
     }
     #endif
@@ -1888,14 +2333,25 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "help [summary|all|<command>]");
       if (!summary) {
         Serial.println ((const char*) "    Print this help menu");
-        Serial.println ((const char*) "    info only");
+      }
+    }
+    if (all || strcmp(param[1], "history")==0) {
+      Serial.println ((const char*) "history");
+      if (!summary) {
+        Serial.println ((const char*) "    Print command history since last restart");
+      }
+    }
+    if (all || strcmp(param[1], "kill")==0 || strncmp(param[1], "auto", 4)==0) {
+      Serial.println ((const char*) "kill <proc-id>");
+      if (!summary) {
+        Serial.println ((const char*) "    signals an automation script to stop on reaching next step");
+        Serial.println ((const char*) "    also see \"run\" and \"procs\"");
       }
     }
     if (all || strcmp(param[1], "locos")==0 || strcmp(param[1], "turnouts")==0) {
       Serial.println ((const char*) "locos|turnouts");
       if (!summary) {
         Serial.println ((const char*) "    List known locomotives or turnouts");
-        Serial.println ((const char*) "    info only");
       }
     }
     #ifdef USEWIFI
@@ -1903,7 +2359,6 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "mdns [on|off|<name>]");
       if (!summary) {
         Serial.println ((const char*) "    Use mDNS to search for wiThrottle on network, or locate service <name>");
-        Serial.println ((const char*) "    Permanent setting or info");
       }
     }
     #endif
@@ -1911,21 +2366,18 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "memory");
       if (!summary) {
         Serial.println ((const char*) "    Show system memory usage");
-        Serial.println ((const char*) "    info only");
       }
     }
     if (all || strcmp(param[1], "name")==0) {
       Serial.println ((const char*) "name [<name>]");
       if (!summary) {
         Serial.println ((const char*) "    Set the name of the throttle");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
     if (all || strcmp(param[1], "nvs")==0) {
       Serial.println ((const char*) "nvs [{<namespace>|*}]");
       if (!summary) {
         Serial.println ((const char*) "    Show contents of Non-Volatile-Storage (NVS) namespace(s)");
-        Serial.println ((const char*) "    info only");
       }
     }
     #ifdef OTAUPDATE
@@ -1934,15 +2386,26 @@ void help(int nparam, char **param)  // show help data
       if (!summary) {
         Serial.println ((const char*) "    Manage Over The Air (OTA) updates to firmware");
         Serial.println ((const char*) "    NB: does not check hardware compatibility, use with care!");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
     #endif
+    if (all || strcmp(param[1], "partitions")==0) {
+      Serial.println ((const char*) "partitions");
+      if (!summary) {
+        Serial.println ((const char*) "    Show eeprom partitioning scheme");
+      }
+    }
     if (all || strcmp(param[1], "pins")==0) {
       Serial.println ((const char*) "pins");
       if (!summary) {
         Serial.println ((const char*) "    Show processor pin assignment");
-        Serial.println ((const char*) "    info only");
+      }
+    }
+    if (all || strcmp(param[1], "procs")==0 || strncmp(param[1], "auto", 4)==0) {
+      Serial.println ((const char*) "procs");
+      if (!summary) {
+        Serial.println ((const char*) "    Lists running automation scripts");
+        Serial.println ((const char*) "    also see \"kill\" and \"run\"");
       }
     }
     #ifndef SERIALCTRL
@@ -1950,7 +2413,6 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "protocol {withrot|dccex}");
       if (!summary) {
         Serial.println ((const char*) "    Select default protocol to use");
-        Serial.println ((const char*) "    permanent setting, default withrottle");
       }
     }
     #endif
@@ -1966,7 +2428,6 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "rotatedisplay [direction]");
       if (!summary) {
         Serial.println ((const char*) "    Rotate screen orientation");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
     #endif
@@ -1974,7 +2435,19 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "routedelay [mS_delay]");
       if (!summary) {
         Serial.println ((const char*) "    Set interval between setting each turnout in a route");
-        Serial.println ((const char*) "    permanent setting");
+      }
+    }
+    if (all || strcmp(param[1], "rpn")==0 || strncmp(param[1], "auto", 4)==0) {
+      Serial.println ((const char*) "rpn <expression>");
+      if (!summary) {
+        Serial.println ((const char*) "    Evaluates a rpn expression displaying each step");
+      }
+    }
+    if (all || strcmp(param[1], "run")==0 || strncmp(param[1], "auto", 4)==0) {
+      Serial.println ((const char*) "run <file-name>");
+      if (!summary) {
+        Serial.println ((const char*) "    Starts an automation script");
+        Serial.println ((const char*) "    also see \"kill\" and \"procs\"");
       }
     }
     if (all || strcmp(param[1], "sendcmd")==0) {
@@ -1989,16 +2462,16 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "server [<index> <IP-address|DNS-name> [<port-number>]]");
       if (!summary) {
         Serial.println ((const char*) "    Set the server address and port");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
     #endif
     if (all || strcmp(param[1], "set")==0) {
       Serial.println ((const char*) "set [<variable> <value>]");
+      Serial.println ((const char*) "set shreg<0-9> <expression>");
       if (!summary) {
-	Serial.println ((const char*) "    Set most NVS variables to a value, use with care limited checking");
+	Serial.println ((const char*) "    Set most NVS variables to a value, use with care - limited checking");
         Serial.println ((const char*) "    Without parameters set will dump all settable settings");
-        Serial.println ((const char*) "    permanent setting");
+        Serial.println ((const char*) "    Can also be used to store a value in a shared register");
       }
     }
     #ifndef SERIALCTRL
@@ -2037,14 +2510,18 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "[no]sortdata");
       if (!summary) {
         Serial.println ((const char*) "    sort lists of locos and turnouts");
-        Serial.println ((const char*) "    permanent setting, default sortdata");
       }
     }
     if (all || strcmp(param[1], "speedstep")==0) {
       Serial.println ((const char*) "speedstep [<1-9>]");
       if (!summary) {
-        Serial.println ((const char*) "    Set the speed change set be each thottle click");
-        Serial.println ((const char*) "    permanent setting");
+        Serial.println ((const char*) "    Set the speed change set be each throttle click");
+      }
+    }
+    if (all || strcmp(param[1], "trace")==0) {
+      Serial.println ((const char*) "trace <Process-ID>");
+      if (!summary) {
+        Serial.println ((const char*) "    Traces the execuation of and automation script");
       }
     }
     #ifdef WARNCOLOR
@@ -2052,7 +2529,6 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "warnspeed [<50-101>]");
       if (!summary) {
         Serial.println ((const char*) "    change speed graph color when percentage warnspeed is exceeded");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
     #endif
@@ -2061,14 +2537,12 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "webpass [password]");
       if (!summary) {
         Serial.println ((const char*) "    change web user password for web authentication");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
     if (all || strcmp(param[1], "webuser")==0) {
       Serial.println ((const char*) "webuser [User-Name]");
       if (!summary) {
         Serial.println ((const char*) "    change web user for web authentication");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
     #endif
@@ -2078,14 +2552,12 @@ void help(int nparam, char **param)  // show help data
       if (!summary) {
         Serial.println ((const char*) "    Set WiFi SSID and password for a known network");
         Serial.println ((const char*) "    Leave password blank for open access points");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
     if (all || strcmp(param[1], "wifimode")==0) {
       Serial.println ((const char*) "wifimode [ap|sta|both]");
       if (!summary) {
         Serial.println ((const char*) "    Set WiFi mode to Access Point (AP), Station (sta) or both (both)");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
     if (all || strcmp(param[1], "wifiscan")==0) {
@@ -2095,7 +2567,6 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    - list: use the list of known WiFi networks as listed by preference");
         Serial.println ((const char*) "    - strength: use the strongest signal of known WiFi networks");
         Serial.println ((const char*) "    - any: use the strongest signal even if unknown open access point");
-        Serial.println ((const char*) "    permanent setting");
       }
     }
     #endif

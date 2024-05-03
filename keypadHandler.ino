@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -51,7 +51,14 @@ void keypadMonitor(void *pvParameters)
     char inChar = keypad.getKey();
     if (inChar != NO_KEY) {
       if (showKeypad) Serial.println (inChar);
-      if (menuMode) {   // when driving menus, use numbers as arrows
+      #ifdef USEWIFI
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('k', (char *) &inChar, false);
+        xSemaphoreGive(diagPortSem);
+      }
+      #endif
+      inChar =  util_menuKeySwap(inChar);
+      /* if (menuMode) {   // when driving menus, use numbers as arrows
         switch (inChar) {
           case 'U': inChar = 'D' ; break;  // transpose meaning of up and down
           case 'D': inChar = 'U' ; break;
@@ -63,7 +70,7 @@ void keypadMonitor(void *pvParameters)
           case '0': inChar = 'E' ; break;  // 0 as escape
           case '#': inChar = 'S' ; break;  // # as select
         }
-      }
+      } */
       xQueueSend (keyboardQueue, &inChar, 0);
       lastKey = inChar;
       if (lastKey >= '0' && lastKey <='9') { // for function keys in driving mode we want to know if they are released

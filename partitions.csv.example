@@ -11,13 +11,13 @@
 # then this partition is suitable for miniThrottle
 #  * 64K Bootstrap space (36K Reserved, 28K Unused)
 #  * 28K Unused
-#  * 2M Program
-#  * 64K NVS
-#  * 1.875M File-System
+#  * 2.5M Program
+#  * 64K NVS (Non volatile storage)
+#  * 1.375M File-System
 # Name,   Type, SubType, Offset,  Size,    Flags
-factory,  app,  factory, 0x10000, 0x200000,
-nvs,      data, nvs,     0x210000,0x10000,
-spiffs,   data, spiffs,  0x220000,0x1E0000,
+factory,  app,  factory, 0x10000, 0x280000,
+nvs,      data, nvs,     0x290000,0x10000,
+spiffs,   data, spiffs,  0x2A0000,0x160000,
 #
 # If you are using OTA (Over The Air update) then
 # comment out the entries above, and uncomment the
@@ -25,7 +25,7 @@ spiffs,   data, spiffs,  0x220000,0x1E0000,
 #  * 56K Bootstrap space (36K reserved, 20K Unused)
 #  * 8K OTA data
 #  * 2 x 1.875M Program - OTA updates non-active program partition
-#  * 64K NVS
+#  * 64K NVS (Non volatile storage)
 #  * 128K File-System
 # Name,   Type, SubType, Offset,  Size,    Flags
 #otadata,  data, ota,     0xe000,  0x2000,

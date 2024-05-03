@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -59,7 +59,12 @@ SOFTWARE.
     { (char*)"inventoryTurn",  INTEGER,    0,             2,            0,       (char*)   "", (char*)"DCC_Ex turnouts inventory"},
     { (char*)"inventoryRout",  INTEGER,    0,             2,            0,       (char*)   "", (char*)"DCC_Ex routes inventory"},
     { (char*)"diagPort",       INTEGER,   10,         65500,           23,       (char*)   "", (char*)"Diagnostic port"},
-    // { "diagPortEnable", INTEGER,    0,             1,            0,       (char*)   "", (char*)"Diagnostic port enabled"},
+    { (char*)"mainMenuMask",   INTEGER,    0,            15,            0,       (char*)   "", (char*)"Main Menu Mask"},
+    { (char*)"clientTimeout",  INTEGER,   20,       TIMEOUT,    TIMEOUT/4,       (char*)   "", (char*)"WiFi client timeout"},
+    #ifndef SERIALCTRL
+    { (char*)"missedKeepAlive",INTEGER,    0,            20,            3,       (char*)   "", (char*)"Max missed keepalive responses"},
+    { (char*)"resetKeepAlive", INTEGER,    0,             1,            0,       (char*)   "", (char*)"Reset keepalive timer if other traffic sent"},
+    #endif
     #ifdef DELAYONSTART
     { (char*)"delayOnStart",   INTEGER,    0,           120, DELAYONSTART,       (char*)   "", (char*)"Start up delay in seconds" },
     #endif
@@ -91,14 +96,18 @@ SOFTWARE.
     #ifdef OTAUPDATE
     { (char*)"ota_url",        STRING,    16,           120,            0,  (char*) OTAUPDATE, (char*)"OTA update URL" },
     #endif
-    { (char*)"mdns",           INTEGER,    0,             1,            1,       (char*)   "", (char*)"mDNS Search Endabled" },
-    { (char*)"defaultProto",   INTEGER, WITHROT,      DCCEX,      WITHROT,        (char*)  "", (char*)"Preferred Protocol" },
+    { (char*)"mdns",           INTEGER,    0,             1,            1,       (char*)   "", (char*)"mDNS Search Enabled" },
+    { (char*)"defaultProto",   INTEGER, WITHROT,      DCCEX,      WITHROT,       (char*)   "", (char*)"Preferred Protocol" },
     { (char*)"toOffset",       INTEGER,    1,          1000,          100,       (char*)   "", (char*)"turnout numbering starts at" },
     #ifdef RELAYPORT
     { (char*)"maxRelay",       INTEGER,    0,      MAXRELAY,   MAXRELAY/2,       (char*)   "", (char*)"Max nodes to relay" },
     { (char*)"relayMode",      INTEGER,    0,             2,            1,       (char*)   "", (char*)"Relay mode" },
     { (char*)"relayPort",      INTEGER,    1,         65534,    RELAYPORT,       (char*)   "", (char*)"Relay port" },
     { (char*)"fastclock2dcc",  INTEGER,    0,             1,            0,       (char*)   "", (char*)"send fastclock to dcc-ex" },
+    { (char*)"clientTimeout",  INTEGER,   20,       TIMEOUT,    TIMEOUT/4,       (char*)   "", (char*)"WiFi client timeout"},
+    { (char*)"relayKeepAlive", INTEGER,    0,          3600,KEEPALIVETIMEOUT,    (char*)   "", (char*)"JMRI Relay keepalive interval" },
+    { (char*)"missedKeepAlive",INTEGER,    1,            10,            2,       (char*)   "", (char*)"Max missed keepalive packets" },
+    { (char*)"oneIPoneClient", INTEGER,    0,             1,            1,       (char*)   "", (char*)"One IP, One Client" },
     #ifdef FC_HOUR
     { (char*)"fc_hour",        INTEGER,    0,            23,      FC_HOUR,       (char*)   "", (char*)"fastclock hour" },
     #endif
@@ -127,6 +136,7 @@ SOFTWARE.
     { (char*)"dccRtError",     INTEGER,    0,             1,            0,       (char*)   "", (char*)"Stop route setup on error" },
     { (char*)"dccRmLoco",      INTEGER,    0,             1,            0,       (char*)   "", (char*)"Delete locos on DCC-Ex when not in use" },
     { (char*)"staConnect",     INTEGER,    0,             3,            2,       (char*)   "", (char*)"Wifi Station selection criteria" },
+    { (char*)"obsessive",      INTEGER,    0,             1,            0,       (char*)   "", (char*)"Obsessive connection checking" },
     { (char*)"APname",         STRING,     4,            32,            0,      (char*)  NAME, (char*)"Access point name" },
     { (char*)"APpass",         STRING,     4,            32,            0,     (char*) "none", (char*)"Access point password" },
     { (char*)"apChannel",      INTEGER,    1,            13,            6,       (char*)   "", (char*)"Access point channel" },
@@ -215,6 +225,34 @@ SOFTWARE.
     #endif
     #ifndef keynone
     #endif
+    #if ESPMODEL == ESP32C3
+    { 20,           (char*)"Console - Tx" },
+    { 21,           (char*)"Console - Rx" }
+    #elif ESPMODEL == ESP32C2
+    { 20,           (char*)"Console - Tx" },
+    { 19,           (char*)"Console - Rx" }
+    #elif ESPMODEL == ESP32S3
+    { 22,           (char*)"Not Usable" },
+    { 23,           (char*)"Not Usable" },
+    { 24,           (char*)"Not Usable" },
+    { 25,           (char*)"Not Usable" },
+    { 43,           (char*)"Console - Tx" },
+    { 44,           (char*)"Console - Rx" }
+    #elif ESPMODEL == ESP32S2
+    { 22,           (char*)"Not Usable" },
+    { 23,           (char*)"Not Usable" },
+    { 24,           (char*)"Not Usable" },
+    { 25,           (char*)"Not Usable" },
+    { 43,           (char*)"Console - Tx" },
+    { 44,           (char*)"Console - Rx" }
+    #else
     { 1,            (char*)"Console - Tx" },
-    { 3,            (char*)"Console - Rx" }
+    { 3,            (char*)"Console - Rx" },
+    { 6,            (char*)"Internal Flash - sdclk" },
+    { 7,            (char*)"Internal Flash - data0" },
+    { 8,            (char*)"Internal Flash - data1" },
+    { 9,            (char*)"Internal Flash - data2" },
+    { 10,           (char*)"Internal Flash - data3" },
+    { 11,           (char*)"Internal Flash - sdcmd" }
+    #endif
   }; 

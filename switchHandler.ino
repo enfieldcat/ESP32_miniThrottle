@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -100,8 +100,8 @@ void switchMonitor(void *pvParameters)
   // deal with the encoder first
   #ifdef ENCODE_UP
   #ifdef ENCODE_DN
-  ESP32Encoder::useInternalWeakPullResistors=UP;
-  encoder.attachFullQuad(ENCODE_UP, ENCODE_DN);
+  ESP32Encoder::useInternalWeakPullResistors = puType::up;
+  encoder.attachHalfQuad(ENCODE_UP, ENCODE_DN);
   encoder.setFilter(1023);
   encoder.setCount (100);
   #endif
@@ -155,6 +155,12 @@ void switchMonitor(void *pvParameters)
             case ENCODE_SW:
               if (readChar==0) {
                 if (showKeypad) Serial.println (submitKey);
+                #ifdef USEWIFI
+                if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                  diagEnqueue ('k', (char *) "S", false);
+                  xSemaphoreGive(diagPortSem);
+                }
+                #endif
                 xQueueSend (keyboardQueue, &submitKey, 0);
               }
               break;
@@ -172,10 +178,22 @@ void switchMonitor(void *pvParameters)
       if (++detentCount >= nvs_get_int ("detentCount", 2)) {
         if (encodeValue > 100) {
           if (showKeypad) Serial.println (downKey);
+          #ifdef USEWIFI
+          if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            diagEnqueue ('k', (char *) "D", false);
+            xSemaphoreGive(diagPortSem);
+          }
+          #endif
           xQueueSend (keyboardQueue, &downKey, 0);
         }
         else {
           if (showKeypad) Serial.println (upKey);
+          #ifdef USEWIFI
+          if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            diagEnqueue ('k', (char *) "U", false);
+            xSemaphoreGive(diagPortSem);
+          }
+          #endif
           xQueueSend (keyboardQueue, &upKey, 0);
         }
         encoder.setCount (100);
@@ -249,6 +267,15 @@ void sendDirChange (uint8_t fwdPin, uint8_t revPin)
   }
   if (showKeypad) Serial.println (directionCode);
   xQueueSend (keyboardQueue, &directionCode, 0);
+  #ifdef USEWIFI
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    char tmpStr[2];
+    tmpStr[0] = directionCode;
+    tmpStr[1] = '\0';
+    diagEnqueue ('k', (char *) tmpStr, false);
+    xSemaphoreGive(diagPortSem);
+  }
+  #endif
 }
 
 

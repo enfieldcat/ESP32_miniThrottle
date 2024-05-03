@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -94,11 +94,13 @@ void webListener(void *pvParameters)
     size_t outputLength;
     char t_userName[64];
     char t_userPass[64];
+    unsigned char encoded[128];
     nvs_get_string ("webuser", t_userName, WEBUSER, sizeof(t_userName));
     nvs_get_string ("webpass", t_userPass, WEBPASS, sizeof(t_userPass));
     strcat (t_userName, ":");
     strcat (t_userName, t_userPass);
-    unsigned char * encoded = base64_encode((const unsigned char *)t_userName, strlen(t_userName), &outputLength);
+    // unsigned char * encoded = base64_encode((const unsigned char *)t_userName, strlen(t_userName), &outputLength);
+    mbedtls_base64_encode(encoded, 128, &outputLength, (const unsigned char*) t_userName, strlen(t_userName));
     if (outputLength < sizeof(webCredential)) {
       strncpy (webCredential, (const char*) encoded, outputLength);
       webCredential[outputLength] = '\0';
@@ -108,7 +110,11 @@ void webListener(void *pvParameters)
       Serial.printf ("%s Encoded web credential too long, configure shorter webuser or webpass.\r\n", getTimeStamp());
       xSemaphoreGive(consoleSem);
     }
-    free (encoded);
+    //free (encoded);
+  }
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    diagEnqueue ('e', (char *) "### Starting web server ---------------------------------------------------", true);
+    xSemaphoreGive(diagPortSem);
   }
   // Wait for incoming connections for as long as there is a connection
   while (webIsRunning) {
@@ -158,6 +164,10 @@ void webListener(void *pvParameters)
     xSemaphoreGive(webServerSem);
   }
   else semFailed ("webServerSem", __FILE__, __LINE__);
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    diagEnqueue ('e', (char *) "### Stopping web server ---------------------------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
   vTaskDelete( NULL );
 }
 
@@ -584,7 +594,7 @@ void mkWebEditor (WiFiClient *myClient, char *myUri, bool keepAlive, char *hostN
   }
   mkWebHeader (myClient, 200, 0, keepAlive);
   mkWebHtmlHeader (myClient, &myUri[5], 0);
-  myClient->printf ((const char*)"<form action=\"/save\" method=\"post\"><label for=\"fileName\">Save file as: </label><input id=\"fileName\" name=\"fileName\" value=\"%s\"><br><br>", &myUri[5]);
+  myClient->printf ((const char*)"<h2>File Contents</h2><form action=\"/save\" method=\"post\">");
   myClient->printf ((const char*)"<textarea id=\"editdata\" name=\"editdata\" rows=\"24\" cols=\"80\">");
   if(file){
     webDumpFile (myClient, &file, true);
@@ -593,7 +603,12 @@ void mkWebEditor (WiFiClient *myClient, char *myUri, bool keepAlive, char *hostN
   else {
     myClient->printf ((const char*)"File not found");
   }
-  myClient->printf ((const char*)"</textarea><br><br><input type=\"checkbox\" name=\"applyconfig\" id=\"applyconfig\"><label for=\"applyconfig\">Apply file as configuration after saving</label><br><input type=\"submit\" value=\"Save\"></form><br><p>To access file outside editor: <a href=\"http://");
+  myClient->printf ((const char*)"</textarea><br><h2>Save Options</h2>");
+  myClient->printf ((const char*)"<label for=\"fileName\">Save file as: </label><input id=\"fileName\" name=\"fileName\" value=\"%s\"><br>", &myUri[5]);
+  myClient->printf ((const char*)"<input type=\"radio\" id=\"applyStd\" name=\"applyconfig\" value=\"0\" checked=\"true\"><label for=\"applyStd\">Save and perform no further action</label><br>");
+  myClient->printf ((const char*)"<input type=\"radio\" id=\"applyConf\" name=\"applyconfig\" value=\"1\"><label for=\"applyConf\">Save and apply as configuration change</label><br>");
+  myClient->printf ((const char*)"<input type=\"radio\" id=\"applyAuto\" name=\"applyconfig\" value=\"2\"><label for=\"applyAuto\">Save and run as automation script</label><br>");
+  myClient->printf ((const char*)"<input type=\"submit\" value=\"Save\"></form><br><p>To access file outside editor: <a href=\"http://");
   if (hostName == NULL) {
     myClient->printf ((const char*)"%s.local%s\">http://%s.local%s</a></p>", tname, &myUri[5], tname, &myUri[5]);
   }
@@ -825,8 +840,22 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   myClient->printf ((const char*)"<input type=\"radio\" id=\"allMenuEvery\" name=\"allMenuItems\" value=\"1\"");
   if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"allMenuEvery\">Show all menu options</label></td></tr>");
+  compInt = nvs_get_int ("mainMenuMask", 0);
+  myClient->printf ((const char*)"<tr><td>Disable Menus</td><td><strong>NB:</strong> To disable also select \"only show valid menu options\" (Above).");
+  {
+    uint8_t mask=1;
+    for (uint8_t n=0; n<6; n++, mask<<=1) {
+      myClient->printf ((const char*)"<br><input type=\"checkbox\" id=\"disableMenu%d\" name=\"disableMenu%d\" value=\"%d\"", n, n, n);
+      if ((mask&compInt) > 0) myClient->printf ((const char*)" checked=\"true\"");
+      myClient->printf ((const char*)"><label for=\"disableMenu%d\"> %s</label>", n, baseMenu[n]);
+    }    
+  }
+  compInt = nvs_get_int ("disableCabMenu", 0);
+  myClient->printf ((const char*)"<br><input type=\"checkbox\" id=\"disableCabMenu\" name=\"disableCabMenu\" value=\"1\"");
+  if (compInt > 0) myClient->printf ((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"disableCabMenu\"> Cab (Loco) Menu - Menu button becomes \"Release Loco\"</label></td></tr>");
   compInt = nvs_get_int ("menuWrap", 0);
-  myClient->printf ((const char*)"<tr><td>Menu Wrap around</td><td><input type=\"radio\" id=\"menuWrapNo\" name=\"menuWrap\" value=\"0\"");
+  myClient->printf ((const char*)"<tr><td>Menu Wrap Around</td><td><input type=\"radio\" id=\"menuWrapNo\" name=\"menuWrap\" value=\"0\"");
   if (compInt == 0) myClient->printf((const char*)" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"menuWrapNo\">Hard stop at menu top and bottom</label><br>");
   myClient->printf ((const char*)"<input type=\"radio\" id=\"menuWrapYes\" name=\"menuWrap\" value=\"1\"");
@@ -936,10 +965,22 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   if (compInt == WITHROTRELAY)  myClient->printf ((const char*)" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"relaywithrot\">WiThrottle</label><br><input type=\"radio\" id=\"relaydcc\" name=\"relayMode\" value=\"%d\"", DCCRELAY);
   if (compInt == DCCRELAY)  myClient->printf ((const char*)" checked=\"true\"");
+  compInt = nvs_get_int ("oneIPoneClient", 1);
+  myClient->printf ((const char*)"><label for=\"relaydcc\">DCC-Ex</label></td></tr><tr><td>Clients</td><td><input type=\"radio\" id=\"oneIPoneClientY\" name=\"oneIPoneClient\" value=\"1\"");
+  if (compInt == 1)  myClient->printf ((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"oneIPoneClientY\"> each client has only one connection</label><br><input type=\"radio\" id=\"oneIPoneClientN\" name=\"oneIPoneClient\" value=\"0\"");
+  if (compInt == 0)  myClient->printf ((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"oneIPoneClientN\"> each client can have multiple connections</label></td></tr>");
   compInt = nvs_get_int ("relayPort", RELAYPORT);
-  myClient->printf ((const char*)"><label for=\"relaydcc\">DCC-Ex</label></td></tr><tr><td>Relay port (1-65534)</td><td><input type=\"number\" name=\"relayPort\" value=\"%d\" min=\"1\" max=\"65534\" size=\"7\"> Default is %d</td></tr>", compInt, RELAYPORT);
+  myClient->printf ((const char*)"<tr><td>Relay port (1-65534)</td><td><input type=\"number\" name=\"relayPort\" value=\"%d\" min=\"1\" max=\"65534\" size=\"7\"> Default is %d</td></tr>", compInt, RELAYPORT);
+  compInt = nvs_get_int ("clientTimeout", TIMEOUT/4);
+  myClient->printf ((const char*)"<tr><td>TCP/IP Timeout</td><td><input type=\"number\" name=\"clientTimeout\" value=\"%d\" min=\"20\" max=\"120000\" size=\"8\"> mS</td></tr>", compInt);
   compInt = nvs_get_int ("maxRelay", MAXRELAY);
-  myClient->printf ((const char*)"<tr><td>Max clients (3-%d)</td><td><input type=\"number\" name=\"maxRelay\" value=\"%d\" min=\"3\" max=\"%d\" size=\"5\"></td></tr></table>", MAXRELAY, compInt, MAXRELAY);
+  myClient->printf ((const char*)"<tr><td>Max clients (3-%d)</td><td><input type=\"number\" name=\"maxRelay\" value=\"%d\" min=\"3\" max=\"%d\" size=\"5\"></td></tr>", MAXRELAY, compInt, MAXRELAY);
+  compInt = nvs_get_int ("relayKeepAlive", KEEPALIVETIMEOUT);
+  myClient->printf ((const char*)"<tr><td>Request JMRI Keepalive</td><td><input type=\"number\" name=\"relayKeepAlive\" value=\"%d\" min=\"0\" max=\"3600\" size=\"5\"> Seconds (0 => no keep alive)</td></tr>", compInt);
+  compInt = nvs_get_int ("missedKeepAlive", 2);
+  myClient->printf ((const char*)"<tr><td>Max missed Keepalives</td><td><input type=\"number\" name=\"missedKeepAlive\" value=\"%d\" min=\"1\" max=\"10\" size=\"5\"> keep alive packets then disconnect</td></tr></table>", compInt);
   #endif   // RELAYPORT
   #ifdef WEBLIFETIME    // should not be building a web page without this, but anyhow...
   compInt = nvs_get_int ("webTimeOut", WEBLIFETIME);
@@ -981,7 +1022,18 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   if (compInt == WITHROT) myClient->printf (" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"defProtoWITHROT\">WiThrottle</label><br><input type=\"radio\" name=\"defaultProto\" id=\"defProtoDCC\" value=\"%d\"", DCCEX);
   if (compInt == DCCEX) myClient->printf (" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"defProtoDCC\">DCC-Ex</label></td></tr></table><br><br><table><tr><th>Server</th><th>Port</th></tr>");
+  myClient->printf ((const char*)"><label for=\"defProtoDCC\">DCC-Ex</label></td></tr>");
+  compInt = nvs_get_int ("clientTimeout", TIMEOUT/4);
+  myClient->printf ((const char*)"<tr><td>TCP/IP Timeout</td><td><input type=\"number\" name=\"clientTimeout\" value=\"%d\" min=\"20\" max=\"120000\" size=\"8\"> mS</td></tr>", compInt);
+  compInt = nvs_get_int ("missedKeepAlive", 3);
+  myClient->printf ((const char*)"<tr><td>Max Missed Keepalive</td><td><input type=\"number\" name=\"missedKeepAlive\" value=\"%d\" min=\"0\" max=\"20\" size=\"8\"> missed responses, 0 => ignore WiThrottle keepalive response</td></tr>", compInt);
+  compInt = nvs_get_int ("resetKeepAlive", 0);
+  myClient->printf ((const char*)"<tr><td>Keepalive timer</td><td><input type=\"radio\" name=\"resetKeepAlive\" id=\"resetKA0\" value=\"0\"");
+  if (compInt==0) myClient->printf ((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for\"resetKA0\">WiThrottle keepalives sent on regular interval</label><br><input type=\"radio\" name=\"resetKeepAlive\" id=\"resetKA1\" value=\"1\"");
+  if (compInt==1) myClient->printf ((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for\"resetKA1\">Only send keepalives during lulls in activity</label></td></tr>");
+  myClient->printf ((const char*)"</table><br><br><table><tr><th>Server</th><th>Port</th></tr>");
   for (uint8_t n=0; n<WIFINETS; n++) {
     sprintf (labelName, "server_%d", n);
     if (n==0) nvs_get_string (labelName, labelDesc, HOST, sizeof(labelDesc));
@@ -1026,9 +1078,9 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   compInt = nvs_get_int ("buttonStop", 1);
   myClient->printf ((const char*)"><label for=\"bidiTrue\">Bidirectional</label></td></tr><tr><td>Encoder button</td><td><input type=\"radio\" name=\"buttonStop\" id=\"buttonStopNo\" value=\"0\"");
   if (compInt == 0) myClient->printf (" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"buttonStopNo\">Loco menu only in driving mode, must be stopped</label><br><input type=\"radio\" name=\"buttonStop\" id=\"buttonStopYes\" value=\"1\"");
+  myClient->printf ((const char*)"><label for=\"buttonStopNo\">Cab menu displayed in driving mode</label><br><input type=\"radio\" name=\"buttonStop\" id=\"buttonStopYes\" value=\"1\"");
   if (compInt == 1)  myClient->printf (" checked=\"true\"");
-  myClient->printf ((const char*)"><label for=\"buttonStopYes\">Push stops train or loco menu if stopped in driving mode<label></td></tr>");
+  myClient->printf ((const char*)"><label for=\"buttonStopYes\">Push stops train or cab menu if stopped in driving mode<label></td></tr>");
   #endif  // NODISPLAY
   compInt = nvs_get_int ("noPwrTurnouts", 0);
   myClient->printf ((const char*)"<tr><td>Turnout/Route Options</td><td><input type=\"radio\" id=\"noPwrTurnout\" name=\"noPwrTurnouts\" value=\"0\"");
@@ -1037,6 +1089,13 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   myClient->printf ((const char*)"<input type=\"radio\" id=\"yesPwrTurnout\" name=\"noPwrTurnouts\" value=\"1\"");
   if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"yesPwrTurnout\">Turnouts work without track power</label></td></tr>");
+  compInt = nvs_get_int ("obsessive", 0);
+  myClient->printf ((const char*)"<tr><td>Connectivity Checking</td><td><input type=\"radio\" id=\"noObsessive\" name=\"obsessive\" value=\"0\"");
+  if (compInt == 0) myClient->printf((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"noObsessive\">Rely on keep alive packets</label><br>");
+  myClient->printf ((const char*)"<input type=\"radio\" id=\"yesObsessive\" name=\"obsessive\" value=\"1\"");
+  if (compInt == 1) myClient->printf((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"yesObsessive\">Use obsessive connectivity checks</label></td></tr>");
   myClient->printf ((const char*)"<tr><td>Diagnotics Port</td><td>");
   compInt = nvs_get_int ("diagPort", 23);
   myClient->printf ((const char*)"<input type=\"checkbox\" name=\"diagEnable\" value=\"1\"> enable temporary diagnostics port<br>Port <input name=\"diagPort\" value=\"%d\" type=\"number\" min=\"1\" max=\"65534\" size=\"7\"> (telnet/raw)", compInt);
@@ -1067,8 +1126,10 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   char varName[16];
   bool hasChanged     = false;
   bool rebootRequired = false;
+  bool diagOn         = false;
   int checkNum;
   int inputNum;
+  int mask;
 
   mkWebHeader (myClient, 200, 0, keepAlive);
   mkWebHtmlHeader (myClient, "Saved file/data", 0);
@@ -1078,14 +1139,20 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   resultPtr = webScanData (data, "fileName", dataSize);
   if (resultPtr != NULL && resultPtr[0]!='\0') {
     fs::FS fs = (fs::FS) SPIFFS;
+    char* action = NULL;
     char filename[strlen(resultPtr)+1];
     char inChar;
     bool unchanged = true;
     bool applyconfig = false;
+    bool runAsAuto = false;
 
     myClient->printf ((const char*)"<h2>Update File</h2><ul>");
     strcpy (filename, resultPtr);
-    if (webScanData (data, "applyconfig", dataSize)) applyconfig = true;;
+    action = webScanData (data, "applyconfig", dataSize);
+    if (action != NULL) {
+      if (action[0]=='1') applyconfig = true;
+      else if (action[0]=='2') runAsAuto = true;
+    }
     resultPtr = webScanData (data, "editdata", dataSize);
     File file = fs.open(filename);
     inputNum = 0;
@@ -1112,16 +1179,22 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     }
     else myClient->printf ((const char*)"<li>file %s is unchanged</li>", filename);
     if (applyconfig) myClient->printf ((const char*)"<li>apply %s as configuration data</li>", filename);
+    if (runAsAuto) myClient->printf ((const char*)"<li>run %s as automation script</li>", filename);
     myClient->printf ((const char*)"<li><a href=\"/\">Back to main page</a></li></ul><hr></body></html>\r\n");
     if (applyconfig) {
       myClient->flush();
       util_readFile (SPIFFS, filename, true);
+    }
+    else if (runAsAuto) {
+      myClient->flush();
+      runAutomation::runbg (filename);
     }
     return;
   }
   //
   // Download a URL
   //
+  #ifndef NOHTTPCLIENT
   resultPtr = webScanData (data, "downloadURL", dataSize);
   if (resultPtr != NULL && resultPtr[0]!='\0') {
     altPtr = NULL;
@@ -1138,6 +1211,7 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     myClient->printf ((const char*)"<li><a href=\"/\">Back to main page</a></li></ul><hr></body></html>\r\n");
     return;
   }
+  #endif
   //
   // Update any other parameters
   //
@@ -1199,6 +1273,30 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
       }
     }
   }
+  checkNum = nvs_get_int("mainMenuMask", 0);
+  inputNum = 0;
+  mask = 1;
+  // Checks fpr disabling menus
+  for (uint8_t n=0; n<6; n++, mask<<=1) {
+    sprintf (varName, "disableMenu%d", n);
+    resultPtr = webScanData (data, varName, dataSize);
+    if (resultPtr!=NULL) inputNum = inputNum|mask;
+  }
+  if (checkNum != inputNum) {
+    nvs_put_int ("mainMenuMask", inputNum);
+    myClient->printf ("<li>mainMenuMask = %d</li>", inputNum);
+    hasChanged = true;
+  }
+  checkNum = nvs_get_int("disableCabMenu", 0);
+  resultPtr = webScanData (data, "disableCabMenu", dataSize);
+  if (resultPtr==NULL) inputNum = 0;
+  else inputNum=1;
+  if (checkNum != inputNum) {
+    nvs_put_int ("disableCabMenu", inputNum);
+    myClient->printf ("<li>disableCabMenu = %d</li>", inputNum);
+    hasChanged = true;
+  }
+  //checks for WiFi defs
   for (uint8_t n=0; n<WIFINETS; n++) {
     sprintf (varName, "wifissid_%d", n);
     resultPtr = webScanData (data, varName, dataSize);
@@ -1246,11 +1344,22 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
     }
   }
   if (!hasChanged) {
-     myClient->printf ((const char*)"<li>No changes saved.</li>");
+    myClient->printf ((const char*)"<li>No changes saved.</li>");
   }
   resultPtr = webScanData (data, "diagEnable", dataSize);
   if (resultPtr!=NULL && resultPtr[0]=='1') {
+    diagOn = true;
     startDiagPort();
+    myClient->printf ((const char*)"<li>Diagnostic port started: telnet ");
+    if (WiFi.status() == WL_CONNECTED) {
+      IPAddress ip = WiFi.localIP();
+      myClient->printf (" %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+      if (APrunning) { myClient->printf (" or"); }
+    }
+    if (APrunning) {
+      myClient->printf (" 192.168.4.1");
+    }
+    myClient->printf ((const char*)" port %d.</li>", nvs_get_int ("diagPort", 23));
   }
   #ifdef OTAUPDATE
   resultPtr = webScanData (data, "ota_action", dataSize);
@@ -1273,10 +1382,11 @@ void mkWebSave(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAli
   resultPtr = webScanData (data, "rebootOnUpdate", dataSize);
   if (resultPtr!=NULL && (resultPtr[0]=='Y' || (hasChanged && resultPtr[0]=='C'))) {
     rebootRequired = true;
-    myClient->printf ((const char*)"<li>Rebooting %s.</li>", tname);
+    if (diagOn) myClient->printf ((const char*)"<li>Reboot required, but diagnostic port has been turned on, not rebooting. %s.</li>", tname);
+    else myClient->printf ((const char*)"<li>Rebooting %s.</li>", tname);
   } 
   myClient->printf ((const char*)"</ul><p><a href=\"/\">Back to main page</a></p></td></tr></table><hr></body></html>\r\n");
-  if (rebootRequired) {
+  if (rebootRequired && !diagOn) {
     myClient->stop();
     delay (1000);
     mt_sys_restart ((const char*)"web requested reboot");
@@ -1295,6 +1405,7 @@ void mkWebFileIndex(WiFiClient *myClient)
   char *dirname = {(char*)"/"};
   char *suffix;
   char msgBuffer[80];
+  char *curFileName;
   bool editable;
   fs::FS fs = (fs::FS) SPIFFS;
   File root = fs.open(dirname);
@@ -1318,23 +1429,27 @@ void mkWebFileIndex(WiFiClient *myClient)
   File file = root.openNextFile();
   myClient->printf ((const char*)"<table><tr><th>Type</th><th></th><th>Name</th><th></th><th>Size</th></tr>");
   while(file){
+    curFileName  = (char*)file.name();
     if(file.isDirectory()){
-      myClient->printf  ((const char*)"<tr><td>DIR</td><td rowspan=\"2\">%s</td></tr>",(char*)file.name());
+      myClient->printf  ((const char*)"<tr><td>DIR</td><td rowspan=\"2\">%s</td></tr>", curFileName);
       mkWebFileIndex(myClient);
     }
     else {
       editable = true;
+      if (curFileName[0]=='/') curFileName++;
       suffix = (char*) file.name() + (strlen((char*) file.name()) - 4);
       if (strcmp(suffix, ".ico") == 0 || strcmp(suffix, ".png") == 0 || strcmp(suffix, ".jpg") == 0 || strcmp(suffix, "jpeg") == 0) editable = false;
       myClient->printf ((const char*)"<tr><td>FILE</td><td>&nbsp;&nbsp;</td><td><a href=\"");
       if (editable) myClient->printf ((const char*)"/edit");
-      myClient->printf ((const char*)"%s\">%s</a></td><td>&nbsp;&nbsp;</td><td align=\"right\">%d</td></tr>", (char*)file.name(), (char*)file.name(), (uint) file.size());
+      myClient->printf ((const char*)"/%s\">/%s</a></td><td>&nbsp;&nbsp;</td><td align=\"right\">%d</td></tr>", curFileName, curFileName, (uint) file.size());
     }
     file = root.openNextFile();
   }
   myClient->printf ((const char*)"</table><p>%d bytes used of %d available (%d%% used)</p>", SPIFFS.usedBytes(), SPIFFS.totalBytes(), (SPIFFS.usedBytes()*100)/SPIFFS.totalBytes());
   myClient->printf ((const char*)"<p><strong>Note:</strong> File names should always start with a forward slash (/)</p>");
-  myClient->printf ((const char*)"<form action=\"/save\" method=\"post\"><h2>Download</h2><p><input name=\"downloadURL\" type=\"url\" value=\"http://\">&nbsp;<input type=\"submit\" value=\"Download\"><hr></form></td></tr></table></body></html>\r\n");
+  #ifndef NOHHTPCLIENT
+  #endif
+  myClient->printf ((const char*)"</td></tr></table></body></html>\r\n");
 }
 
 
@@ -1591,7 +1706,7 @@ void mkWebFunctionMap (WiFiClient *myClient, char *postData, uint16_t dataSize, 
 \* --------------------------------------------------------------------------- */
 void mkWebDeviceDescript (WiFiClient *myClient)
 {
-  esp_chip_info_t chip_info;
+  // esp_chip_info_t chip_info;
   uint32_t throt_time = 36;
   uint16_t mins  = esp_timer_get_time() / (uS_TO_S_FACTOR * 60.0);
   uint16_t hours = mins / 60;
@@ -1607,7 +1722,7 @@ void mkWebDeviceDescript (WiFiClient *myClient)
   }
   
   hours = hours - (days * 24);
-  esp_chip_info(&chip_info);
+  // esp_chip_info(&chip_info);
 
   if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (fc_time != throt_time) {
@@ -1626,11 +1741,11 @@ void mkWebDeviceDescript (WiFiClient *myClient)
   if (APrunning) {
     myClient->printf (" (192.168.4.1)");
   }
-  myClient->printf ((const char*)"</td></tr><tr><td align=\"right\">Hardware:</td><td>%d core ESP32 revision %d, flash = %d MB %s</td></tr>", \
-     chip_info.cores, \
+  myClient->printf ((const char*)"</td></tr><tr><td align=\"right\">Hardware:</td><td>%d core %s revision %d, flash = %d MB</td></tr>", \
+     coreCount, \
+     ESP.getChipModel(), \
      ESP.getChipRevision(), \
-     spi_flash_get_chip_size() / (1024 * 1024), \
-     (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
+     spi_flash_get_chip_size() / (1024 * 1024));
   myClient->printf ((const char*)"<tr><td align=\"right\">Software:</td><td>%s %s</td></tr>", PRODUCTNAME, VERSION);
   myClient->printf ((const char*)"<tr><td align=\"right\">Compile time:</td><td>%s %s</td></tr>", __DATE__, __TIME__);
   myClient->printf ((const char*)"<tr><td align=\"right\">Uptime:</td><td>");
@@ -1640,6 +1755,10 @@ void mkWebDeviceDescript (WiFiClient *myClient)
   myClient->printf ((const char*)"%s%%)</td></tr>", util_ftos ((ESP.getFreeHeap()*100.0)/ESP.getHeapSize(), 1));
   myClient->printf ((const char*)"<tr><td align=\"right\">Min Free Memory:</td><td>%s bytes (", util_ftos (ESP.getMinFreeHeap(), 0));
   myClient->printf ((const char*)"%s%%)</td></tr>", util_ftos ((ESP.getMinFreeHeap()*100.0)/ESP.getHeapSize(), 1));
+  if (ESP.getPsramSize() > 0) {
+    myClient->printf ((const char*)"<tr><td align=\"right\">Free PSRAM:</td><td>%s bytes (", util_ftos (ESP.getFreePsram(), 0));
+    myClient->printf ((const char*)"%s%%)</td></tr>", util_ftos ((ESP.getFreePsram()*100.0)/ESP.getPsramSize(), 1));
+  }
   myClient->printf ((const char*)"<tr><td align=\"right\">Non Volatile Storage:</td><td>%d x 32 byte blocks</td></tr>", nvs_get_freeEntries());
   myClient->printf ((const char*)"<tr><td align=\"right\">CPU Frequency:</td><td>%s MHz</td></tr>", util_ftos (ESP.getCpuFreqMHz(), 0));
   if (strlen(ssid) > 0) {

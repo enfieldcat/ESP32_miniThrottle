@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -38,26 +38,63 @@ SOFTWARE.
  * The source font should be listed in Ardiuno IDE before displayRoutines.ino
  */
 #ifndef NODISPLAY
-#ifdef CUSTOM_FONT
-#ifdef GIANT_FONT
-const char *fontLabel[] = {"Small", "Std", "Large", "Wide", "Huge", "Giant"};
-const uint8_t fontWidth[]  = { 6,8,10,14,12,16 };
-const uint8_t fontHeight[] = { 8,16,20,16,24,32 };
-#else
-const char *fontLabel[] = {"Small", "Std", "Large", "Wide", "Huge"};
-const uint8_t fontWidth[]  = { 6,8,10,14,12 };
-const uint8_t fontHeight[] = { 8,16,20,16,24 };
+const char *fontLabel[] = {"Small 6x8", "Std 8x16"
+#ifdef FONT_10x20
+, "Medium 10x20"
 #endif
-#else
-const char *fontLabel[] = {"Small", "Std", "Large", "Wide"};
-const uint8_t fontWidth[]  = { 6,8,10,14 };
-const uint8_t fontHeight[] = { 8,16,20,16 };
+#ifdef FONT_14x16
+, "Wide 14x16"
 #endif
+#ifdef FONT_12x24
+, "Large 12x24" 
+#endif
+#ifdef FONT_16x32
+, "X Large 16x32"
+#endif
+#ifdef FONT_32x64
+, "XX Large 32x64"
+#endif
+};
+const uint8_t fontWidth[]  = { 6, 8
+#ifdef FONT_10x20
+, 10
+#endif
+#ifdef FONT_14x16
+, 14
+#endif
+#ifdef FONT_12x24
+, 12
+#endif
+#ifdef FONT_16x32
+, 16
+#endif
+#ifdef FONT_32x64
+, 32
+#endif
+};
+const uint8_t fontHeight[] = { 8, 16
+#ifdef FONT_10x20
+, 20
+#endif
+#ifdef FONT_14x16
+, 16
+#endif
+#ifdef FONT_12x24
+, 24
+#endif
+#ifdef FONT_16x32
+, 32
+#endif
+#ifdef FONT_32x64
+, 64
+#endif
+};
 
 
 void setupFonts()
 {
   static uint8_t fontIndex = 1;
+  uint8_t incrementer = 0;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s setupFonts()\r\n", getTimeStamp());
@@ -74,37 +111,33 @@ void setupFonts()
   screenWidth    = display.width();
   screenHeight   = display.height();
   fontIndex      = nvs_get_int ("fontIndex", 1);
+  if (fontIndex >= sizeof(fontWidth)) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s WARNING: Font index out of range: %d\r\n", getTimeStamp(), fontIndex);
+      xSemaphoreGive(consoleSem);
+    }
+    fontIndex = 1;   // out of range check
+  }
   selFontWidth   = fontWidth[fontIndex];
   selFontHeight  = fontHeight[fontIndex];
   charsPerLine   = screenWidth  / selFontWidth;
   linesPerScreen = screenHeight / selFontHeight;
-  switch (fontIndex) {
-    case 0:
-      display.setFixedFont(ssd1306xled_font6x8);
-      break;
-    case 1:
-      display.setFixedFont(ssd1306xled_font8x16);
-      break;
-    case 2:
-      display.setFixedFont(font_10x20);
-      break;
-    case 3:
-      display.setFixedFont(font_14x16);
-      break;
-    #ifdef CUSTOM_FONT
-    case 4:
-      display.setFixedFont(font_12x24);
-      break;
-    #ifdef GIANT_FONT
-    case 5:
-      display.setFixedFont(font_16x32);
-      break;
-    #endif
-    #endif
-    default:
-      display.setFixedFont(ssd1306xled_font8x16);
-      break;
-  }
+  if (fontIndex == incrementer++) display.setFixedFont(ssd1306xled_font6x8);
+  else if (fontIndex == incrementer++) display.setFixedFont(ssd1306xled_font8x16);
+#ifdef FONT_10x20
+  else if (fontIndex == incrementer++) display.setFixedFont(font_10x20);
+#endif
+#ifdef FONT_14x16
+  else if (fontIndex == incrementer++) display.setFixedFont(font_14x16);
+#endif
+#ifdef FONT_12x24
+  else if (fontIndex == incrementer++) display.setFixedFont(font_12x24);
+#endif
+#ifdef FONT_16x32
+  else if (fontIndex == incrementer++) display.setFixedFont(font_16x32);
+#endif
+  else display.setFixedFont(ssd1306xled_font8x16);
+
   display.fill(0x00);
   #ifdef STDCOLOR
   display.setColor (STDCOLOR);
@@ -131,7 +164,7 @@ void mkLocoMenu()
   locoMenu[locomotiveCount+1] = (char*) prevMenuOption;   // give option to go to previous menu
   while (result!=0 && trackPower
     #ifndef SERIALCTRL
-    && client.connected()
+    && wiCliConnected
     #endif
     ) {
     result = displayMenu ((const char**) locoMenu, locomotiveCount+2, lastLocoMenuOption);
@@ -191,7 +224,7 @@ void mkTurnoutMenu()
   //for (uint8_t n=0; n<turnoutStateCount; n++) stateMenu[n] = turnoutState[n].name;
   while (result!=0
     #ifndef SERIALCTRL
-    && client.connected()
+    && wiCliConnected
     #endif
     ) {
     result = displayMenu ((const char**) switchMenu, turnoutCount+1, lastSwitchMenuOption);
@@ -230,7 +263,7 @@ void mkRouteMenu()
   routeMenu[routeCount] = (char*) prevMenuOption;
   while (result!=0
     #ifndef SERIALCTRL
-    && client.connected()
+    && wiCliConnected
     #endif
     ) {
     result = displayMenu ((const char**)routeMenu, routeCount+1, lastRouteMenuOption);
@@ -273,6 +306,7 @@ void mkConfigMenu()
     Serial.printf ("%s mkConfigMenu()\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
+  inConfigMenu = true;
   #ifdef SERIALCTRL
   reference[4] = 200;  // protocol, serial => DCC-Ex direct connection
   reference[7] = 200;  // Server IP, not applicable for serial link
@@ -310,6 +344,7 @@ void mkConfigMenu()
       case 6:
         setDisconnected();
         displayTempMessage ("Restarting", "Press any key to reboot or wait 30 seconds", true);
+        displayTempMessage ("Restarting", "Please wait", false);
         ESP.restart();
         break;
       case 7:
@@ -348,6 +383,7 @@ void mkConfigMenu()
         break;
     }
   }
+  inConfigMenu = false;
 }
 
 void mkCVMenu()
@@ -367,7 +403,7 @@ void mkCVMenu()
   if (cmdProtocol == DCCEX) {
     while (result!=0
       #ifndef SERIALCTRL
-      && client.connected()
+      && wiCliConnected
       #endif
       ) {
       result = displayMenu (cvMenu, 6, lastCvMenuOption);
@@ -563,21 +599,25 @@ void mkProtoPref()
 
 uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
 {
-  const char *CABOptions[] = {"Add Loco", "Remove Loco", "Turnouts", "Routes", "Return"} ;
+  const char *CABOptions[] = {"Add Loco", "Consist Reversal", "Remove Loco", "Routes", "Set Lead Loco", "Turnouts", "Return"} ;
 
   uint8_t result = 255;
   uint8_t option = 0;
   uint8_t retval = 0;
   uint8_t limit = locomotiveCount + MAXCONSISTSIZE;
-  uint8_t reference[] = { 1,2,3,4,5 };
+  uint8_t reference[] = { 1,2,3,4,5,6,7};
+  uint8_t menuMask = nvs_get_int("mainMenuMask", 0);
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkCabMenu()\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
-  if (turnoutCount == 0) reference[2] = 200;
-  if (routeCount == 0)   reference[3] = 200;
-  result = displayMenu((const char**)CABOptions , 5, 2);
+  for (uint8_t n = 0; n<limit; n++) if (locoRoster[n].owned) retval++;
+  if (turnoutCount == 0 || (menuMask&2) > 0) reference[3] = 200;  // Turnouts are array index 1 in baseMenu => mask 0x02
+  if (routeCount == 0   || (menuMask&4) > 0) reference[5] = 200;  // Routes   are array index 2 in baseMenu => mask 0x04
+  if (retval <= 1)      {reference[1] = 200; reference[4] = 200;  }
+  retval = 0;
+  result = displayMenu((const char**)CABOptions, reference , 7, 2);
   if (result == 1) {     // Add loco, should only show locos we don't yet own
     char *addOpts [locomotiveCount+1];
     for (uint8_t n = 0; n<locomotiveCount; n++) if (!locoRoster[n].owned) addOpts[option++] = locoRoster[n].name;
@@ -622,6 +662,7 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
               locoRoster[option].steps     = 128;
               locoRoster[option].id        = tLoco;
               locoRoster[option].function  = 0;
+              locoRoster[option].reverseConsist = false;
               sprintf (locoRoster[option].name, "Loco-ID-%d", tLoco);
             }
           }
@@ -648,6 +689,7 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
         else if (cmdProtocol==DCCEX) {
           locoRoster[option].steal = 'N';
           locoRoster[option].owned = true;
+          locoRoster[option].reverseConsist = false;
           #ifdef RELAYPORT
           locoRoster[option].relayIdx = 240;
           #endif
@@ -655,36 +697,114 @@ uint8_t mkCabMenu() // In CAB menu - Returns the count of owned locos
       }
     }
   }
-  else if (result == 2) {  // remove loco, should only list locos we own
-    uint8_t count = 0;
-    for (uint8_t n = 0; n<limit; n++) if (locoRoster[n].owned) count++;
-    char *removeOpts[count+1];
-    for (uint8_t n = 0; n<limit; n++) if (locoRoster[n].owned && (n != initialLoco || count == 1)) {
-      removeOpts[option++] = locoRoster[n].name;
-    }
-    removeOpts[option++] = (char*) "Return";
-    result = displayMenu ((const char**) removeOpts, option, 0);
-    if (result != 0 && result != option) {
-      result--;
-      for (uint8_t n=0; n<limit; n++) {
-        if (locoRoster[n].owned && strcmp (locoRoster[n].name, removeOpts[result]) == 0) {
-          setLocoOwnership (n, false);
-          locoRoster[n].owned = false;
-          #ifdef RELAYPORT
-          locoRoster[n].relayIdx = 255;
-          #endif
-        }
-      }
-    }
+  else if (result == 2) {
+    mkSetReverseMenu();
   }
-  else if (result == 3) {
-    mkTurnoutMenu();
+  else if (result == 3) {  // remove loco, should only list locos we own
+    result = mkGetLocoMenu(0);
+    if (result != 255) {
+      setLocoOwnership (result, false);
+      locoRoster[result].owned = false;
+      #ifdef RELAYPORT
+      locoRoster[result].relayIdx = 255;
+      #endif
+    }
   }
   else if (result == 4) {
     mkRouteMenu();
   }
+  else if (result == 5) {
+    mkSetLeadLocoMenu();
+  }
+  else if (result == 6) {
+    mkTurnoutMenu();
+  }
   for (uint8_t n = 0; n<limit; n++) if (locoRoster[n].owned) retval++;
   return (retval);
+}
+
+// for cab menu, select a controlled loco
+// variation 0 exclude lead loco
+// variation 1 include lead loco
+// return loco index in roster
+uint8_t mkGetLocoMenu (uint8_t variation)
+{
+  uint8_t limit = locomotiveCount + MAXCONSISTSIZE;
+  uint8_t retVal=255;
+  uint8_t count = 0;
+  uint8_t option = 0;
+  uint8_t leadIndex = 0;
+
+  for (uint8_t n = 0; n<limit; n++) if (locoRoster[n].owned) count++;
+  char *selectOpts[count+1];
+  uint8_t reference[count+1];
+  for (uint8_t n = 0; n<limit; n++) if (locoRoster[n].owned && (variation == 1 || n != initialLoco || count == 1)) {
+    if (n == initialLoco) leadIndex = option;
+    reference[option] = n;
+    selectOpts[option++] = locoRoster[n].name;
+  }
+  reference[option] = 255;
+  selectOpts[option++] = (char*) "Return";
+  count = displayMenu ((const char**) selectOpts, option, leadIndex);
+  if (count > 0 && count < option) {
+    retVal = reference[count-1];
+  }
+  return(retVal);
+}
+
+void mkSetReverseMenu()
+{
+  uint8_t switchLoco = mkGetLocoMenu(1);
+
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s mkSetReverseMenu()\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
+  if (switchLoco != 255 && switchLoco != initialLoco) {
+    int16_t speed = 0;
+    uint8_t direction = 0;
+    if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (locoRoster[switchLoco].reverseConsist) locoRoster[switchLoco].reverseConsist = false;
+      else locoRoster[switchLoco].reverseConsist = true;
+      direction = locoRoster[switchLoco].direction;
+      speed = locoRoster[switchLoco].speed;
+      xSemaphoreGive(velociSem);
+      setLocoDirection (switchLoco, direction);
+      setLocoSpeed (switchLoco, speed, direction);
+    }
+    else semFailed ("velociSem", __FILE__, __LINE__);
+  }
+}
+
+void mkSetLeadLocoMenu()
+{
+  uint8_t newLead = mkGetLocoMenu(1);
+
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s mkSetLeadLocoMenu()\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
+  if (newLead != 255 && newLead != initialLoco) {
+    const uint32_t maxMask = 1<<31;
+    uint32_t mask = 1;
+    uint32_t oldFuncs;
+    uint32_t tval;
+    uint8_t oldLead = initialLoco;
+    initialLoco = newLead;
+    if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      oldFuncs = locoRoster[oldLead].function;
+      xSemaphoreGive(velociSem);
+      // now have to swap any slected lead loco only functions
+      for (uint8_t functPrefix=0; mask<maxMask; mask<<=1, functPrefix++) {
+        tval = oldFuncs & mask;
+        if (tval > 0) {
+          setLocoFunction (oldLead, functPrefix, false);
+          setLocoFunction (newLead, functPrefix, true);
+        }
+      }
+    }
+    else semFailed ("velociSem", __FILE__, __LINE__);
+  }
 }
 
 void mkRotateMenu()
@@ -752,6 +872,7 @@ void displayInfo()
   }
   if (currentOpt == 3) {
     currentOpt++;
+    #ifdef USEWIFI
     if (ssid[0]!='\0') {
       IPAddress ip = WiFi.localIP();
       if (charsPerLine < 20)
@@ -764,6 +885,7 @@ void displayInfo()
       displayScreenLine (outData, lineNr++, false);
     }
     if (lineNr >= linesPerScreen) return;
+    #endif
   }
   if (currentOpt == 4) {
     currentOpt++;
@@ -826,11 +948,12 @@ void displayInfo()
   }
   // Got thus far ... so back to opt zero;
   currentOpt = 0;
+  if (lineNr==0) displayInfo(); // try again if we displayed nothing
 }
 
 
 //
-// display menu after weeding out code-200 items not for display
+// display menu after weeding out code-200(dead) items not for display
 //
 uint8_t displayMenu (const char **menuItems, uint8_t *menuIndex, uint8_t itemCount, uint8_t selectedItem)
 {
@@ -866,15 +989,20 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
   char commandKey;
   bool hasChanged = true;
   bool lineChanged[itemCount];
+  bool lastTrackPower;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s displayMenu(%x, %d, %d)\r\n", getTimeStamp(), menuItems, itemCount, selectedItem);
     xSemaphoreGive(consoleSem);
   }
+  lastTrackPower = trackPower;
   for (uint8_t n=0; n<itemCount; n++) lineChanged[n] = true;
   if (selectedItem > itemCount) selectedItem = 0;
   display.clear();
-  menuMode = true;
+  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    menuMode = true;
+    xSemaphoreGive(shmSem);
+  }
   while (exitCode == 255) {
     if (hasChanged) {
       hasChanged = false;
@@ -888,7 +1016,12 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
         lineChanged[displayLine] = false;
       }
     }
-    if (xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(10)) == pdPASS) {
+    #ifndef SERIALCTRL
+    // we are here by grace of having a connection unless in config menu
+    // exit if no connection
+    if (!(inConfigMenu || netConnState (1))) exitCode = 0;
+    #endif
+    if (exitCode != 0 && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(10)) == pdPASS) {
       #ifdef SCREENSAVER
       if (xSemaphoreTake(screenSvrSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         if (inScreenSaver) {
@@ -898,6 +1031,7 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
             Serial.printf ("%s SCREEN: Blanking ended\r\n", getTimeStamp());
             xSemaphoreGive(consoleSem);
           }
+          commandKey = '\\'; // just cleared, so key should be meaningless
         }
         screenActTime = esp_timer_get_time();
         xSemaphoreGive(screenSvrSem);
@@ -907,7 +1041,7 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
       if (commandKey == 'S' || commandKey == 'R') {
         exitCode = currentItem + 1;
       }
-      else if (commandKey == 'E' || commandKey == 'L') {
+      else if (commandKey == 'E' || commandKey == 'L' || lastTrackPower != trackPower) {
         exitCode = 0;
       }
       else if (commandKey == 'D') {
@@ -964,7 +1098,10 @@ uint8_t displayMenu (const char **menuItems, uint8_t itemCount, uint8_t selected
       #endif
     }
   }
-  menuMode = false;
+  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    menuMode = false;
+    xSemaphoreGive(shmSem);
+  }
   if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (exitCode==0) Serial.printf ("%s MENU: No selection / Back One Level\r\n", getTimeStamp());
     else Serial.printf ("%s MENU: Option %d: %s\r\n", getTimeStamp(), exitCode, menuItems[(exitCode-1)]);
@@ -1014,6 +1151,80 @@ void displayScreenLine (const char *menuItem, uint8_t lineNr, bool inverted)
     display.setBackground (BACKCOLOR);
     #endif
   }
+}
+
+void displayScreenLine (const char *menuItem, uint8_t lineNr, char function, bool inverted)
+{
+  char linedata[charsPerLine+1];
+
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    char *boolind = (char*)"false";
+    if (inverted) boolind = (char*) "true";
+    Serial.printf ("%s displayScreenLine(%s, %d, %c)\r\n", getTimeStamp(), menuItem, lineNr, function);
+    xSemaphoreGive(consoleSem);
+  }
+  if (lineNr >= linesPerScreen) return;
+  // create a right padded line with the data to be displayed
+  if (strlen (menuItem) > charsPerLine) {
+    strncpy (linedata, menuItem, charsPerLine);
+    linedata[sizeof(linedata)-1] = '\0';
+  }
+  else {
+    strcpy (linedata, menuItem);
+    for (uint8_t n=strlen(linedata); n<charsPerLine; n++) linedata[n]=' ';
+  }
+  linedata[charsPerLine] = '\0';
+ 
+  #ifdef COLORDISPLAY
+  switch (function) {
+    #ifdef LEADCOLOR
+      case 'L':
+        display.setColor (LEADCOLOR);
+        break;
+    #endif
+    #ifdef REVERSCOLOR
+      case 'R':
+        display.setColor (REVERSCOLOR);
+        break;
+    #endif
+    #ifdef INVERTCOLOR
+      case 'I':
+        display.setColor (INVERTCOLOR);
+        break;
+    #endif
+    #ifdef INPUTCOLOR
+      case 'K':
+        display.setColor (INPUTCOLOR);
+        break;
+    #endif
+    #ifdef WARNCOLOR
+      case 'W':
+        display.setColor (WARNCOLOR);
+        break;
+    #endif
+    #ifdef  STDCOLOR
+      default:
+        display.setColor (STDCOLOR);
+        break;
+    #endif
+  }
+  #ifdef BACKCOLOR
+  display.setBackground (BACKCOLOR);
+  #endif
+  #endif
+  if (inverted) {
+    display.invertColors();
+  }
+  display.printFixed(0, (lineNr*selFontHeight), linedata, STYLE_NORMAL);
+  if (inverted) {
+    display.invertColors();
+  }
+  #ifdef  STDCOLOR
+  display.setColor (STDCOLOR);
+  #endif
+  #ifdef BACKCOLOR
+  display.setBackground (BACKCOLOR);
+  #endif
 }
 
 // wait for up to 30 seconds to read CV data
@@ -1088,7 +1299,10 @@ bool displayYesNo (const char *question)
   uint8_t command = 255;
   bool option = true;
 
-  menuMode = true;
+  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    menuMode = true;
+    xSemaphoreGive(shmSem);
+  }
   while (command != 'S' && command != 'R' && command != 'L') {  // Select or left right to accept answer
     if (command == 255 || xQueueReceive(keyboardQueue, &command, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
       if (command == 255) command = 254;
@@ -1097,7 +1311,10 @@ bool displayYesNo (const char *question)
       displayScreenLine (" No",  baseLine+1, !option);
     }
   }
-  menuMode = false;
+  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    menuMode = false;
+    xSemaphoreGive(shmSem);
+  }
   if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s PROMPT: %s\r\n   YES/NO: ", getTimeStamp(), question);
     if (option) Serial.printf ("Yes\r\n");

@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -252,6 +252,55 @@ void sortRoute()
   }
 }
 
+// Convert degrees C to F
+float util_ctof (float celcius)
+{
+  return ((celcius * (9.00/5.00)) + 32);
+}
+
+// Convert degrees F to C
+float util_ftoc (float fahrenheit)
+{
+  return ((fahrenheit - 32) / 1.8);
+}
+
+// Convert radians to degrees
+float util_rtod (float radian)
+{
+  return (radian * 57.295779513);
+}
+
+// Convert degrees to radians
+float util_dtor (float degree)
+{
+  return (degree * 0.01745329252);
+}
+
+char util_menuKeySwap(char inChar)
+{
+  char retval=inChar;
+  bool isMenu = false;
+
+  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (menuMode) isMenu = true;
+    xSemaphoreGive(shmSem);
+  }
+  if (isMenu) {   // when driving menus, use numbers as arrows
+    switch (inChar) {
+      case 'U': retval = 'D' ; break;  // transpose meaning of up and down
+      case 'D': retval = 'U' ; break;
+      case '2': retval = 'D' ; break;  // 2 acts as down
+      case '8': retval = 'U' ; break;  // 8 acts as up
+      case '4': retval = 'L' ; break;  // 4 as left
+      case '5': retval = 'S' ; break;  // 5 as select
+      case '6': retval = 'R' ; break;  // 6 as right
+      case '0': retval = 'E' ; break;  // 0 as escape
+      case '#': retval = 'S' ; break;  // # as select
+    }
+  }
+  return(retval);
+}
+
 
 #ifdef FILESUPPORT
 // directory listing of SPiffs filesystem
@@ -306,8 +355,7 @@ void util_listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     file = root.openNextFile();
   }
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    sprintf (msgBuffer, "%d bytes used of %d available (%d%% used)", SPIFFS.usedBytes(), SPIFFS.totalBytes(), (SPIFFS.usedBytes()*100)/SPIFFS.totalBytes());
-    Serial.println (msgBuffer);
+    Serial.printf  ("%d bytes used of %d available (%s%% used)\r\n", SPIFFS.usedBytes(), SPIFFS.totalBytes(), util_ftos((float)(SPIFFS.usedBytes()*100)/(float)SPIFFS.totalBytes(), 2));
     xSemaphoreGive(consoleSem);
   }
 }
@@ -347,9 +395,15 @@ char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
   int ptr = 0;
 
   if (sizeOfFile!=NULL) *sizeOfFile = 0;
+  else if (path[0] != '/') {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("  - File name does not start with /\r\n");
+      xSemaphoreGive(consoleSem);
+    }
+  }
   if (!fs.exists(path)) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.printf ("  - File does not exist\r\n");
+      Serial.printf ("  %s - File does not exist\r\n", path);
       xSemaphoreGive(consoleSem);
     }
     return (retval);
@@ -357,14 +411,14 @@ char* util_loadFile(fs::FS &fs, const char* path, int* sizeOfFile)
   File file = fs.open(path);
   if(!file){
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.printf ("  - failed to open file for reading\r\n");
+      Serial.printf ("  %s - failed to open file for reading\r\n", path);
       xSemaphoreGive(consoleSem);
     }
     return (retval);
   }
   if(file.isDirectory()){
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.printf ("  - Cannot open directory for reading\r\n");
+      Serial.printf ("  %s - Cannot open directory for reading\r\n", path);
       xSemaphoreGive(consoleSem);
       file.close();
     }
@@ -396,6 +450,19 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
   uint8_t bufPtr = 0;
   uint8_t cmdBuffer[BUFFSIZE];
   
+  if (path == NULL) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.println ("Missing file name");
+      xSemaphoreGive(consoleSem);
+    }
+    return;
+  }
+  if (path[0] != '/') {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.println ("WARNING: Name does not start with /");
+      xSemaphoreGive(consoleSem);
+    }
+  }
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.print   ("Reading file: ");
     Serial.println ((char*) path);
@@ -404,7 +471,7 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
 
   if (!fs.exists(path)) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println ("  - File does not exist");
+      Serial.printf ("  %s - File does not exist\r\n", path);
       xSemaphoreGive(consoleSem);
     }
     return;
@@ -412,14 +479,14 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
   File file = fs.open(path);
   if(!file){
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println("  - failed to open file for reading");
+      Serial.printf("  %s - failed to open file for reading\r\n", path);
       xSemaphoreGive(consoleSem);
     }
     return;
   }
   if(file.isDirectory()){
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.println("  - Cannot open directory for reading");
+      Serial.printf("  %s - Cannot open directory for reading\r\n", path);
       xSemaphoreGive(consoleSem);
     }
     return;
@@ -434,7 +501,7 @@ void util_readFile(fs::FS &fs, const char * path, bool replay) {
         Serial.print('\r');
         if (replay || bufPtr == BUFFSIZE){
           cmdBuffer[bufPtr] = '\0';
-          if (cmdBuffer[0] != '#') processSerialCmd(cmdBuffer); // if 1st char in line is a '#' it is a comment
+          if (cmdBuffer[0] != '#') processSerialCmd((char*) cmdBuffer); // if 1st char in line is a '#' it is a comment
           bufPtr = 0;
         }
       }
@@ -488,6 +555,7 @@ void util_format_spiffs()
 }
 
 #ifdef USEWIFI
+#ifndef NOHTTPCLIENT
 void getHttp2File (fs::FS &fs, char *url, char *fileName)
 {
   HTTPClient *httpClient = NULL;
@@ -541,11 +609,13 @@ void getHttp2File (fs::FS &fs, char *url, char *fileName)
   }
   if (httpClient != NULL) closeHttpStream (httpClient);
 }
+#endif
 
 
 /*
  * Open a stream to read http/s data
  */
+#ifndef NOHTTPCLIENT
 WiFiClient* getHttpStream (char *url, const char *cert, HTTPClient *http)
 {
   WiFiClient *retVal = NULL;
@@ -570,10 +640,12 @@ WiFiClient* getHttpStream (char *url, const char *cert, HTTPClient *http)
   }
 return (retVal);
 }
+#endif
 
 /*
  * Close http stream once done
  */
+#ifndef NOHTTPCLIENT
 void closeHttpStream(HTTPClient *http)
 {
   if (http!= NULL) {
@@ -582,6 +654,7 @@ void closeHttpStream(HTTPClient *http)
     http = NULL;
   }
 }
+#endif
 #endif  //  USEWIFI
 
 void defaultCertExists(fs::FS &fs)
@@ -634,16 +707,34 @@ void sampleConfigExists(fs::FS &fs)
       Serial.println (DEFAULTCONF);
       xSemaphoreGive(consoleSem);
     }
-    File defCertFile = fs.open(DEFAULTCONF, FILE_WRITE);
-    if(!defCertFile){
+    File defConfFile = fs.open(DEFAULTCONF, FILE_WRITE);
+    if(!defConfFile){
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println("  - failed to open sample configuration file for writing");
         xSemaphoreGive(consoleSem);
       }
     }
     else {
-      defCertFile.print (sampleConfig);
-      defCertFile.close();
+      defConfFile.print (sampleConfig);
+      defConfFile.close();
+    }
+  }
+  if(!fs.exists(DEFAULTAUTO)) {
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.print ("Missing sample automation file, creating ");
+      Serial.println (DEFAULTAUTO);
+      xSemaphoreGive(consoleSem);
+    }
+    File defAutoFile = fs.open(DEFAULTAUTO, FILE_WRITE);
+    if(!defAutoFile){
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.println("  - failed to open sample automation file for writing");
+        xSemaphoreGive(consoleSem);
+      }
+    }
+    else {
+      defAutoFile.print (sampleAuto);
+      defAutoFile.close();
     }
   }
 }

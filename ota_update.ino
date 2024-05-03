@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +26,7 @@ SOFTWARE.
 
 
 #ifdef OTAUPDATE
+#ifndef NOHTTPCLIENT
 /*
  * ota_control
  * 
@@ -84,6 +85,11 @@ class ota_control {
         Serial.printf ("%s get_meta_data(%s, %x)\r\n", getTimeStamp(), url, cert);
         xSemaphoreGive(consoleSem);
       }
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('u', (char *) "OTA meta data URL:", false);
+        diagEnqueue ('u', (char *) url, true);
+        xSemaphoreGive(diagPortSem);
+      }
       WiFiClient *inStream = getHttpStream(url, cert, otaHttp);
       ota_label[0] = '\0';
       if (inStream != NULL) {
@@ -136,6 +142,12 @@ class ota_control {
         }
       }
       else strcpy(message, "Could not open metadata file");
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        sprintf (inBuffer, "Old Sequence: %ld", sequence);
+        diagEnqueue ('u', (char *) sequence, true);
+        diagEnqueue ('u', (char *) message, true);
+        xSemaphoreGive(diagPortSem);
+      }
       return (retVal);
     }
 
@@ -171,12 +183,22 @@ class ota_control {
           Serial.printf ("%s %s\r\n", paramName, paramValue);
           xSemaphoreGive(consoleSem);
         }
+        if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          diagEnqueue ('u', (char *) "size: ", false);
+          diagEnqueue ('u', (char *) paramValue, true);
+          xSemaphoreGive(diagPortSem);
+        }
       }
       else if (strcmp (paramName, "sequence:") == 0) {
         newSequence = atol (paramValue);
         if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("%s %s\r\n", paramName, paramValue);
           xSemaphoreGive(consoleSem);
+        }
+        if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          diagEnqueue ('u', (char *) "sequence: ", false);
+          diagEnqueue ('u', (char *) paramValue, true);
+          xSemaphoreGive(diagPortSem);
         }
       }
       else if (strcmp (paramName, "sha256:") == 0) {
@@ -185,12 +207,22 @@ class ota_control {
           Serial.printf ("%s %s\r\n", paramName, paramValue);
           xSemaphoreGive(consoleSem);
         }
+        if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          diagEnqueue ('u', (char *) "sha256: ", false);
+          diagEnqueue ('u', (char *) paramValue, true);
+          xSemaphoreGive(diagPortSem);
+        }
       }
       else if (strcmp (paramName, "name:") == 0) {
         if (strlen(paramValue) < sizeof(image_name)) strcpy (image_name, paramValue);
         if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("%s %s\r\n", paramName, paramValue);
           xSemaphoreGive(consoleSem);
+        }
+        if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          diagEnqueue ('u', (char *) "name: ", false);
+          diagEnqueue ('u', (char *) paramValue, true);
+          xSemaphoreGive(diagPortSem);
         }
       }
       else if (strcmp (paramName, "label:") == 0) {
@@ -199,8 +231,15 @@ class ota_control {
           Serial.printf ("%s %s\r\n", paramName, paramValue);
           xSemaphoreGive(consoleSem);
         }
+        if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          diagEnqueue ('u', (char *) "label: ", false);
+          diagEnqueue ('u', (char *) paramValue, true);
+          xSemaphoreGive(diagPortSem);
+        }
       }
-      else sprintf (message, "Parameter %s not recognised", paramName);
+      else {
+        sprintf (message, "Parameter %s not recognised", paramName);
+      }
     }
 
     /*
@@ -214,6 +253,7 @@ class ota_control {
       int32_t inByte, totalByte;
       uint8_t *inBuffer;
       char bin2hex[3];
+      char progMsg[2];
       mbedtls_sha256_context sha256ctx;
       int sha256status, retryCount;
 
@@ -221,15 +261,32 @@ class ota_control {
         Serial.printf ("%s get_ota_image(%s, %x)\r\n", getTimeStamp(), url, cert);
         xSemaphoreGive(consoleSem);
       }
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('u', (char *) "OTA image URL:", false);
+        diagEnqueue ('u', (char *) url, true);
+        xSemaphoreGive(diagPortSem);
+      }
+      targetPart = esp_ota_get_next_update_partition(NULL);
+      if (targetPart == NULL) {
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          sprintf (message, "Cannot identify target partition for update");
+          xSemaphoreGive(consoleSem);
+        }
+        if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          diagEnqueue ('u', (char *) "Cannot identify target partition for update", true);
+          xSemaphoreGive(diagPortSem);
+        }
+        return (false);
+      }
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("Loading new over the air image");
         xSemaphoreGive(consoleSem);
       }
-      targetPart = esp_ota_get_next_update_partition(NULL);
-      if (targetPart == NULL) {
-        sprintf (message, "Cannot identify target partition for update");
-        return (false);
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('u', (char *) "OTA update Starts:", true);
+        xSemaphoreGive(diagPortSem);
       }
+      progMsg[1] = '\0';
       WiFiClient *inStream = getHttpStream(url, cert, otaHttp);
       if (inStream != NULL) {
         if (esp_ota_begin(targetPart, image_size, &targetHandle) == ESP_OK) {
@@ -241,12 +298,17 @@ class ota_control {
           while (totalByte < image_size && retryCount > 0) {
             inByte = inStream->read(inBuffer, WEB_BUFFER_SIZE);
             if (inByte > 0) {
+              if (inByte > (WEB_BUFFER_SIZE/2)) progMsg[0] = '#';
+              else if (inByte > (WEB_BUFFER_SIZE/4)) progMsg[0] = '*';
+              else if (inByte > (WEB_BUFFER_SIZE/8)) progMsg[0] = '.';
+              else progMsg[0] = ' ';
               if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-                if (inByte > (WEB_BUFFER_SIZE/2)) Serial.printf ("#");
-                else if (inByte > (WEB_BUFFER_SIZE/4)) Serial.printf ("*");
-                else if (inByte > (WEB_BUFFER_SIZE/8)) Serial.printf (".");
-                else Serial.printf (" ");
+                Serial.printf (progMsg);
                 xSemaphoreGive(consoleSem);
+              }
+              if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                diagEnqueue ('u', (char *) progMsg, false);
+                xSemaphoreGive(diagPortSem);
               }
               totalByte += inByte;
               if (sha256status == 0) sha256status = mbedtls_sha256_update_ret(&sha256ctx, (const unsigned char*) inBuffer, inByte);
@@ -267,6 +329,11 @@ class ota_control {
               if (retryCount>0) Serial.printf ("-end-\r\n");
               else Serial.printf ("-failed- too many retries -\r\n");
               xSemaphoreGive(consoleSem);
+            }
+            if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              if (retryCount>0) diagEnqueue ('u', (char *) "\r\n-end-", true);
+              else diagEnqueue ('u', (char *) "\r\n-failed- too many retries", true);
+              xSemaphoreGive(diagPortSem);
             }
             sha256status = mbedtls_sha256_finish_ret(&sha256ctx, (unsigned char*) inBuffer);
             message[0] = '\0'; // Truncate message buffer, then use it as a temporary store of the calculated sha256 string
@@ -299,6 +366,11 @@ class ota_control {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.println ("\r\nOver the air image - load complete");
         xSemaphoreGive(consoleSem);
+      }
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('u', (char *) "\r\nOver the air load complete: ", false);
+        diagEnqueue ('u', (char *) message, true);
+        xSemaphoreGive(diagPortSem);
       }
       return (retVal);
     }
@@ -372,6 +444,10 @@ class ota_control {
       }
       else {
         strcpy (message, "No previous image to roll back to");
+      }
+      if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        diagEnqueue ('e', (char *) message, true);
+        xSemaphoreGive(diagPortSem);
       }
       return (retVal);
     }
@@ -473,6 +549,11 @@ bool OTAcheck4update(char* retVal, bool forceUpdate)
       nvs_put_int ("ota_initial", 1);
       status = true;
     }
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      diagEnqueue ('e', (char *) "### Final OTA Update status message ---------------------------------------", true);
+      diagEnqueue ('e', (char *) theOtaControl.get_status_message(), true);
+      xSemaphoreGive(diagPortSem);
+    }
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.println (theOtaControl.get_status_message());
       xSemaphoreGive(consoleSem);
@@ -480,7 +561,13 @@ bool OTAcheck4update(char* retVal, bool forceUpdate)
     if (retVal != NULL) strcpy (retVal, theOtaControl.get_status_message());
     xSemaphoreGive(otaSem);
   }
-  else strcpy (retVal, "Another over the air update operation is in progress.");
+  else {
+    strcpy (retVal, "Another over the air update operation is in progress.");
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      diagEnqueue ('e', (char *) "Another OTA update is in progress", true);
+      xSemaphoreGive(diagPortSem);
+    }
+  }
   return (status);
 }
 
@@ -534,4 +621,5 @@ const char* OTAstatus()
   return (message);
 }
 
+#endif
 #endif

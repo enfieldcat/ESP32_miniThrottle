@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -71,6 +71,11 @@ static SemaphoreHandle_t routeSem     = xSemaphoreCreateMutex();  // used for se
 static SemaphoreHandle_t tcpipSem     = xSemaphoreCreateMutex();
 static SemaphoreHandle_t fastClockSem = xSemaphoreCreateMutex();  // for sending/receiving/displaying fc messages
 static SemaphoreHandle_t shmSem       = xSemaphoreCreateMutex();  // shared memory for used for moved blocks of data between tasks/threads
+#ifdef USEWIFI
+static SemaphoreHandle_t diagPortSem  = xSemaphoreCreateMutex();  // try to only enqueue one message at a time
+static SemaphoreHandle_t rescanSem    = xSemaphoreCreateMutex();  // only one scan of wifi networks at any time
+#endif
+static SemaphoreHandle_t procSem      = xSemaphoreCreateMutex();  // Process control Semaphore
 #ifdef WEBLIFETIME
 static SemaphoreHandle_t webServerSem = xSemaphoreCreateMutex();  // used by different web server threads
 #endif
@@ -81,24 +86,30 @@ static SemaphoreHandle_t screenSvrSem = xSemaphoreCreateMutex();  // used to coo
 static SemaphoreHandle_t relaySvrSem  = xSemaphoreCreateMutex();  // used by various relay threads to coordinate memory/dcc-ex access
 #endif
 #ifdef OTAUPDATE
+#ifndef NOHTTPCLIENT
 static SemaphoreHandle_t otaSem       = xSemaphoreCreateMutex();  // used to ensure only one ota activity at a time
 static HTTPClient *otaHttp            = new HTTPClient();         // Client used for update
+#endif
 #endif
 static QueueHandle_t cvQueue          = xQueueCreate (2,  sizeof(int16_t));  // Queue for querying CV Values
 static QueueHandle_t keyboardQueue    = xQueueCreate (3,  sizeof(char));     // Queue for keyboard type of events
 static QueueHandle_t keyReleaseQueue  = xQueueCreate (3,  sizeof(char));     // Queue for keyboard release type of events
+static QueueHandle_t locoUpdateQueue  = xQueueCreate (3,  sizeof(char));     // Queue for signaling change required to loco driving display
 static QueueHandle_t dccAckQueue      = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc updates, avoid flooding of WiFi
 static QueueHandle_t dccLocoRefQueue  = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc locomotive speed and direction changes
 static QueueHandle_t dccTurnoutQueue  = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc turnout data
 static QueueHandle_t dccRouteQueue    = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc route data
 static QueueHandle_t dccOffsetQueue   = xQueueCreate (10, sizeof(uint8_t));  // Queue for dcc array offsets for setup of data
+#ifdef USEWIFI
 static QueueHandle_t diagQueue        = xQueueCreate (256, sizeof(char));    // diagnostic data queue.
+#endif
 static struct locomotive_s   *locoRoster   = (struct locomotive_s*) malloc (sizeof(struct locomotive_s) * MAXCONSISTSIZE);
 static struct turnoutState_s *turnoutState = NULL;  // table of turnout states
 static struct turnout_s      *turnoutList  = NULL;  // table of turnouts
 static struct routeState_s   *routeState   = NULL;  // table of route states
 static struct route_s        *routeList    = NULL;  // table of routes
 static char *sharedMemory = NULL;     // inter process communication shared memory buffer
+const char *baseMenu[]  = { "Locomotives", "Turnouts", "Routes", "Track Power", "CV Programming", "Configuration" };
 #ifdef BACKLIGHTPIN
 #ifdef SCREENSAVER
 static uint64_t screenActTime  = 0;   // time stamp of last user activity
@@ -115,6 +126,7 @@ static int keepAliveTime    = 10;     // WiThrottle keepalive time
 static int brakePres        = 0;      // brake pressure register
 #endif
 static uint32_t fc_time = 36;         // in jmri mode we can receive fast clock, in relay mode we can send it, 36s past midnight => not updated
+static float sharedRegister[REGISTERCOUNT];
 static uint32_t defaultLatchVal     = 0;  // bit map of which functions latch
 static uint32_t defaultLeadVal      = 0;  // bit map of which functions are for lead loco only
 const  uint16_t routeDelay[]        = {0, 500, 1000, 2000, 3000, 4000}; // selectable delay times when setting route in DCCEX mode
@@ -163,6 +175,9 @@ static uint8_t defaultWifiMode  = WIFIBOTH;      // default wifi mode
 #else
 static uint8_t defaultWifiMode  = WIFIBOTH;      // default wifi mode - Optionally change to WIFISTA as non-relay default
 #endif
+#ifndef SERIALCTRL
+static uint64_t maxKeepAliveTO  = 0;             // by default ignore keep alive replies
+#endif
 #ifdef WEBLIFETIME
 static WiFiServer *webServer;                    // the web server wifi service
 static uint16_t webPort         = WEBPORT;       // tcp/ip web server port
@@ -183,6 +198,7 @@ static char dccLCD[4][21];               // DCC-Ex LCD messages
 static char diagMonitorMode   = ' ';     // mode of diag monitor
 static bool configHasChanged  = false;
 static bool showPackets       = false;   // debug setting: [no]showpackets
+static bool showNextPacket    = false;   // Show next packet - used for sendcmd responses
 static bool showKeepAlive     = false;   // debug setting: [no]showkeepalive
 static bool showKeypad        = false;   // debug setting: [no]showkeypad
 static bool showWebHeaders    = false;   // debug setting: [no]showweb
@@ -196,15 +212,28 @@ static bool funcChange        = true;    // in locomotive driving mode, have fun
 static bool speedChange       = false;   // in locomotive driving mode, has speed changed?
 static bool netReceiveOK      = false;
 static bool diagReceiveOK     = false;   // flag to ensure only one cpy is running
+#ifdef USEWIFI
 static bool diagIsRunning     = false;   // run state indicator
+static bool obsessive         = false;   // obsessive connectivity checks
+#endif
 static bool APrunning         = false;   // are we running as an access point?
+static bool wiCliConnected    = false;   // manage our own wifi client connected state
+static bool inConfigMenu      = false;   // in config menu flag - config menu can run without server connection
+static bool resetKeepAliveInd = false;   // is the keep alive timer reset if other oackets are sent?
+#ifdef USEWIFI
 static WiFiServer *diagServer = NULL;    // the diagnostic server wifi service
+#endif
 #ifdef POTTHROTPIN
 static bool enablePot         = true;    // potentiometer enable/disable while driving
 #endif
 #ifdef SCREENSAVER
 static bool inScreenSaver     = false;   // Has backlight been turned off?
 #endif
+// Automation related
+static struct procTable_s    procTable[PROCTABLESIZE];
+static struct dccSensor_s    dccSensorTable[DCCSENSORCNT];	
+static struct localpin_s     localPinTable[LOCALPINCNT];
+static int8_t ledChannel     = 0;
 #ifdef FILESUPPORT
 static fs::File writeFile;
 static bool writingFile       = false;
@@ -266,6 +295,13 @@ const char *cssTemplate = {"* { font-family: system-ui; }\n" \
 ".Off { background-color: #DD0000 !important; padding: 0px; border-spacing: 0px; }\n" \
 };
 #endif  //  WEBLIFETIME
+const char *sampleAuto = {"# Sample automation of power and keypad tasks\n" \
+"# use for repetative testing and system set up\n# Rename as /auto.run to run automatically on start.\n#\n" \
+"# delete exit line to allow rest of automation to run\nexit\n#\n" \
+"# wait for connection and power on\nwaitfor connected\nrem connected proceeding with automation.\ndelay 1000\npower on\nwaitfor trackpower\n#\n" \
+"# Now set up initial route\nroute initial\ndelay 5000\n#\n" \
+"# Do some keypad setup\nkey L\ndelay 1000\nkey U\ndelay 500\nkey U\ndelay 500\nkey U\n" \
+};
 const char *sampleConfig = {"# Sample file for adding definitions to miniThrottle\n" \
 "#\nTypically this may be used to define a locomotive roster and turnouts for\n" \
 "# DCC-Ex or set configuration parameters which can be set at the console.\n\n" \
@@ -327,63 +363,116 @@ const char txtWarning[] = { "Warning" };
  * * Start subtasks to handle I/O
  */
 void setup()  {
-  esp_chip_info_t chip_info;
-  //  printf("This is ESP32 chip with %d CPU cores, WiFi%s%s, ",
-  //          chip_info.cores,
-  //          (chip_info.features & CHIP_FEATURE_BT) ? "/BT" : "",
-  //          (chip_info.features & CHIP_FEATURE_BLE) ? "/BLE" : "");
+  // esp_chip_info_t chip_info;
+  char commandKey = '.';
+  bool cpuOK = true;
   Serial.begin(115200);
+  #ifdef STARTDELAY
+    Serial.printf ("Waiting %d seconds:", STARTDELAY);
+    for (uint8_t n=0; n<STARTDELAY; n++) {
+      Serial.printf (" #");
+      delay (1000);
+    }
+    Serial.printf (" Starting\r\n");
+  #endif
   for (uint8_t n=0; n<MAXCONSISTSIZE; n++) {
     strcpy (locoRoster[n].name, "Void");
-    locoRoster[n].owned    = false;
-    locoRoster[n].relayIdx = 255;
+    locoRoster[n].owned          = false;
+    locoRoster[n].relayIdx       = 255;
+    locoRoster[n].reverseConsist = false;
   }
   // load initial settings from Non Volatile Storage (NVS)
   nvs_init();
   nvs_get_string ("tname", tname, NAME, sizeof(tname));
   // Print a diagnostic to the console, Prior to starting tasks no semaphore required
-  esp_chip_info(&chip_info);
-  coreCount = chip_info.cores;
-  Serial.printf  ("\r\n----------------------------------------\r\n");
-  Serial.printf  ("Hardware Vers: %d core ESP32 revision %d, Speed %dMHz, Xtal Freq: %dMHz, %d MB %s flash\r\n", \
-     chip_info.cores, \
+  //esp_chip_info(&chip_info);
+  coreCount = ESP.getChipCores();
+  #if ESPMODEL == ESP32C3
+  printf  ("Hardware Vers: %d core %s (rev %d) %dMHz, Xtal: %dMHz, %d MB flash\r\n", \
+     coreCount, \
+     ESP.getChipModel(), \
      ESP.getChipRevision(), \
      ESP.getCpuFreqMHz(), \
      getXtalFrequencyMhz(), \
-     spi_flash_get_chip_size() / (1024 * 1024), \
-     (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
+     spi_flash_get_chip_size() / (1024 * 1024));
+  printf ("  Heap Memory: %d bytes\r\n", ESP.getHeapSize());
+  printf ("Console Tx and Rx ports switch to I/O pins %d and %d respectively\r\n", TX, RX);
+  #endif
+  mt_ruler (NULL);
+  Serial.printf  ("Hardware Vers: %d core %s (rev %d) %dMHz, Xtal: %dMHz, %d MB flash\r\n", \
+     coreCount, \
+     ESP.getChipModel(), \
+     ESP.getChipRevision(), \
+     ESP.getCpuFreqMHz(), \
+     getXtalFrequencyMhz(), \
+     spi_flash_get_chip_size() / (1024 * 1024));
+  Serial.printf  ("  Heap Memory: %d bytes\r\n", ESP.getHeapSize());
   Serial.printf  ("Software Vers: %s %s\r\n", PRODUCTNAME, VERSION);
   Serial.printf  (" Compile Time: %s %s\r\n", __DATE__, __TIME__);
   #ifndef NODISPLAY
   Serial.printf  (" Display Type: %s\r\n", DISPLAYNAME);
+  #else
+  Serial.printf  (" Display Type: No Display\r\n");
   #endif   //  NODISPLAY
   Serial.printf  ("Throttle Name: %s\r\n", tname);
-  Serial.printf  ("----------------------------------------\r\n\r\n");
+  // Optional define in miniThrottle.h, not critical to check partitions on each reboot
+  mt_ruler (NULL);
   for (uint8_t n=0; n<coreCount; n++) print_reset_reason(n, rtc_get_reset_reason(n));
-  debounceTime = nvs_get_int ("debounceTime", DEBOUNCEMS);
-  screenRotate = nvs_get_int ("screenRotate", 0);
+  mt_ruler (NULL);
   if (nvs_get_int ("bidirectional", 0) == 1) bidirectionalMode = true;
+  #if ESPMODEL == ESP32
+  if (strcmp (ESP.getChipModel(), "ESP32") != 0 && strncmp (ESP.getChipModel(), "ESP32-D", 7) != 0) cpuOK = false;
+  #elif ESPMODEL == ESP32S2
+  if (strcmp (ESP.getChipModel(), "ESP32-S2") != 0) cpuOK = false;
+  #elif ESPMODEL == ESP32S3
+  if (strcmp (ESP.getChipModel(), "ESP32-S3") != 0) cpuOK = false;
+  #elif ESPMODEL == ESP32C2
+  if (strcmp (ESP.getChipModel(), "ESP32-C2") != 0) cpuOK = false;
+  #elif ESPMODEL == ESP32C2
+  if (strcmp (ESP.getChipModel(), "ESP32-C3") != 0) cpuOK = false;
+  #endif
+  if (!cpuOK) {
+    char* cpuName = (char*) ESP.getChipModel();
+    Serial.printf ("CPU type mismatch, requires miniThrottle.h line: #define ESPMODEL ");
+    if      (strcmp (cpuName, "ESP32")    == 0 || strncmp (ESP.getChipModel(), "ESP32-D", 7) == 0) Serial.printf ("ESP32");
+    else if (strcmp (cpuName, "ESP32-S2") == 0) Serial.printf ("ESP32S2");
+    else if (strcmp (cpuName, "ESP32-S3") == 0) Serial.printf ("ESP32S3");
+    else if (strcmp (cpuName, "ESP32-C2") == 0) Serial.printf ("ESP32C2");
+    else                                        Serial.printf ("ESP32C3");
+    Serial.printf ("\r\nInitialisation halted, please define and recompile.\r\n");
+    while (1 == 1) sleep (3600);
+  }
+  #ifdef SHOWPARTITIONS
+  displayPartitions();
+  #endif    // SHOWPARTITIONS
+  if (showPinConfig()) Serial.printf ("%s Basic hardware check passed.\r\n", getTimeStamp());
+  else {
+    Serial.printf ("%s Basic hardware check failed.\r\n", getTimeStamp());
+    Serial.printf ("%s Some I/O pins may have more than one assignment.\r\n", getTimeStamp());
+    Serial.printf ("%s Reconfigure and recompile required to proceed.\r\n", getTimeStamp());
+    Serial.printf ("%s System initialisation aborted.\r\n", getTimeStamp());
+    while (true) delay (10000);
+  }
   #ifdef SHOWPACKETSONSTART
   showPackets = true;
   #endif    //  SHOWPACKETSONSTART
+  debounceTime = nvs_get_int ("debounceTime", DEBOUNCEMS);
+  screenRotate = nvs_get_int ("screenRotate", 0);
   // Also change CPU speed before starting wireless comms
   #ifndef NOCPUSPEED
-  int cpuSpeed = nvs_get_int ("cpuspeed", 0);
-  if (cpuSpeed > 0) {
-    #ifdef USEWIFI   //  USEWIFI
-    if (cpuSpeed < 80) cpuSpeed = 80; 
-    #endif
-    Serial.printf ("%s Setting CPU speed to %d MHz\r\n", getTimeStamp(), cpuSpeed);
-    setCpuFrequencyMhz (cpuSpeed);
+  {
+    int cpuSpeed = nvs_get_int ("cpuspeed", 0);
+    if (cpuSpeed > 0) {
+      #ifdef USEWIFI   //  USEWIFI
+      if (cpuSpeed < 80) cpuSpeed = 80; 
+      #endif
+      Serial.printf ("%s Setting CPU speed to %d MHz\r\n", getTimeStamp(), cpuSpeed);
+      delay (1000);
+      setCpuFrequencyMhz (cpuSpeed);
+      delay (1000);
+    }
   }
   #endif
-  if (showPinConfig()) Serial.printf ("%s Basic hardware check passed\r\n", getTimeStamp());
-  else {
-    Serial.printf ("%s Basic hardware check failed\r\n", getTimeStamp());
-    Serial.printf ("%s Reconfigure and recompile required to proceed\r\n", getTimeStamp());
-    Serial.printf ("%s System initialisation aborted\r\n", getTimeStamp());
-    while (true) delay (10000);
-  }
   debuglevel      = nvs_get_int ("debuglevel",    DEBUGLEVEL);
   dccPowerFunc    = nvs_get_int ("dccPower",      DCCPOWER);
   defaultLatchVal = nvs_get_int ("FLatchDefault", FUNCTLATCH);
@@ -392,6 +481,12 @@ void setup()  {
   inventoryTurn   = nvs_get_int ("inventoryTurn", LOCALINV);
   inventoryRout   = nvs_get_int ("inventoryRout", LOCALINV);
   for (uint8_t n=0;n<4;n++) dccLCD[n][0] = '\0'; // store empty string in dccLCD array
+  // initialise queues
+  commandKey = '.'; // initialise queue to start
+  xQueueSend (keyboardQueue, &commandKey, 0);
+  xQueueSend (keyReleaseQueue, &commandKey, 0);
+  // xQueueSend (locoUpdateQueue, &commandKey, 0);
+  xQueueSend (dccAckQueue, &commandKey, 0);
   #ifdef RELAYPORT
   relayPort = nvs_get_int ("relayPort", RELAYPORT);
   relayServer = new WiFiServer(relayPort);
@@ -459,11 +554,16 @@ void setup()  {
 
   // Check filesystem for config, cert and icon storage
   #ifdef FILESUPPORT
-  Serial.printf ("%s Attaching SPIFFS filesystem - may take several minutes if formatting is required.\r\n", getTimeStamp());
-  if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)){
-    Serial.printf ("%s SPIFFS filesystem required formatted.\r\n", getTimeStamp());
-    delay (1500);
+  Serial.printf ("%s Attaching SPIFFS filesystem.\r\n", getTimeStamp());
+  if(SPIFFS.begin (false)) {
+    Serial.printf ("%s SPIFFS filesystem started OK.\r\n", getTimeStamp());
+    }
+  else {
+    Serial.printf ("%s SPIFFS filesystem formatting - please wait.\r\n", getTimeStamp());
+    SPIFFS.begin (true);
+    Serial.printf ("%s SPIFFS filesystem formatted OK.\r\n", getTimeStamp());
   }
+  delay (250);
   sampleConfigExists(SPIFFS);
   #ifdef CERTFILE
   defaultCertExists(SPIFFS);
@@ -474,32 +574,57 @@ void setup()  {
   defaultCssFileExists(SPIFFS);
   #endif   //  WEBLIFETIME
   #endif   //  FILESUPPORT
+  // Process management for automations
+  for (uint8_t n=0; n<PROCTABLESIZE; n++) {
+    procTable[n].id = 0;
+    procTable[n].state = 11;
+    for (uint8_t j=0; j<PROCNAMELENGTH; j++) procTable[n].filename[j] = '\0';
+    }
+  for (uint8_t i; i<REGISTERCOUNT; i++) sharedRegister[i] = 0.00;
+  for (uint8_t i; i<DCCSENSORCNT;  i++) {
+    dccSensorTable[i].id = 65500;
+    dccSensorTable[i].value = SENSORUNKNOWN;
+  }
+  for (uint8_t i; i<LOCALPINCNT;   i++) {
+    localPinTable[i].pinNr = 255;
+    localPinTable[i].assignment = PWM + 10;
+  }
   // Use tasks to process various input and output streams
   // micro controller has enough memory, that stack sizes can be generously allocated to avoid stack overflows
   xTaskCreate(serialConsole, "serialConsole", 8192, NULL, 4, NULL);
-  #ifdef SERIALPORT
+  delay (250);
+  #ifdef SERIALCTRL
   cmdProtocol = DCCEX;    // expect it always to be this!
   #else
   cmdProtocol = nvs_get_int ("defaultProto", WITHROT);
-  #endif  //  SERIALPORT
+  if (cmdProtocol == WITHROT) {
+    resetKeepAliveInd = nvs_get_int("resetKeepAlive", 0) > 0;
+  }
+  #endif  //  SERIALCTRL
   #ifdef DELAYONSTART
   {
     uint16_t delayOnStart = nvs_get_int ("delayOnStart", DELAYONSTART);
     if (delayOnStart>120) delayOnStart = 120;
-    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.printf ("%s Delay %ds before starting network services and initialising display\r\n", getTimeStamp(), delayOnStart);
+    if (delayOnStart > 0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s Waiting %d seconds before starting network services and initialising display.\r\n", getTimeStamp(), delayOnStart);
+      Serial.printf ("%s Count down: ", getTimeStamp());
+      for (uint8_t n=0; n<delayOnStart; n++) {
+        Serial.printf (" #");
+        delay (1000);
+      }
+      printf (" Starting\r\n");
       xSemaphoreGive(consoleSem);
     }
-    delayOnStart *= 1000;
-    delay (delayOnStart);  // console started but no network services before the delay
   }
   #endif   // DELAYONSTART
   #ifdef USEWIFI
+  if (nvs_get_int ("obsessive", 0) == 1) obsessive = true;
+  else obsessive = false;
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Starting WiFi network services\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
-  xTaskCreate(connectionManager, "connectionMgr", 4096, NULL, 4, NULL);
+  xTaskCreate(connectionManager, "connectionMgr", 6144, NULL, 4, NULL);
   #ifndef SERIALCTRL
   // Only used if connection to controlstation is over WiFi
   xTaskCreate(keepAlive, "keepAlive", 2048, NULL, 4, NULL);
@@ -510,7 +635,7 @@ void setup()  {
     Serial.printf ("%s Starting connection to serially connected DCC-Ex\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
-  xTaskCreate(serialConnectionManager, "serialCntMgr", 4096, NULL, 4, NULL);
+  xTaskCreate(serialConnectionManager, "serialCntMgr", 6144, NULL, 4, NULL);
   #ifdef RELAYPORT
   #ifdef USEWIFI
   // if (relayMode == WITHROTRELAY) {
@@ -546,9 +671,10 @@ void setup()  {
   #endif   // keynone
   xTaskCreate(switchMonitor, "switchMonitor", 2048, NULL, 4, NULL);
   #endif   // NODISPLAY
-  //if (nvs_get_int("diagPortEnable", 0) == 1) {
-  //  startDiagPort();
-  //}
+  // Finally check for an auto run
+  if(SPIFFS.exists("/auto.run")) {
+    runInitialAuto();
+  }
 }
 
 /*
@@ -563,10 +689,11 @@ void loop()
   uint8_t change = 0;
   uint8_t answer;
   uint8_t menuResponse[] = {1,2,3,4,5,6};
+  uint8_t menuMask = nvs_get_int("mainMenuMask", 0);
   char commandKey;
   char commandStr[2];
-  const char *baseMenu[]  = { "Locomotives", "Turnouts", "Routes", "Track Power", "CV Programming", "Configuration" };
   const char txtNoPower[] = { "Track power off. Turn power on to enable function." };
+  bool menuDisplayable = false;
   #endif   // NODISPLAY
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -616,17 +743,17 @@ void loop()
   // Normal control
   while (true) {
     #ifndef SERIALCTRL
-    if (!client.connected()) {
+    if (!wiCliConnected) {
       uint8_t answer;
       static bool stateChange   = true;
       static bool wifiConnected = false;
       static bool APConnected   = false;
 
-      if ((!APrunning) && WiFi.status() != WL_CONNECTED && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
+      if (((!APrunning) && WiFi.status() != WL_CONNECTED || !wiCliConnected) && xQueueReceive(keyboardQueue, &commandKey, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
         mkConfigMenu();
         stateChange = true;
       }
-      if (((!APrunning) && WiFi.status() != WL_CONNECTED) || (!client.connected())) {
+      if (((!APrunning) && WiFi.status() != WL_CONNECTED) || (!wiCliConnected)) {
         if (wifiConnected && WiFi.status() != WL_CONNECTED) {
           wifiConnected = false;
           stateChange   = true;
@@ -676,56 +803,72 @@ void loop()
       }
     }
     else {
-      while (client.connected()) {
+      while (wiCliConnected) {
     #else
     // handling for Serial connection
     if (true) {
       while (true) { // Assume serial => always connected
     #endif
-        if (trackPower) {
-          menuResponse[0] = 1;
+        // Prime the menuResponse as if it will all work
+        for (uint8_t n=0; n<sizeof(menuResponse); n++) menuResponse[n] = n+1;
+        // Find if any options are disabled due to lack of power
+        if (trackPower) {  // We have track power
           if (turnoutCount == 0) menuResponse[1] = 200;
-          else menuResponse[1] = 2;
           if (routeCount == 0)   menuResponse[2] = 200;
-          else menuResponse[2] = 3;
           if (cmdProtocol == WITHROT) {
             menuResponse[4] = 200;
             if (lastMainMenuOption == 4) lastMainMenuOption = 0;
           }
-          else menuResponse[4] = 5;
         }
-        else {
+        else {   // We have no track power
           menuResponse[0] = 200;
           if (nvs_get_int("noPwrTurnouts", 0) == 0) menuResponse[1] = 200;
           if (nvs_get_int("noPwrTurnouts", 0) == 0) menuResponse[2] = 200;
           menuResponse[4] = 200;
           if (lastMainMenuOption != 3 && lastMainMenuOption != 5) lastMainMenuOption = 3;
         }
-        answer = displayMenu ((const char**)baseMenu, menuResponse, 6, lastMainMenuOption);
-        if (answer > 0) lastMainMenuOption = answer - 1;
-        switch (answer) {
-          case 1:
-            if (trackPower) mkLocoMenu ();
-            else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
-            break;
-          case 2:
-            if (trackPower || nvs_get_int("noPwrTurnouts", 0) == 1) mkTurnoutMenu ();
-            else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
-            break;
-          case 3:
-            if (trackPower || nvs_get_int("noPwrTurnouts", 0) == 1) mkRouteMenu();
-            else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
-            break;
-          case 4:
-            mkPowerMenu();
-            break;
-          case 5:
-            if (trackPower) mkCVMenu ();
-            else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
-            break;
-          case 6:
-            mkConfigMenu();
-            break;
+        // check if any menu options are disabled from configuration
+        {
+          uint8_t chkMask  = 1;
+          menuMask = nvs_get_int("mainMenuMask", 0);
+          for (uint8_t n=0; n<6; n++, chkMask <<= 1) {
+            if ((menuMask & chkMask) > 0 ) menuResponse[n] = 200; // Kill the option
+          }
+        }
+        // Check if the menu is displayable
+        menuDisplayable = false;
+        for (uint8_t n=0; n<6 && !menuDisplayable; n++) if (menuResponse[n] != 200) menuDisplayable = true;
+        if (menuDisplayable) {   // Menu is displayable
+          answer = displayMenu ((const char**)baseMenu, menuResponse, 6, lastMainMenuOption);
+          if (answer > 0) lastMainMenuOption = answer - 1;
+          switch (answer) {
+            case 1:
+              if (trackPower) mkLocoMenu ();
+              else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
+              break;
+            case 2:
+              if (trackPower || nvs_get_int("noPwrTurnouts", 0) == 1) mkTurnoutMenu ();
+              else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
+              break;
+            case 3:
+              if (trackPower || nvs_get_int("noPwrTurnouts", 0) == 1) mkRouteMenu();
+              else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
+              break;
+            case 4:
+              mkPowerMenu();
+              break;
+            case 5:
+              if (trackPower) mkCVMenu ();
+              else displayTempMessage ((char*)txtWarning, (char*)txtNoPower, true);
+              break;
+            case 6:
+              mkConfigMenu();
+              break;
+          }
+        }
+        else {     // Menu is not displayable - show info instead, 10 second refresh
+          displayInfo();
+          delay (10000);
         }
       }
     }
@@ -735,12 +878,12 @@ void loop()
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s Terminate loop()\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
-  }
+  }   //  stop thread is not required
   vTaskDelete( NULL );
 }
 
 
-
+// Decode reason for last reser
 void print_reset_reason(uint8_t n, RESET_REASON reason)
 {
   if (reason>0 && reason<17) {
@@ -762,7 +905,7 @@ void print_reset_reason(uint8_t n, RESET_REASON reason)
       case 14 : Serial.printf ("for APP CPU, reset by PRO CPU");break;
       case 15 : Serial.printf ("Reset when the vdd voltage is not stable");break;
       case 16 : Serial.printf ("RTC Watch dog reset digital core and rtc module");break;
-      default : Serial.printf ("NO_MEAN");
+      default : Serial.printf ("Unknown - NO_MEAN code");
     }
     Serial.printf ("\r\n");
   }

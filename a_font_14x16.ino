@@ -9,9 +9,13 @@
 // if the source(s) are acknowleged. While the code text has been altered
 // to suit lcdgfx library, the art work of the lettering remains true to
 // the original source.
-// 
+//
+// to exclude from build, rename with .alt1 suffix
+//
 //###########################################################################
 //
+#ifndef NODISPLAY
+#define FONT_14x16
 
 const PROGMEM uint8_t font_14x16[] = {
 0x00, // Fixed width font
@@ -1755,3 +1759,5 @@ const PROGMEM uint8_t font_14x16[] = {
 // +--------------+
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 0x00 }; 
+
+#endif

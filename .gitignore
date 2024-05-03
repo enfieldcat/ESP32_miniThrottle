@@ -1,9 +1,13 @@
 a_font_12x24.ino
 a_font_16x32.ino
+a_font_32x64.ino
 miniThrottle.zip
 miniThrottle.h
+miniThrottleHandheld.h
+miniThrottleNoCtrl.h
+miniThrottleNoDisp.h
+miniThrottleStackRelay.h
+miniThrottleRelay.h
 partitions.csv
 *.bak
-*.alt1
-*.alt2
 

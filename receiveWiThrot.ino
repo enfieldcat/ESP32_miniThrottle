@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -106,6 +106,24 @@ void processWiThrotPacket (char *packet)
       Serial.printf ("%s Keep Alive interval set to %d seconds\r\n", getTimeStamp(), keepAliveTime);
       xSemaphoreGive(consoleSem);
     }
+    #ifndef SERIALCTRL
+    {
+      // set to no tracking
+      uint8_t maxMissedKeepAlive = nvs_get_int ("missedKeepAlive", 3);
+      if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        if (maxMissedKeepAlive > 0) {
+          if (maxMissedKeepAlive > 20) maxMissedKeepAlive = 20;
+          maxKeepAliveTO = ((keepAliveTime * maxMissedKeepAlive) + 1 ) * uS_TO_S_FACTOR;
+        }
+        else maxKeepAliveTO = 0;
+        xSemaphoreGive(shmSem);
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s Max missed Keep Alive packets set to %d\r\n", getTimeStamp(), maxMissedKeepAlive);
+          xSemaphoreGive(consoleSem);
+        }
+      }
+    }
+    #endif
   }
   else if (strncmp (packet, "PFT", 3) == 0 && strlen(packet) > 7) { // Update fast clock
     for (uint8_t n=3; n<strlen(packet); n++) if (packet[n]=='<') packet[n]='\0';
@@ -178,15 +196,20 @@ void processWiThrotPacket (char *packet)
       if (packet[2] == '+') {  // Add locomotive
         for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
           if ((locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type) || (locoNumber == 0 && throtId == locoRoster[ptr].throttleNr)) {
+            const char inChar = 'S';
             locoRoster[ptr].owned = true;
             locoRoster[ptr].steal = 'N';
+            xQueueSend (locoUpdateQueue, &inChar, 0);
           }
         }        
       }
       else if (packet[2] == '-') {  // Remove locomotive
         for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
           if ((locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type) || (locoNumber == 0 && throtId == locoRoster[ptr].throttleNr)) {
+            const char inChar = 'S';
             locoRoster[ptr].owned = false;
+            locoRoster[ptr].reverseConsist = false;
+            xQueueSend (locoUpdateQueue, &inChar, 0);
           }
         }        
       }
@@ -210,9 +233,11 @@ void processWiThrotPacket (char *packet)
             if ((locoNumber == 0 && throtId == locoRoster[ptr].throttleNr) || (locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type)) {
               if (locoNumber != 0) found = true;
               if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                const char inChar = 'F';
                 if (tptr[1] == '1') locoRoster[ptr].function = locoRoster[ptr].function | mask;
                 else locoRoster[ptr].function = locoRoster[ptr].function & mask;
                 xSemaphoreGive(functionSem);
+                xQueueSend (locoUpdateQueue, &inChar, 0);
               }
               else semFailed ("functionSem", __FILE__, __LINE__);
             }
@@ -224,12 +249,15 @@ void processWiThrotPacket (char *packet)
         //
         else if (tptr[0] == 'V') {  // Velocity Update
           int velocity = strtol (&tptr[1], &workingToken, 10);
+          if (velocity>127 || velocity < -1) velocity = 0;
           for (uint8_t ptr=0; ptr<maxLocoArray && !found; ptr++) {
             if ((locoNumber == 0 && throtId == locoRoster[ptr].throttleNr) || (locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type)) {
               if (locoNumber != 0) found = true;
               if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                const char inChar = 'S';
                 locoRoster[ptr].speed = velocity;
                 xSemaphoreGive(velociSem);
+                xQueueSend (locoUpdateQueue, &inChar, 0);
               }
               else semFailed ("velociSem", __FILE__, __LINE__);
             }
@@ -243,9 +271,11 @@ void processWiThrotPacket (char *packet)
             if ((locoNumber == 0 && throtId == locoRoster[ptr].throttleNr) || (locoNumber == locoRoster[ptr].id && tType == locoRoster[ptr].type)) {
               if (locoNumber != 0) found = true;
               if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                const char inChar = 'S';
                 if (tptr[1] == '0') locoRoster[ptr].direction = REVERSE;
                 else locoRoster[ptr].direction = FORWARD;
                 xSemaphoreGive(velociSem);
+                xQueueSend (locoUpdateQueue, &inChar, 0);
               }
               else semFailed ("velociSem", __FILE__, __LINE__);
             }
@@ -303,25 +333,27 @@ void processWiThrotPacket (char *packet)
         }
         if (strlen(workingToken) > (NAMELENGTH-1)) workingToken[NAMELENGTH-1] = '\0'; // Allow up to 32 chars in a name
         strcpy (locoData[tokenPtr].name, workingToken);  // Name is in first part - pointed by by workingToken
-        locoData[tokenPtr].type      = subToken[1][0];
-        locoData[tokenPtr].direction = STOP;
-        locoData[tokenPtr].speed     = 0;
-        locoData[tokenPtr].steps     = 128;
-        locoData[tokenPtr].id        = (int) strtol ((const char*)subToken[0], &tptr, 10);
-        locoData[tokenPtr].owned     = false;
-        locoData[tokenPtr].function  = 0;
-        locoData[tokenPtr].throttleNr= 255;
-        locoData[tokenPtr].relayIdx  = 255;
-        locoData[tokenPtr].functionLatch = 65535;  // should not use in JMRI, but set it to all on => use default.
+        locoData[tokenPtr].type           = subToken[1][0];
+        locoData[tokenPtr].direction      = STOP;
+        locoData[tokenPtr].speed          = 0;
+        locoData[tokenPtr].steps          = 128;
+        locoData[tokenPtr].id             = (int) strtol ((const char*)subToken[0], &tptr, 10);
+        locoData[tokenPtr].owned          = false;
+        locoData[tokenPtr].function       = 0;
+        locoData[tokenPtr].throttleNr     = 255;
+        locoData[tokenPtr].relayIdx       = 255;
+        locoData[tokenPtr].reverseConsist = false;
+        locoData[tokenPtr].functionLatch  = 65535;  // should not use in JMRI, but set it to all on => use default.
         locoData[tokenPtr].functionString = NULL;
       }
       uint8_t maxLoco = tokenTally + MAXCONSISTSIZE;
       uint8_t n = 0;
       for (;tokenPtr < maxLoco; tokenPtr++) {
         sprintf (locoData[tokenPtr].name, "ad-hoc-%d", ++n);
-        locoData[tokenPtr].owned    = false;
-        locoData[tokenPtr].relayIdx = 255;
-        locoData[tokenPtr].functionLatch = 65535;  // should not use in JMRI, but set it to all on => use default.
+        locoData[tokenPtr].owned          = false;
+        locoData[tokenPtr].relayIdx       = 255;
+        locoData[tokenPtr].reverseConsist = false;
+        locoData[tokenPtr].functionLatch  = 65535;  // should not use in JMRI, but set it to all on => use default.
         locoData[tokenPtr].functionString = NULL;
       }
       if (locoRoster != NULL) free(locoRoster);   // free space if we had previously allocated it

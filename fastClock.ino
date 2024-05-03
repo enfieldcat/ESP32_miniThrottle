@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -73,6 +73,10 @@ void fastClock (void *pvParameters)
     }
   }
   else {
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      diagEnqueue ('e', (char *) "### Starting fast clock service -------------------------------------------", true);
+      xSemaphoreGive(diagPortSem);
+    }
     xTimerStart (fastClockTimer, pdMS_TO_TICKS(int (60000/fc_multiplier)));
     while (true) {
       if (fc_multiplier != 0.00) {
@@ -103,6 +107,10 @@ void fastClock (void *pvParameters)
       else semFailed ("fastClockSem", __FILE__, __LINE__);
     }
   }
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    diagEnqueue ('e', (char *) "### Stopping fast clock service -------------------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
   vTaskDelete( NULL );
 }
 
@@ -120,7 +128,7 @@ void fc_sendUpdate()
       sprintf (outPacket, "PFT%d<;>%4.2f\r\n", fc_time, fc_multiplier);
       xSemaphoreGive(fastClockSem);
       for (uint8_t n=0; n<maxRelay ; n++) {
-        if (remoteSys[n].client->connected()) {
+        if (remoteSys[n].active && ((!obsessive) || remoteSys[n].client->connected() || remoteSys[n].client->connected())) {
           reply2relayNode (&remoteSys[n], outPacket);
         }
       }
@@ -138,13 +146,7 @@ void fc_sendUpdate()
     }
     sprintf(buffer, "<JC %d %d>", itime, speed);
     txPacket (buffer);
-    //if (xQueueReceive(dccAckQueue, &reqState, pdMS_TO_TICKS(DCCACKTIMEOUT)) != pdPASS) {
-    //  // wait for ack
-    //  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    //    Serial.printf ("%s Warning: No response for DCC-Ex clock update\r\n", getTimeStamp());
-    //    xSemaphoreGive(consoleSem);
-    //  }
-    //}
+    // Do not wait for any ACK packet
   }
 }
 

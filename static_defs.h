@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -30,19 +30,24 @@ SOFTWARE.
  * Use this file to centralise any defines and includes
  * This file should contain non-customisable definitions
  */
-// Used for hardware inspection
-#include "esp_system.h"
-#include "esp_spi_flash.h"
-#include <rom/rtc.h>
-// Used for process / thread control
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
+// #include <stdio.h>
+// #include <time.h>
 // Used for user interfaces
 #ifndef NODISPLAY
 #include "lcdgfx.h"
 #include <Keypad.h>
+#ifdef ENCODE_UP
 #include <ESP32Encoder.h>
 #endif
+#endif
+// Used for hardware inspection
+#include "esp_system.h"
+#include "esp_spi_flash.h"
+#include <rom/rtc.h>
+#include <esp_timer.h>
+// Used for process / thread control
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 // Used for NVS access and query
 #include <Preferences.h>
 #include <esp_partition.h>
@@ -54,8 +59,8 @@ SOFTWARE.
 #ifdef VERSION
 #undef VERSION
 #endif
-#define PRODUCTNAME "MiniThrottle" // Branding name
-#define VERSION     "0.6a"         // Version string
+#define PRODUCTNAME "miniThrottle" // Branding name
+#define VERSION     "0.8"          // Version string
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.
@@ -65,7 +70,10 @@ SOFTWARE.
 // #include <WiFiMulti.h>
 #include <ESPmDNS.h>
 #endif
-
+// Geek feature prereqs
+#ifdef SHOWPARTITIONS
+#include <esp_partition.h>
+#endif
 // Sanity check of BACKLIGHTPIN - not available on some display types
 #ifdef BACKLIGHTPIN
 #ifdef SSD1306
@@ -90,9 +98,10 @@ SOFTWARE.
 // Comment out => no web server, 0 => always running or lifetime in minutes
 //#define WEBLIFETIME   0
 #ifdef WEBLIFETIME
-extern "C" {
-#include "crypto/base64.h"
-}
+//extern "C" {
+//#include "crypto/base64.h"
+#include "mbedtls/base64.h"
+//}
 #define CSSFILE "/miniThrottle.css"
 #ifndef FILESUPPORT
 #define FILESUPPORT
@@ -103,9 +112,12 @@ extern "C" {
 #ifdef FILESUPPORT
 #define DEFAULTCONF "/sampleConfig.cfg"
 #define DEFAULTCOMMAND "/sampleCommand.cfg"
+#define DEFAULTAUTO "/sampleAuto.run"
 #ifdef USEWIFI
 #define CERTFILE "/rootCACertificate"
+#ifndef NOHTTPCLIENT
 #include <HTTPClient.h>
+#endif
 #endif
 #include <FS.h>
 #include <SPIFFS.h>
@@ -149,6 +161,13 @@ extern "C" {
 // Divisor for converting uSeconds to Seconds
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 
+// command history buffer size in bytes
+#ifndef COMMAND_HISTORY
+#define COMMAND_HISTORY 1024
+#endif
+// automation data
+#define LABELSIZE 16
+
 // DCC-Ex Values
 #define CALLBACKNUM 10812
 #define CALLBACKSUB 22112
@@ -159,6 +178,30 @@ extern "C" {
 #define FUNCTNAMES "Lights~Bell~Horn/Whistle~Coupler Crash~Air Feature~Dyn Brake Fans~Notch Up/Blow Down~Crossing Gate Horn~Mute~Brake Squeal~Air Horn Seq~Greaser~Safety Blow Off~~~~~~~~~~~~~~~~"
 #define FUNCTLATCH 483
 #define FUNCTLEADONLY 225
+
+// default model if not specified elsewhere
+// https://docs.espressif.com/projects/esp-idf/en/v5.0/esp32s3/hw-reference/chip-series-comparison.html
+//
+// Primary target is ESP32 / ESP32-DOWD
+// ESP32-C3: Encoder library won't work, issues with LCDGFX - may have limited application
+// ESP32-S2: Untested
+// ESP32-S3: Limited testing, seems OK
+#define ESP32 1
+#define ESP32C3 2
+#define ESP32S2 3
+#define ESP32S3 4
+#ifndef ESPMODEL
+#define ESPMODEL ESP32
+#endif
+#if ESPMODEL == ESP32
+#define MAXPINS 40
+#elif ESPMODEL == ESPS3
+#define MAXPINS 49
+#elif ESPMODEL == ESPS2
+#define MAXPINS 47
+#else
+#define MAXPINS 22
+#endif
 
 /*
  * **********  ENUMERATIONS  *********************************************************************
@@ -192,6 +235,7 @@ struct locomotive_s {
   char type;                      // Long or short addr. 127 and below should be short, 128 and above should be long
   char name[NAMELENGTH];          // name of loco
   bool owned;                     // Is loco owned by this throttle?
+  bool reverseConsist;            // Is loco reversed in a consist?
 };
 
 struct turnoutState_s {
@@ -227,6 +271,7 @@ struct relayConnection_s {
   uint32_t outPackets;            // count of packets out - sent to remote side
   uint8_t  id;                    // serial number of this entry, used for reverse lookup
   char nodeName[NAMELENGTH];      // remote name
+  bool active;                    // expected to be active and connected
 };
 #endif
 
@@ -247,6 +292,61 @@ struct pinVar_s {
   char *pinDesc;
 };
 
+/*
+ * structures used by automated processes
+ */
+#ifndef PROCTABLESIZE
+#define PROCTABLESIZE 10
+#endif
+#ifndef PROCNAMELENGTH
+#define PROCNAMELENGTH 29
+#endif
+#ifndef LIFO_SIZE
+#define LIFO_SIZE 10
+#endif
+#ifndef REGISTERCOUNT
+#define REGISTERCOUNT 10
+#endif
+// proc table structure
+struct procTable_s {
+  uint16_t id;
+  uint8_t state;
+  char filename[PROCNAMELENGTH];
+};
+enum procStates  { PROCFREE = 7 , PROCDIE = 13, PROCRUN = 17, PROCTRACE = 29 };
+enum pinTypes    { DIN = 0, DOUT = 1, AIN = 2, AOUT = 3, PWM = 4 , RGB = 5};
+// structure for holding jump table info
+struct jumpTable_s {
+  uint16_t jumpTo;
+  char label[LABELSIZE];
+};
+// structure for tokenising key words and pointing to lines
+struct lineTable_s {
+  char* start;
+  uint8_t token;
+  uint8_t sec_token; // secondary tokens also ensure word alignment of pointers
+  uint16_t param;
+};
+// structure for local Pins
+#ifndef LOCALPINCNT
+#define LOCALPINCNT 20
+#endif
+struct localpin_s {
+  uint8_t pinNr;
+  uint8_t assignment;
+  uint8_t channel;
+};
+// structure of dcc-ex sensor data
+#ifndef DCCSENSORCNT
+#define DCCSENSORCNT 50
+#endif
+enum { SENSORON, SENSOROFF, SENSORUNKNOWN };
+struct dccSensor_s {
+  uint32_t id;
+  uint8_t  value;
+};
+//                          0       1       2         3        4           5       6         7        8         9          10        11        12       13      14          15
+const char* runTokens[] = {"rem ", "key ", "delay ", "goto ", "waitfor ", "exit", "runfg ", "runbg ", "power ", "route ", "throw ", "close ", "sleep ", "set ", "sendcmd ", "configpin " };
 
 /*
  * Required by Throttle functionality to get loco, turnout and route data, but also useful debug tool for inspecting NVS

@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -49,6 +49,8 @@ void connectionManager(void *pvParameters)
   uint8_t index     = 0;
   uint8_t scanIndex = 0;
   uint8_t staPref   = 0;
+  uint8_t bumpCount = 0;
+  uint8_t mywifimode= 0;
   bool networkFound = false;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -57,13 +59,20 @@ void connectionManager(void *pvParameters)
   }
 
   // Scan networks at startup just for the record
-  if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
+  /* if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
     wifi_scanNetworks(true);
     xSemaphoreGive(tcpipSem);
   }
-  else semFailed ("tcpipSem", __FILE__, __LINE__);
+  else semFailed ("tcpipSem", __FILE__, __LINE__); */
+  mywifimode = nvs_get_int("WiFiMode", defaultWifiMode);
+  switch (mywifimode) {
+    case 1: WiFi.mode(WIFI_STA);    break;
+    case 2: WiFi.mode(WIFI_AP);     break;
+    case 3: WiFi.mode(WIFI_AP_STA); break;
+  }
+  WiFi.setMinSecurity(WIFI_AUTH_OPEN);
   // Start AP if required
-  if ((nvs_get_int("WiFiMode", defaultWifiMode) & 2) > 0) {
+  if ((mywifimode & 2) > 0) {
     nvs_get_string ("APname", apssid, tname,  sizeof(apssid));
     nvs_get_string ("APpass", appass, "none", sizeof(appass));
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -79,7 +88,7 @@ void connectionManager(void *pvParameters)
   }
   while (true) {
     // Check if WiFi station mode needs to be connected and is connected
-    if ((nvs_get_int("WiFiMode", defaultWifiMode) & 1) > 0) {
+    if ((mywifimode & 1) > 0) {
       if (WiFi.status() != WL_CONNECTED) {
         if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
           wifi_scanNetworks();
@@ -87,6 +96,18 @@ void connectionManager(void *pvParameters)
         }
         else semFailed ("tcpipSem", __FILE__, __LINE__);
         staPref = nvs_get_int ("staConnect", 0);
+        #ifndef SERIALCTRL
+        wiCliConnected = false;
+        if ((!APrunning) && trackPower) {
+          trackPower = false;
+          #ifdef TRACKPWR
+          digitalWrite(TRACKPWR, LOW);
+          #endif
+          #ifdef TRACKPWRINV
+          digitalWrite(TRACKPWRINV, HIGH);
+          #endif
+        }
+        #endif
         // Preference is to only access known access points in a strict order of preference
         if (staPref == 0) {
           networkFound = false;
@@ -132,7 +153,7 @@ void connectionManager(void *pvParameters)
           }
         }
         // Preference is to access access-points by order of signal strength preference
-        else {
+        else if (numberOfNetworks > 0) {
           int entryNum[numberOfNetworks];
           int strength[numberOfNetworks];
           int limit = numberOfNetworks - 1;
@@ -193,12 +214,43 @@ void connectionManager(void *pvParameters)
           }
           if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
             strcpy (ssid, stassid);
+            WiFi.disconnect();
             if (strcmp (stapass, "none") == 0) WiFi.begin(stassid, NULL);
             else WiFi.begin(stassid, stapass);
             xSemaphoreGive(tcpipSem);
+            if ((nvs_get_int("WiFiMode", defaultWifiMode) & 2) == 0) {
+              #ifdef WEBLIFETIME
+              startWeb = true;
+              #endif
+              #ifdef RELAYPORT
+              startRelay = true;
+              #endif
+            }
           }
-          delay (TIMEOUT);
-          if ((!APrunning) && xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
+          if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            diagEnqueue ('e', (char*) "### connecting to WiFi ", false);
+            diagEnqueue ('e', (char*) stassid, false);
+            diagEnqueue ('e', (char*) "-------------------------------------------", true);
+            xSemaphoreGive(diagPortSem);
+          }
+          for (uint8_t n=0; n<30 && WiFi.status()!=WL_CONNECTED; n++) delay (TIMEOUT);
+          if (WiFi.status() != WL_CONNECTED) {
+            if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              Serial.printf ("%s WiFi Status = ", getTimeStamp());
+              switch (WiFi.status()) {
+                case WL_IDLE_STATUS:     Serial.printf ("WL_IDLE_STATUS");     break;
+                case WL_NO_SSID_AVAIL:   Serial.printf ("WL_NO_SSID_AVAIL");   break;
+                case WL_SCAN_COMPLETED:  Serial.printf ("WL_SCAN_COMPLETED");  break;
+                case WL_CONNECT_FAILED:  Serial.printf ("WL_CONNECT_FAILED");  break;
+                case WL_CONNECTION_LOST: Serial.printf ("WL_CONNECTION_LOST"); break;
+                case WL_DISCONNECTED:    Serial.printf ("WL_DISCONNECTED");    break;
+                default: Serial.printf ("Unknown"); break;
+              }
+              Serial.printf ("\r\n");
+              xSemaphoreGive (consoleSem);
+            }
+          }
+          if ((!APrunning) && WiFi.status() == WL_CONNECTED && xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
             MDNS.begin(tname);
             xSemaphoreGive(tcpipSem);
           }
@@ -206,7 +258,7 @@ void connectionManager(void *pvParameters)
         // Warn if no candidates found
         else {
           if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-            Serial.printf ("%s WiFi Station mode: no access point found.\r\n", getTimeStamp());
+            Serial.printf ("%s WiFi Station mode: no known access point found.\r\n", getTimeStamp());
             xSemaphoreGive (consoleSem);
           }
           if ((nvs_get_int("WiFiMode", defaultWifiMode) & 2) == 0) {
@@ -252,19 +304,22 @@ void connectionManager(void *pvParameters)
     // Does the connection to the Control System need to be estabilished?
     #ifndef SERIALCTRL
     // if Wifi connected but server not connected
-    if ((APrunning || WiFi.status() == WL_CONNECTED) && !client.connected()) {
+    // if ((APrunning || WiFi.status() == WL_CONNECTED) && !client.connected()) {
+    if ((APrunning || WiFi.status() == WL_CONNECTED) && !wiCliConnected) {
       char server[65];
       int  port;
 
-      trackPower = false;
-      #ifdef TRACKPWR
-      digitalWrite(TRACKPWR, LOW);
-      #endif
-      #ifdef TRACKPWRINV
-      digitalWrite(TRACKPWRINV, HIGH);
-      #endif
+      if ((!APrunning) && trackPower) {
+        trackPower = false;
+        #ifdef TRACKPWR
+        digitalWrite(TRACKPWR, LOW);
+        #endif
+        #ifdef TRACKPWRINV
+        digitalWrite(TRACKPWRINV, HIGH);
+        #endif
+      }
       // Use mdns to look up service
-      if ((!client.connected()) && nvs_get_int ("mdns", 1) == 1) {
+      if ((!wiCliConnected) && nvs_get_int ("mdns", 1) == 1) {
         server[0] = '\0';
         port = mdnsLookup ("_withrottle", server);
         if (port != 0 && strlen(server) > 0) {
@@ -273,15 +328,17 @@ void connectionManager(void *pvParameters)
             xSemaphoreGive (consoleSem);
           }
           connect2server (server, port);
-          delay (TIMEOUT);
+          delay (TIMEOUT * 5);
+          if ((!wiCliConnected) && (client.connected() || client.connected())) wiCliConnected = true;
         }
         else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           Serial.printf ("%s MDNS look up: no services found.\r\n", getTimeStamp());
           xSemaphoreGive (consoleSem);
         }
+      // Serial.print (WiFi.RSSI());
       }
       // now work through server list until we connect or just give up
-      for (index = 0; index <WIFINETS && !client.connected(); index++) {
+      for (index = 0; index <WIFINETS && !wiCliConnected; index++) {
         sprintf (paramName, "server_%d", index);
         nvs_get_string (paramName, server, "none", sizeof(server));
         if (strcmp (server, "none") != 0) {
@@ -292,12 +349,21 @@ void connectionManager(void *pvParameters)
             xSemaphoreGive (consoleSem);
           }
           connect2server (server, port);
-          delay(TIMEOUT);
+          delay(TIMEOUT * 5);
+          if ((!wiCliConnected) && (client.connected() || client.connected())) wiCliConnected = true;
         }
       }
     }
     #endif // NOT SERIALCTRL
     delay (10000);
+    // rescan networks at minute intervals
+    if (bumpCount++ > 5) {
+      bumpCount = 0;
+      // if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
+        wifi_scanNetworks(false);
+        // xSemaphoreGive(tcpipSem);
+      // }
+    }
   }
   vTaskDelete( NULL );
 }
@@ -336,14 +402,27 @@ else wifi_scanNetworks (false);
 
 void wifi_scanNetworks(bool echo)
 {
-  numberOfNetworks = WiFi.scanNetworks();
-  if (echo && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-    Serial.printf("Number of networks found: %d\r\n", numberOfNetworks);
-    Serial.printf("%-16s %8s %-17s Channel Type\r\n", "Name", "Strength", "Address");
-    for (int i = 0; i < numberOfNetworks; i++) {
-      Serial.printf ("%-16s %8d %-17s %7d %s\r\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.channel(i), wifi_EncryptionType(WiFi.encryptionType(i)));
+  static bool firstRun = true;
+
+  if (WiFi.status() != WL_CONNECTED && xSemaphoreTake(rescanSem, pdMS_TO_TICKS(TIMEOUT/10)) == pdTRUE) {   // one at a time
+    WiFi.disconnect();
+    if (firstRun) firstRun = false;
+    else WiFi.scanDelete();
+    numberOfNetworks = WiFi.scanNetworks();
+    if (numberOfNetworks > 65500) numberOfNetworks = 0;
+    if (echo && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (numberOfNetworks == 0) Serial.printf ("No networks found.\r\n");
+      else {
+        Serial.printf("Number of networks found: %d\r\n", numberOfNetworks);
+        Serial.printf("%-16s %8s %-17s Channel Type\r\n", "Name", "Strength", "Address");
+        for (int i = 0; i < numberOfNetworks; i++) {
+          Serial.printf ("%-16s %8d %-17s %7d %s\r\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.BSSIDstr(i).c_str(), WiFi.channel(i), wifi_EncryptionType(WiFi.encryptionType(i)));
+        }
+      }
+      xSemaphoreGive(consoleSem);
     }
-    xSemaphoreGive(consoleSem);
+    delay (TIMEOUT/10); // avoid back 2 back scans
+    xSemaphoreGive(rescanSem);
   }
 }
 
@@ -351,13 +430,16 @@ void wifi_scanNetworks(bool echo)
 #ifndef SERIALCTRL
 void connect2server (char *server, int port)
 {
+  uint32_t clientTimeout;
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s connect2server(%s, %d)\r\n", getTimeStamp(), server, port);
     xSemaphoreGive(consoleSem);
   }
 
+  clientTimeout = nvs_get_int ("clientTimeout", TIMEOUT/4);
   if (strcmp (server, "none") == 0) return;
-  if (client.connect(server, port)) {
+  if (client.connect(server, port, clientTimeout)) {
+    client.setNoDelay (true);
     initialDataSent = false;
     cmdProtocol = nvs_get_int ("defaultProto", WITHROT);  // Go straight to default protocol
     if (strlen(server) < sizeof(remServerNode)-1) strcpy (remServerNode, server);
@@ -366,6 +448,12 @@ void connect2server (char *server, int port)
       remServerNode[sizeof(remServerNode)-1] = '\0';
     }
     // Once connected, we can listen for returning packets
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      diagEnqueue ('e', (char*) "### connecting to Server ", false);
+      diagEnqueue ('e', (char*) server, false);
+      diagEnqueue ('e', (char*) "-------------------------------------------", true);
+      xSemaphoreGive(diagPortSem);
+    }
     xTaskCreate(receiveNetData, "Network_In", 4096, NULL, 4, NULL);
     // Print diagnostic
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -478,7 +566,7 @@ int mdnsLookup (const char *service, char *addr)
 // Transmit a packet
 void txPacket (const char *header, const char *pktData)
 {
-  if (!client.connected()) return;
+  if (!wiCliConnected) return;
   if (pktData == NULL) return;
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (header==NULL) Serial.printf ("%s txPacket(NULL, %s)\r\n", getTimeStamp(), pktData);
@@ -488,17 +576,21 @@ void txPacket (const char *header, const char *pktData)
 
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (header != NULL) {
-      client.print (header);
+      if (client.write ((const uint8_t*) header, strlen(header)) < 0) wiCliConnected = false;
     }
-    client.println (pktData);
+    if (wiCliConnected && client.write ((const uint8_t*) pktData, strlen(pktData)) < 0) wiCliConnected = false;
+    if (wiCliConnected && client.write ((const uint8_t*) "\r\n", 2) < 0) wiCliConnected = false;
     client.flush();
     xSemaphoreGive(tcpipSem);
-    if (diagIsRunning) {
+    resetKeepAlive();
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (!wiCliConnected) diagEnqueue ('p', (char*) "connection failed on: ", false);
       diagEnqueue ('p', (char *) "--> ", false);
       if (header != NULL) {
         diagEnqueue ('p', (char*) header, false);
       }
       diagEnqueue ('p', (char*) pktData, true);
+      xSemaphoreGive(diagPortSem);
     }
     if (showPackets) {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -556,18 +648,21 @@ void txPacket (const char *header, const char *pktData)
   }
   if (xSemaphoreTake(serialSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (header!=NULL) {
-      serial_dev.write (header, strlen(header));
+      serial_dev.write ((const uint8_t*)header, strlen(header));
     }
-    serial_dev.write (pktData, strlen(pktData));
-    serial_dev.write ("\r\n", 2);
+    serial_dev.write ((const uint8_t*)pktData, strlen(pktData));
+    serial_dev.write ((const uint8_t*)"\r\n", 2);
     xSemaphoreGive(serialSem);
-    if (diagIsRunning) {
+    #ifdef USEWIFI
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       diagEnqueue ('p', (char *) "--> ", false);
       if (header!=NULL) {
         diagEnqueue ('p', (char*) header, false);
       }
       diagEnqueue ('p', (char*) pktData, true);
+      xSemaphoreGive(diagPortSem);
     }
+    #endif
     if (showPackets) {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
         Serial.print ("--> ");

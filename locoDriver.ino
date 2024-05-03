@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -65,6 +65,12 @@ void locomotiveDriver()
     xSemaphoreGive(consoleSem);
   }
 
+  #ifdef USEWIFI
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    diagEnqueue ('e', (char *) "### Starting loco driving session -----------------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
+  #endif
   potVal[0] = '\0';
   funVal[0] = '\0';
   speedStep = nvs_get_int ("speedStep", 4);
@@ -114,13 +120,16 @@ void locomotiveDriver()
     #endif
     if (speedLine == 0) refreshDisplay = true;
     if (refreshDisplay) {
+      uint8_t dispColorFlag = 'S';
       refreshDisplay = false;
       display.clear();
       lineNr = 0;
       // display all controlled locos, but leave at least 1 status line
       for (uint8_t n=0; n<maxLocoArray && lineNr<(linesPerScreen-2); n++) if (locoRoster[n].owned) {
-        // sprintf (displayLine, "Loco: %s", locoRoster[n].name);
-        displayScreenLine (locoRoster[n].name, lineNr++, true);
+        if (n == initialLoco) dispColorFlag = 'L';
+        else if (locoRoster[n].reverseConsist) dispColorFlag = 'R';
+        else dispColorFlag = 'I';
+        displayScreenLine (locoRoster[n].name, lineNr++, dispColorFlag, true);
       }
       speedLine = lineNr++;
       if (speedLine < linesPerScreen-4) {
@@ -145,6 +154,15 @@ void locomotiveDriver()
         speedChange = true;
       }
       xSemaphoreGive(fastClockSem);
+    }
+    //
+    // has speed or function changed?
+    //
+    if (xQueueReceive(locoUpdateQueue, &commandChar, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
+      switch (commandChar) {
+        case 'S': speedChange = true; break;
+        case 'F': funcChange = true;  break;
+      }
     }
     if (speedChange && speedLine<linesPerScreen) {
       speedChange = false;
@@ -230,6 +248,11 @@ void locomotiveDriver()
         }
         else {
           if (locoRoster[initialLoco].steps > 0) {
+            #ifdef SCALEFONT
+            if (screenWidth > 240 && selFontWidth > 15)
+            sprintf (displayLine, "%s%3d%%", dirString[calcDirection], calcSpeed);
+            else
+            #endif
             sprintf (displayLine, "%s %3d%%", dirString[calcDirection], calcSpeed);
           }
           else {
@@ -281,7 +304,7 @@ void locomotiveDriver()
         #endif
         display.setColor (SPEEDBAR);
         #endif
-        display.fillRect(1, ypos+2, xpos         , ypos + (barHeight-2));
+        display.fillRect(1, ypos+2, xpos, ypos + (barHeight-2));
         display.setColor (0);
         display.fillRect( xpos+1 ,ypos+1, screenWidth-2, ypos + (barHeight-2));
         display.setColor (oldColor);
@@ -300,14 +323,16 @@ void locomotiveDriver()
       #endif
     }
     if (funcChange && funcLine>0) {
-      for (uint8_t n=0; n<maxLocoArray && funcChange; n++) if (locoRoster[n].owned) {
-        funcChange = false;    
-        displayFunctions (funcLine, locoRoster[n].function);
-      }
+      //for (uint8_t n=0; n<maxLocoArray && funcChange; n++) if (locoRoster[n].owned) {
+      //  funcChange = false;    
+      //  displayFunctions (funcLine, locoRoster[n].function);
+      //}
+      displayFunctions (funcLine, locoRoster[initialLoco].function);
+      funcChange = false;    
     }
     //
     // When adjusting speed, multiple units may get out of step with each other for
-    // various reasons, eg missed packets on network. So always use the initial loco
+    // various reasons, eg missed packets on network. So always use the lead loco
     // as the authoritative speed reference.
     //
     if (xQueueReceive(keyboardQueue, &commandChar, pdMS_TO_TICKS(debounceTime)) == pdPASS) {
@@ -338,14 +363,14 @@ void locomotiveDriver()
                 dirChange = true;
                 t_speed = 1;                                      // put into forward motion.
               }
-              speedChange = true;
+              // speedChange = true;
             }
             else if (t_speed < (t_steps - 2)) {                   // FORWARD or not bidirectional
               if (t_direction == STOP) {                          // if stopped default direction is forward
                 dirChange = true;
                 t_direction = FORWARD;
               }
-              speedChange = true;
+              // speedChange = true;
               t_speed = t_speed + speedStep;
               if (t_speed > (t_steps - 2)) {
                 t_speed = t_steps - 2;
@@ -353,6 +378,7 @@ void locomotiveDriver()
             }
             // now set increased speed for all our controlled locos, based on initial loco speed
             for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
+              if (t_speed >127 || t_speed<-1) t_speed = 0;
               setLocoSpeed (n, t_speed, t_direction);
               if (dirChange) {
                 setLocoDirection (n, t_direction);
@@ -374,11 +400,11 @@ void locomotiveDriver()
               if (t_direction == STOP) {              // If in STOP, then "down" places us in reverse
                 t_direction = REVERSE;
                 t_speed = -1;
-                speedChange = true;
+                // speedChange = true;
                 dirChange = true;
               }
               else if (t_speed < (t_steps - 2)) {     // bidirectional && REVERSE, make go faster reverse
-                speedChange = true;
+                // speedChange = true;
                 t_speed = t_speed + speedStep;
                 if (t_speed > (t_steps - 2)) {
                   t_speed = t_steps - 2;
@@ -386,7 +412,7 @@ void locomotiveDriver()
               }
             }
             else if (t_speed > 0) {                   // not bidirectional and speed > 0
-              speedChange = true;
+              // speedChange = true;
               t_speed = t_speed - speedStep;
               if (t_speed < 0) t_speed = 0;
               #ifdef BRAKEPRESPIN
@@ -411,6 +437,7 @@ void locomotiveDriver()
             }
             // now set reduced speed for all our controlled locos, based on initial loco speed
             for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
+              if (t_speed >127 || t_speed<-1) t_speed = 0;
               setLocoSpeed (n, t_speed, t_direction);
               if (dirChange) {
                 setLocoDirection (n, t_direction);
@@ -420,7 +447,7 @@ void locomotiveDriver()
           else semFailed ("velociSem", __FILE__, __LINE__);
           break;
         case 'B':
-          speedChange = true;
+          // speedChange = true;
           for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
             setLocoSpeed (n, -1, STOP);
           }
@@ -440,7 +467,7 @@ void locomotiveDriver()
           else intended_dir = FORWARD;
           for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
             if (t_direction != intended_dir) {
-              speedChange = true;
+              // speedChange = true;
               setLocoDirection (n, intended_dir);
               setLocoSpeed (n, 0, intended_dir);
             }
@@ -475,12 +502,22 @@ void locomotiveDriver()
           uint8_t check = 0;
           for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned && locoRoster[n].speed>0) check++;
           if (check == 0) {
-            locoCount = mkCabMenu();
+            if (nvs_get_int("disableCabMenu", 0) == 0) locoCount = mkCabMenu();
+            else {  //Only expect the initialLoco to be controlled if Cab  Menu is disabled
+              setLocoOwnership (initialLoco, false);
+              locoRoster[initialLoco].owned = false;
+              #ifdef RELAYPORT
+              locoRoster[initialLoco].relayIdx = 255;
+              #endif
+              locoCount = 0;
+            }
           }
           else {
-            if (commandChar == '#' || nvs_get_int ("buttonStop", 1) == 0) displayTempMessage ("Warning:", "Cannot enter Cab menu when speed > 0", true);
+            if (commandChar == '#' || nvs_get_int ("buttonStop", 1) == 0) {
+              displayTempMessage ("Warning:", "Cannot enter Cab menu when speed > 0", true);
+            }
             else {
-              speedChange = true;
+              // speedChange = true;
               #ifdef BRAKEPRESPIN
               brakedown(128);
               #endif
@@ -494,12 +531,13 @@ void locomotiveDriver()
             }
           }
           refreshDisplay = true;
+          delay (20);
           break;
         }
       if (commandChar >= '0' && commandChar <= '9') {
         if (xSemaphoreTake(functionSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
           // refreshDisplay = true;  // force change to top lines of display
-          funcChange = true;
+          // funcChange = true;
           functPrefix += (commandChar - '0');
           uint16_t mask = 1 << functPrefix;
           inFunct = true;
@@ -545,11 +583,20 @@ void locomotiveDriver()
         }
       }
     }
+    // if (speedChange || funcChange) delay (20); // hold off for processing messages
+    #ifndef SERIALCTRL
+    // we are here by grace of having a connection
+    // exit if no connection as that means we're controlling nothing
+    if (!netConnState (1)) locoCount = 0;
+    #endif
   }
   for (uint8_t n=0; n<maxLocoArray; n++) if (locoRoster[n].owned) {
     setLocoOwnership (n, false);
     if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      if (cmdProtocol==DCCEX) locoRoster[n].owned = false;
+      if (cmdProtocol==DCCEX) {
+        locoRoster[n].owned = false;
+        locoRoster[n].reverseConsist = false;
+      }
       #ifdef RELAYPORT
       if (locoRoster[n].relayIdx == 240) locoRoster[n].relayIdx = 255;
       #endif
@@ -567,6 +614,16 @@ void locomotiveDriver()
   dacWrite (BRAKEPRESPIN, 0);
   #endif
   drivingLoco = false;
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Ending locoDriver session\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
+  #ifdef USEWIFI
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    diagEnqueue ('e', (char *) "### Stopping loco driving session -----------------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
+  #endif
 }
 
 #ifdef BRAKEPRESPIN

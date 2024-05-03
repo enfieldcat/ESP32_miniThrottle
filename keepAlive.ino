@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -67,25 +67,25 @@ void keepAlive(void *pvParameters)
     }
   }
   else {
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      diagEnqueue ('e', (char *) "### Starting keep alive thread --------------------------------------------", true);
+      xSemaphoreGive(diagPortSem);
+    }
     lastTime = keepAliveTime;
     if (lastTime > 0) xTimerStart (keepAliveTimer, pdMS_TO_TICKS(lastTime * 1000));
     while (lastTime > 0 && cmdProtocol != DCCEX) {
       while (lastTime > 0 && (APrunning || WiFi.status() == WL_CONNECTED) && cmdProtocol != DCCEX) {
-        while (lastTime > 0 && client.connected() && cmdProtocol != DCCEX) {
-          if (xQueueReceive(keepAliveQueue, &queueData, pdMS_TO_TICKS((lastTime*1000)+1000)) != pdPASS) {
-            if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-              Serial.printf ("%s Missing keep-alive packet\r\n", getTimeStamp());
-              xSemaphoreGive(consoleSem);
+        while (lastTime > 0 && wiCliConnected && cmdProtocol != DCCEX) {
+          if (xQueueReceive(keepAliveQueue, &queueData, pdMS_TO_TICKS((lastTime*1000)+1000)) == pdPASS) {
+            if (lastTime > 0 && !turnOff) sendKeepAlive ("*");    // send the heartbeat, if we have started the sequence
+            if (lastTime != keepAliveTime) { // has the period changed?
+              lastTime = keepAliveTime;
+              if (lastTime > 0) xTimerChangePeriod(keepAliveTimer, pdMS_TO_TICKS(lastTime * 1000), pdMS_TO_TICKS(1100));
             }
-          }
-          if (lastTime > 0 && !turnOff) sendKeepAlive ("*");    // send the heartbeat, if we have started the sequence
-          if (lastTime != keepAliveTime) { // has the period changed?
-            lastTime = keepAliveTime;
-            if (lastTime > 0) xTimerChangePeriod(keepAliveTimer, pdMS_TO_TICKS(lastTime * 1000), pdMS_TO_TICKS(1100));
-          }
-          if (turnOff) { // Enable heartbeats if they have stopped.
-            turnOff = false;
-            sendKeepAlive ("*+");
+            if (turnOff) { // Enable heartbeats if they have stopped.
+              turnOff = false;
+              sendKeepAlive ("*+");
+            }
           }
         }
         turnOff = true;
@@ -94,7 +94,7 @@ void keepAlive(void *pvParameters)
       delay (1000);   // wait for WiFi reconnect
     }
   }
-  if (client.connected() && cmdProtocol == WITHROT) {
+  if (wiCliConnected && cmdProtocol == WITHROT) {
     sendKeepAlive ("*-");
   }
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -103,6 +103,10 @@ void keepAlive(void *pvParameters)
   }
   if (keepAliveTimer != NULL) xTimerDelete (keepAliveTimer, pdMS_TO_TICKS(TIMEOUT));
   if (keepAliveQueue != NULL) vQueueDelete (keepAliveQueue);
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    diagEnqueue ('e', (char *) "### Stopping keep alive thread --------------------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
   vTaskDelete( NULL );
 }
 
@@ -118,7 +122,9 @@ void sendKeepAlive(const char *pktData)
   }
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (pktData!= NULL) {
-      client.println (pktData);
+      if (wiCliConnected && client.write ((const uint8_t*) pktData, strlen(pktData)) < 0) wiCliConnected = false;
+      if (wiCliConnected && client.write ((const uint8_t*) "\r\n", 2) < 0) wiCliConnected = false;
+      // client.println (pktData);
       client.flush();
     }
     xSemaphoreGive(tcpipSem);
@@ -128,7 +134,20 @@ void sendKeepAlive(const char *pktData)
         xSemaphoreGive(consoleSem);
       }
     }
+    if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (!wiCliConnected) diagEnqueue ('p', (char*) "connection failed on: ", false);
+      diagEnqueue ('p', (char*) "KA> ", false);
+      diagEnqueue ('p', (char*) pktData, true);
+      xSemaphoreGive(diagPortSem);
+    }
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
+}
+
+void resetKeepAlive()
+{
+  if (resetKeepAliveInd && cmdProtocol == WITHROT && keepAliveTimer != NULL) {
+    xTimerReset( keepAliveTimer, 0 );
+  }
 }
 #endif

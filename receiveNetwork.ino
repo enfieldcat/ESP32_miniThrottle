@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -35,6 +35,11 @@ void receiveNetData(void *pvParameters)
   char inBuffer[NETWBUFFSIZE];
   char inChar;
   uint8_t bufferPtr = 0;
+  uint8_t checkVar = 0;
+  #ifndef SERIALCTRL
+  uint8_t connChkCount = 0;
+  #endif
+  int readState = 1;
   bool quit = false;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -55,6 +60,13 @@ void receiveNetData(void *pvParameters)
     }
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
+  #ifdef USEWIFI
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    diagEnqueue ('e', (char *) "### Starting network/serial receiver service ------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
+  #endif
+  wiCliConnected = true;
   setInitialData();
   #ifdef SERIALCTRL
   while (true) {
@@ -65,27 +77,71 @@ void receiveNetData(void *pvParameters)
       }
       else semFailed ("serialSem", __FILE__, __LINE__);
   #else
+  if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    // set to no tracking
+    uint8_t maxMissedKeepAlive = nvs_get_int ("missedKeepAlive", 3);
+    if (cmdProtocol == WITHROT && maxMissedKeepAlive > 0) {
+      uint16_t keepAliveInterval = nvs_get_int ("relayKeepAlive", 60);
+      if (maxMissedKeepAlive < 1 || maxMissedKeepAlive > 20) maxMissedKeepAlive = 20;
+      if (keepAliveInterval  < 1) keepAliveInterval = 1;
+      maxKeepAliveTO = ((keepAliveInterval * maxMissedKeepAlive) + 1 ) * uS_TO_S_FACTOR;
+    }
+    else maxKeepAliveTO = 0;
+    xSemaphoreGive(shmSem);
+  }
   while (netConnState (1)) {
+    if (++connChkCount > 20) {  // Reduce calls to connected check, and cache in wiCliConnected variable
+      connChkCount = 0;
+      // if using obsessive checks, require 3 connection failures to declare connection dead
+      if (obsessive && (!client.connected()) && (!client.connected()) && (!client.connected()) && wiCliConnected) {
+        wiCliConnected = false;
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.printf ("%s connection closed to server\r\n", getTimeStamp());
+          xSemaphoreGive(consoleSem);
+        }
+      }
+    }
     while (netConnState(2)) {
+      checkVar = 0;
+      // wait for a character to become available - read sometimes fails if there is none available
+      while (checkVar == 0) {
+        if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          if (client.available()) checkVar = 1;
+          xSemaphoreGive(tcpipSem);
+        }
+        if (checkVar == 0) delay (10);  // relinquish the tcpipSem for 1/100 th second
+      }
+      // Now we should have something to read attempt to avoid uncaught exception on some reads
       if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        inChar = client.read();
+        readState = client.read((uint8_t*)&inChar, 1);
         xSemaphoreGive(tcpipSem);
       }
       else semFailed ("tcpipSem", __FILE__, __LINE__);
   #endif
-      if (inChar == '\r' || inChar == '\n' || (cmdProtocol==DCCEX && inChar=='>') || bufferPtr == (NETWBUFFSIZE-1)) {
-        if (bufferPtr > 0) {
-          if (cmdProtocol==DCCEX && inChar=='>') inBuffer[bufferPtr++] = '>';
-          inBuffer[bufferPtr] = '\0';
-          if (diagIsRunning) {
-            diagEnqueue ('p', (char *) "<-- ", false);
-            diagEnqueue ('p', inBuffer, true);
+      if (readState == 1) {
+        if (inChar == '\r' || inChar == '\n' || (cmdProtocol==DCCEX && inChar=='>') || bufferPtr == (NETWBUFFSIZE-1)) {
+          if (bufferPtr > 0) {
+            #ifndef SERIALCTRL
+            if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) { // Value can change asynchronous by JMRI server
+              if (maxKeepAliveTO != 0 && cmdProtocol==WITHROT) statusTime = esp_timer_get_time();
+              xSemaphoreGive(shmSem);
+            }
+            #endif
+            if (cmdProtocol==DCCEX && inChar=='>') inBuffer[bufferPtr++] = '>';
+            inBuffer[bufferPtr] = '\0';
+            #ifdef USEWIFI
+            if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              diagEnqueue ('p', (char *) "<-- ", false);
+              diagEnqueue ('p', inBuffer, true);
+              xSemaphoreGive(diagPortSem);
+            }
+            #endif
+            processPacket (inBuffer);
+            bufferPtr = 0;
           }
-          processPacket (inBuffer);
-          bufferPtr = 0;
         }
+        else inBuffer[bufferPtr++] = inChar;
       }
-      else inBuffer[bufferPtr++] = inChar;
     }
     delay (debounceTime);
     if (cmdProtocol == DCCEX) { // send out periodic <s> status request - a keep alive of sorts on an approx 10 minute basis
@@ -97,8 +153,32 @@ void receiveNetData(void *pvParameters)
         }
       }
     }
+    #ifndef SERIALCTRL
+    else if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (maxKeepAliveTO != 0 && bumpCount++ > 30) {
+        bumpCount = 0;
+        if (esp_timer_get_time() - statusTime > maxKeepAliveTO) {
+          xSemaphoreGive(shmSem);
+          wiCliConnected = false;
+          if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            Serial.printf ("%s Missed keepalive packet - unresponsive connection\r\n", getTimeStamp());
+            xSemaphoreGive(consoleSem);
+          }
+          #ifdef USEWIFI
+          if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            diagEnqueue ('e', (char *) "### Missed keepalive packet - unresponsive connection ---------------------", true);
+            xSemaphoreGive(diagPortSem);
+          }
+          #endif
+        }
+        else xSemaphoreGive(shmSem);
+      }
+      else xSemaphoreGive(shmSem);
+    }
+    #endif
   }
   #ifndef SERIALCTRL
+  client.stop();
   #ifdef TRACKPWR
   digitalWrite(TRACKPWR, LOW);
   #endif
@@ -109,6 +189,7 @@ void receiveNetData(void *pvParameters)
   initialDataSent = false;
   #endif
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    if (WiFi.status() != WL_CONNECTED) Serial.printf ("%s WiFi signal lost\r\n", getTimeStamp());
     Serial.printf ("%s Network connection closed (disconnect)\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
@@ -117,6 +198,12 @@ void receiveNetData(void *pvParameters)
     xSemaphoreGive(tcpipSem);
   }
   else semFailed ("tcpipSem", __FILE__, __LINE__);
+  #ifdef USEWIFI
+  if (diagIsRunning && xSemaphoreTake(diagPortSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    diagEnqueue ('e', (char *) "### Stopping network/serial receiver service ------------------------------", true);
+    xSemaphoreGive(diagPortSem);
+  }
+  #endif
   vTaskDelete( NULL );
 }
 
@@ -125,16 +212,20 @@ void receiveNetData(void *pvParameters)
 bool netConnState (uint8_t chkmode)
 {
   bool retval = false;
+
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     switch (chkmode) {
-    case 1: retval = (APrunning || WiFi.status() == WL_CONNECTED) && client.connected();
+    case 1: retval = (APrunning || WiFi.status() == WL_CONNECTED) && wiCliConnected;
             break;
-    case 2: retval = (APrunning || WiFi.status() == WL_CONNECTED) && client.connected() && client.available()>0;
+    case 2: retval = (APrunning || WiFi.status() == WL_CONNECTED) && wiCliConnected && client.available()>0;
             break;
     }
     xSemaphoreGive(tcpipSem);
   }
-  else semFailed ("tcpipSem", __FILE__, __LINE__);
+  else {
+    semFailed ("tcpipSem", __FILE__, __LINE__);
+    if (chkmode == 1) retval = true;   ///need to assume something else is holding the semaphore and all is actually OK
+  }
   return (retval);
 }
 #endif
@@ -149,8 +240,19 @@ void processPacket (char *packet)
   }
   if (showPackets) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-      Serial.print ("<-- ");
-      Serial.println (packet);
+      Serial.printf ("<-- %s\r\n", packet);
+      xSemaphoreGive(consoleSem);
+    }
+  }
+  else {
+    bool displayIt = false;
+    if (xSemaphoreTake(shmSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      displayIt = showNextPacket;
+      showNextPacket = false;
+      xSemaphoreGive(shmSem);
+    }
+    if (displayIt && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("<-- %s\r\n", packet);
       xSemaphoreGive(consoleSem);
     }
   }
@@ -166,7 +268,7 @@ void processPacket (char *packet)
       char relayPacket[packetLength];
       strcpy (relayPacket, packet);
       strcat (relayPacket, "\r\n");
-      for (uint8_t n=0; n<maxRelay; n++) if (remoteSys != NULL && remoteSys[n].client != NULL && remoteSys[n].client->connected()) {
+      for (uint8_t n=0; n<maxRelay; n++) if (remoteSys != NULL && remoteSys[n].client != NULL && ((!obsessive) || remoteSys[n].client->connected() || remoteSys[n].client->connected() || remoteSys[n].client->connected())) {
         reply2relayNode (&remoteSys[n], relayPacket);
       }
     }

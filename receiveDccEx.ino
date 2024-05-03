@@ -3,7 +3,7 @@ miniThrottle, A WiThrottle/DCC-Ex Throttle for model train control
 
 MIT License
 
-Copyright (c) [2021-2023] [Enfield Cat]
+Copyright (c) [2021-2024] [Enfield Cat]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -46,7 +46,42 @@ void processDccPacket (char *packet)
   else if (strncmp (packet, "<jT ", 4) == 0) dccConfTurnout (&packet[4]);
   else if (strncmp (packet, "<jA ", 4) == 0) dccConfRoute   (&packet[4]);
   else if (strncmp (packet, "<jR ", 4) == 0) dccConfLoco    (&packet[4]);
+  else if (strncmp (packet, "<q ",  3) == 0 || strncmp (packet, "<Q ", 3) == 0) dccSensorIn (packet[1], &packet[3]);
 }
+
+
+/*
+ * sensor update
+ * <q 1408>
+ */
+void dccSensorIn(char op, char* idTxt)
+{
+  uint8_t lim = strlen(idTxt);
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s dccSensorIn(%c, %s)\r\n", getTimeStamp(), op, idTxt);
+    xSemaphoreGive(consoleSem);
+  }
+  if (idTxt[lim-1] == '>') idTxt[lim-1] = '\0';
+  if (util_str_isa_int(idTxt)) {
+    uint16_t index = util_str2int(idTxt);
+    uint8_t n= 0;
+    bool notFound=true;
+    if (xSemaphoreTake(procSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      for (n=0; notFound && n<DCCSENSORCNT && dccSensorTable[n].id<40000; n++) if (dccSensorTable[n].id == index) {
+        notFound = false;                // update existing sensor
+        if (op=='q') dccSensorTable[n].value = SENSORON;
+        else dccSensorTable[n].value = SENSOROFF;
+      }
+      if (notFound && n<DCCSENSORCNT) {  // first time we have seen this id
+        dccSensorTable[n].id = index;
+        if (op=='q') dccSensorTable[n].value = SENSORON;
+        else dccSensorTable[n].value = SENSOROFF;
+      }
+      xSemaphoreGive(procSem);
+    }
+  }
+}
+
 
 /*
  * LocoStatus update
@@ -126,8 +161,10 @@ void dccLocoStatus (char* locoStatus)
     if (locoFunc>=0 && locoFunc != 9999 && xSemaphoreTake(functionSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       uint32_t changes  = locoRoster[next].function ^ locoFunc;  // xor new state with current to detect changes
       if (changes>0) {
+        const char inChar = 'F';
         locoRoster[next].function = locoFunc;
-        funcChange = true;
+        // funcChange = true;
+        if (locoRoster[next].owned) xQueueSend (locoUpdateQueue, &inChar, 0);
       }
       xSemaphoreGive(functionSem);
       #ifdef RELAYPORT
@@ -140,8 +177,8 @@ void dccLocoStatus (char* locoStatus)
             if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
               uint32_t mask     = 1;
               uint16_t t_id     = locoRoster[next].id;
-              int8_t t_type     = locoRoster[next].type;
-              int8_t t_relayIdx = locoRoster[next].relayIdx;;
+              uint8_t t_type     = locoRoster[next].type;
+              uint8_t t_relayIdx = locoRoster[next].relayIdx;;
               char t_throttleNr = locoRoster[next].throttleNr;
               char outBuffer[40];
               uint8_t state;
@@ -179,13 +216,14 @@ void dccSpeedChange (char* speedSet)
   int16_t maxLocoArray = locomotiveCount + MAXCONSISTSIZE;
   char *token;
   char *remain = speedSet;
+  const char inChar = 'S';
   uint8_t result = 15;
   uint8_t locoIndex = 0;
   #ifdef RELAYPORT
   uint16_t t_id;
-  int8_t t_direction;
-  int8_t t_type;
-  int8_t t_relayIdx;
+  uint8_t t_direction;
+  uint8_t t_type;
+  uint8_t t_relayIdx;
   char t_throttleNr;
   char outBuffer[40];
   bool t_owned = false;
@@ -212,12 +250,13 @@ void dccSpeedChange (char* speedSet)
   dccSpeed = util_str2int(token);
   token = strtok_r (remain, " ", &remain);
   dccDirection = util_str2int(token);
-  if (dccSpeed>127) dccSpeed = -1;
+  if (dccSpeed>127 || dccSpeed<-1) dccSpeed = -1;
   if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     locoRoster[locoIndex].speed = (int16_t) dccSpeed;
     if (dccDirection == 1) locoRoster[locoIndex].direction = FORWARD;
     else locoRoster[locoIndex].direction = REVERSE;
-    if (locoRoster[locoIndex].owned) speedChange = true;
+    //if (locoRoster[locoIndex].owned) speedChange = true;
+    if (locoRoster[locoIndex].owned) xQueueSend (locoUpdateQueue, &inChar, 0);
     #ifdef RELAYPORT
     if (relayMode == WITHROTRELAY) {
       if (locoRoster[locoIndex].direction == REVERSE) t_direction = 0;
@@ -785,13 +824,14 @@ void dccPopulateLoco()
       }
       curData = curData + NAMELENGTH;
       locoData[n].functionString  = NULL;
-      locoData[n].direction = STOP;
-      locoData[n].speed     = 0;
-      locoData[n].steps     = 128;
-      locoData[n].owned     = false;
-      locoData[n].function  = 0;
-      locoData[n].throttleNr= 255;
-      locoData[n].relayIdx  = 255;
+      locoData[n].direction       = STOP;
+      locoData[n].speed           = 0;
+      locoData[n].steps           = 128;
+      locoData[n].owned           = false;
+      locoData[n].function        = 0;
+      locoData[n].throttleNr      = 255;
+      locoData[n].relayIdx        = 255;
+      locoData[n].reverseConsist  = false;
       sprintf (labelName, "latch%d", n);
       locoData[n].functionLatch = nvs_get_int (labelName, 65535);
     }
@@ -851,8 +891,9 @@ void dccPopulateLoco()
       locoRoster[tokenPtr].function  = 0;
       locoRoster[tokenPtr].throttleNr= 255;
       locoRoster[tokenPtr].relayIdx  = 255;
-      locoRoster[tokenPtr].functionLatch = 65535;
-      locoRoster[tokenPtr].functionString  = NULL;
+      locoRoster[tokenPtr].functionLatch  = 65535;
+      locoRoster[tokenPtr].functionString = NULL;
+      locoRoster[tokenPtr].reverseConsist = false;
     }
   }
 }

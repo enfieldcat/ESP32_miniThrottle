@@ -205,8 +205,8 @@ void relayHandler(void *pvParameters)
   char inBuffer[NETWBUFFSIZE];
   char inchar;
   char indicator = 'A';
-  bool keepAlive = true;
-  bool trackKeepAlive = false;
+  bool keepAlive = true;        // indicates if relay has failed due to no packet receipt
+  bool trackKeepAlive = false;  // does staus change if no keepAlive received
   
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s relayHandler(%x)\r\n", getTimeStamp(), thisRelay);

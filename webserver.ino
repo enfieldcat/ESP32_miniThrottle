@@ -1082,6 +1082,13 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   if (compInt == 1)  myClient->printf (" checked=\"true\"");
   myClient->printf ((const char*)"><label for=\"buttonStopYes\">Push stops train or cab menu if stopped in driving mode<label></td></tr>");
   #endif  // NODISPLAY
+  compInt = nvs_get_int ("minLocoSpeed", 0);
+  myClient->printf ((const char*)"<tr><td>Min Loco Speed</td><td><input type=\"radio\" id=\"minSpeedEm\" name=\"minLocoSpeed\" value=\"-1\"");
+  if (compInt == -1) myClient->printf((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"minSpeedEm\">-1 - Emergency Stop</label><br>");
+  myClient->printf ((const char*)"<input type=\"radio\" id=\"minSpeedZero\" name=\"minLocoSpeed\" value=\"0\"");
+  if (compInt == 0) myClient->printf((const char*)" checked=\"true\"");
+  myClient->printf ((const char*)"><label for=\"minSpeedZero\">0 - Stopped</label></td></tr>");
   compInt = nvs_get_int ("noPwrTurnouts", 0);
   myClient->printf ((const char*)"<tr><td>Turnout/Route Options</td><td><input type=\"radio\" id=\"noPwrTurnout\" name=\"noPwrTurnouts\" value=\"0\"");
   if (compInt == 0) myClient->printf((const char*)" checked=\"true\"");

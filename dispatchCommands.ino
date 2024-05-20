@@ -353,6 +353,7 @@ void setLocoSpeed (uint8_t locoIndex, int16_t speed, int8_t direction)
     xSemaphoreGive(consoleSem);
   }
 
+  if (speed < minLocoSpeed) speed = minLocoSpeed;
   if (invalidLocoIndex(locoIndex, "Set loco speed")) return;
   if (cmdProtocol == WITHROT) {
     if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

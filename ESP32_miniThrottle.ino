@@ -155,6 +155,7 @@ static uint8_t coreCount    = 2;          // cpu core count, used for some diagn
 static uint8_t inventoryLoco = LOCALINV;  // default to local inventory for locos
 static uint8_t inventoryTurn = LOCALINV;  // default tp local inventory for turnouts
 static uint8_t inventoryRout = LOCALINV;  // default to local inventory for routes / automations
+static int8_t  minLocoSpeed  = 0;         // ensure loco speed does not drop below -1 or 0
 #ifdef RELAYPORT
 static WiFiServer *relayServer;                  // the relay server wifi service
 struct relayConnection_s *remoteSys = NULL;      // table of connected clients and assoc states
@@ -480,6 +481,7 @@ void setup()  {
   inventoryLoco   = nvs_get_int ("inventoryLoco", LOCALINV);
   inventoryTurn   = nvs_get_int ("inventoryTurn", LOCALINV);
   inventoryRout   = nvs_get_int ("inventoryRout", LOCALINV);
+  minLocoSpeed    = nvs_get_int ("minLocoSpeed",  0);
   for (uint8_t n=0;n<4;n++) dccLCD[n][0] = '\0'; // store empty string in dccLCD array
   // initialise queues
   commandKey = '.'; // initialise queue to start

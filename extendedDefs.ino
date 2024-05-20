@@ -61,6 +61,7 @@ SOFTWARE.
     { (char*)"diagPort",       INTEGER,   10,         65500,           23,       (char*)   "", (char*)"Diagnostic port"},
     { (char*)"mainMenuMask",   INTEGER,    0,            15,            0,       (char*)   "", (char*)"Main Menu Mask"},
     { (char*)"clientTimeout",  INTEGER,   20,       TIMEOUT,    TIMEOUT/4,       (char*)   "", (char*)"WiFi client timeout"},
+    { (char*)"minLocoSpeed",   INTEGER,   -1,             0,            0,       (char*)   "", (char*)"Minimum locomotive speed"},
     #ifndef SERIALCTRL
     { (char*)"missedKeepAlive",INTEGER,    0,            20,            3,       (char*)   "", (char*)"Max missed keepalive responses"},
     { (char*)"resetKeepAlive", INTEGER,    0,             1,            0,       (char*)   "", (char*)"Reset keepalive timer if other traffic sent"},

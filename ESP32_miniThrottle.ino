@@ -54,7 +54,8 @@ DisplayILI9341_240x320x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL,
 
 #ifdef USEWIFI
 // WiFi Server Definitions
-WiFiClient client;                    // client to use for connection to CS
+static WiFiClient client;                    // client to use for connection to CS
+static WiFiClient diagServerClient[MAXDIAGCONNECT];
 #endif
 #ifdef SERIALCTRL
 static HardwareSerial serial_dev(1);  // serial port to use when connection directly to DCC-Ex

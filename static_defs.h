@@ -33,6 +33,9 @@ SOFTWARE.
 // #include <stdio.h>
 // #include <time.h>
 // Used for user interfaces
+#if defined(USEI2C) || defined(SSD1306) || defined(SSD1327)
+#include <Wire.h>
+#endif
 #ifndef NODISPLAY
 #include "lcdgfx.h"
 #include <Keypad.h>
@@ -43,8 +46,10 @@ SOFTWARE.
 // Used for hardware inspection
 #include "esp_system.h"
 #include "esp_spi_flash.h"
+#include "esp_flash.h"
 #include <rom/rtc.h>
 #include <esp_timer.h>
+#include <esp32-hal-psram.h>
 // Used for process / thread control
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -60,7 +65,46 @@ SOFTWARE.
 #undef VERSION
 #endif
 #define PRODUCTNAME "miniThrottle" // Branding name
-#define VERSION     "0.8a"         // Version string
+#define VERSION     "0.9"          // Version string
+
+/*
+ * Model options
+ * ESPMODEL ESP32
+ * ESPMODEL ESP32S2
+ * ESPMODEL ESP32S3
+ * ESPMODEL ESP32C3
+ * ESPMODEL ESP32C5
+ * ESPMODEL ESP32C6
+ */
+// default model if not specified elsewhere
+// https://docs.espressif.com/projects/esp-idf/en/v5.0/esp32s3/hw-reference/chip-series-comparison.html
+//
+// Primary target is ESP32 / ESP32-DOWD
+// ESP32-C3: Encoder library won't work, issues with LCDGFX - may have limited application
+// ESP32-S2: Untested
+// ESP32-S3: Limited testing, seems OK
+#define ESP32 1
+#define ESP32S2 2
+#define ESP32C3 3
+#define ESP32S3 4
+#define ESP32C5 5
+#define ESP32C6 6
+
+
+#if ESPMODEL == ESP32
+#define MAXPINS 39
+#elif ESPMODEL == ESP32S3
+#define MAXPINS 48
+#elif ESPMODEL == ESP32S2
+#define MAXPINS 46
+#elif ESPMODEL == ESP32C3
+#define MAXPINS 21
+#elif ESPMODEL == ESP32C5
+#define MAXPINS 28
+#elif ESPMODEL == ESP32C6
+#define MAXPINS 23
+#endif
+
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.
@@ -179,29 +223,6 @@ SOFTWARE.
 #define FUNCTLATCH 483
 #define FUNCTLEADONLY 225
 
-// default model if not specified elsewhere
-// https://docs.espressif.com/projects/esp-idf/en/v5.0/esp32s3/hw-reference/chip-series-comparison.html
-//
-// Primary target is ESP32 / ESP32-DOWD
-// ESP32-C3: Encoder library won't work, issues with LCDGFX - may have limited application
-// ESP32-S2: Untested
-// ESP32-S3: Limited testing, seems OK
-#define ESP32 1
-#define ESP32C3 2
-#define ESP32S2 3
-#define ESP32S3 4
-#ifndef ESPMODEL
-#define ESPMODEL ESP32
-#endif
-#if ESPMODEL == ESP32
-#define MAXPINS 40
-#elif ESPMODEL == ESPS3
-#define MAXPINS 49
-#elif ESPMODEL == ESPS2
-#define MAXPINS 47
-#else
-#define MAXPINS 22
-#endif
 
 /*
  * **********  ENUMERATIONS  *********************************************************************
@@ -380,5 +401,6 @@ struct nvs_page                                     // For nvs entries
   nvs_entry Entry[126] ;
 } ;
 
-uint8_t nvs_index_ref[] = { 0x01,      0x02,       0x04,       0x08,       0x11,     0x12,      0x14,      0x18,      0x21,     0x41,   0x42,       0x48,      0xff};
-const char *nvs_descrip[]     = { "uint8_t", "uint16_t", "uint32_t", "uint64_t", "int8_t", "int16_t", "int32_t", "int64_t", "String", "Blob", "BlobData", "BlobIdx", "Unused" };
+uint8_t nvs_index_ref[]   = { 0x01,      0x02,       0x04,       0x08,       0x11,     0x12,      0x14,      0x18,      0x21,     0x41,   0x42,       0x48,      0xff};
+const char *nvs_descrip[] = { "uint8_t", "uint16_t", "uint32_t", "uint64_t", "int8_t", "int16_t", "int32_t", "int64_t", "String", "Blob", "BlobData", "BlobIdx", "Unused" };
+

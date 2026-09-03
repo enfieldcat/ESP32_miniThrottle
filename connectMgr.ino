@@ -490,7 +490,15 @@ void mdnsLookup (const char *service)
   if ((!err) && results != NULL && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     r = results;
     while (r){
+      #ifdef ESP_ARDUINO_VERSION_MAJOR
+      #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+      Serial.printf("%d: IP Protocol: %s\r\n", i++, ip_protocol_str[r->ip_protocol]);
+      #else
       Serial.printf("%d: Interface: %s, Type: %s\r\n", i++, if_str[r->tcpip_if], ip_protocol_str[r->ip_protocol]);
+      #endif
+      #else
+      Serial.printf("%d: Interface: %s, Type: %s\r\n", i++, if_str[r->tcpip_if], ip_protocol_str[r->ip_protocol]);
+      #endif
       if (r->instance_name){
         Serial.printf("  PTR : %s\r\n", r->instance_name);
       }
@@ -522,6 +530,43 @@ void mdnsLookup (const char *service)
     mdns_query_results_free (results);
   }
 }
+
+void mdnsScanService ()
+{
+  char* mdnsServiceList[] = {"withrottle", "http", "arduino", "workstation", "smb", "afpovertcp", "ftp", "ipp", "ipps", "printer", "scanner", "airplay", "googlecast", "sonos", "dlna", "spotify-connect", "ssh", "sftp-ssh", "ftp", "snmp"};
+  int i = sizeof(mdnsServiceList) / sizeof(char*);
+
+  for (int n=0; n<i; n++) mdbsBrowseService (mdnsServiceList[n], "tcp");
+}
+
+// Query a specific service
+void mdbsBrowseService(const char *service, const char *proto) {
+  int n = MDNS.queryService(service, proto);
+  if (n > 0) {
+    Serial.print(n);
+    Serial.println(" service(s) found");
+    for (int i = 0; i < n; ++i) {
+      // Print details for each service found
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.print("  ");
+        Serial.print(i + 1);
+        Serial.print(": ");
+        Serial.printf("_%s._%s.local: ", service, proto);
+        //Serial.print(MDNS.instanceName(i));
+        //Serial.print(" - ");
+        Serial.print(MDNS.hostname(i));
+        //Serial.print(" (");
+        //Serial.print(MDNS.address(i));
+        Serial.print(":");
+        Serial.print(MDNS.port(i));
+        //Serial.println(")");
+        xSemaphoreGive(consoleSem);
+      }
+    }
+  }
+  Serial.println();
+}
+
 
 // mdns lookup of service, returns port number and writes the IP address to the buffer pointed to by *addr
 int mdnsLookup (const char *service, char *addr)
@@ -614,7 +659,7 @@ void txPacket (const char *header, const char *pktData)
 
 #ifdef SERIALCTRL
 //void connectionManager()
-// Rn as a separate thread in case there are start up delays in running population or connection routines
+// Run as a separate thread in case there are start up delays in running population or connection routines
 void serialConnectionManager(void *pvParameters)
 {
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {

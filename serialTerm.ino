@@ -417,7 +417,9 @@ void processSerialCmd (char *inBuffer)
   else if (nparam<=2 && strcmp (param[0], "rotatedisplay") == 0) mt_set_rotateDisp   (nparam, param);
   #endif
   else if (nparam>=2 && strcmp (param[0], "rpn") == 0)           (new runAutomation)->rpn  (nparam, param);
+  #ifdef FILESUPPORT
   else if (nparam==2 && strcmp (param[0], "run") == 0)           runAutomation::runbg (param[1]);
+  #endif
   #ifndef SERIALCTRL
   else if (nparam<=4 && strcmp (param[0], "server") == 0)        mt_set_server       (nparam, param);
   #endif
@@ -1448,6 +1450,9 @@ void set_mdns(int nparam, char **param)
   else if (strcmp (param[1], "off") == 0) {
     nvs_put_int ("mdns", 0);
   }
+  else if (strcmp (param[1], "scan") == 0) {
+    mdnsScanService();
+  }
   else {
     if (param[1][0] != '_') {
       if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -2032,6 +2037,10 @@ bool showPinConfig()  // Display pin out selection
         }
       }
       #endif
+      if (pinVars[n].pinNr > MAXPINS) {
+        retVal = false;
+        Serial.printf (", Exceeds max GPIO pin number (%d)", MAXPINS);
+      }
       Serial.printf ("\r\n");
     }
     #ifdef keynone
@@ -2149,9 +2158,9 @@ void pinEquiv(uint8_t pin)
 void showMemory()
 {
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.print   ("     Heap Size: "); Serial.print (util_ftos (ESP.getHeapSize(), 0)); Serial.println (" bytes");
     Serial.print   ("     Free Heap: "); Serial.print (util_ftos (ESP.getFreeHeap(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getFreeHeap()*100.0)/ESP.getHeapSize(), 1)); Serial.println ("%");
     Serial.print   (" Min Free Heap: "); Serial.print (util_ftos (ESP.getMinFreeHeap(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getMinFreeHeap()*100.0)/ESP.getHeapSize(), 1)); Serial.println ("%");
-    Serial.print   ("     Heap Size: "); Serial.print (util_ftos (ESP.getHeapSize(), 0)); Serial.println (" bytes");
     if (ESP.getPsramSize() > 0) {
       Serial.print   ("    PSRAM Size: "); Serial.print (util_ftos (ESP.getPsramSize(), 0)); Serial.println (" bytes");
       Serial.print   ("    Free PSRAM: "); Serial.print (util_ftos (ESP.getFreePsram(), 0)); Serial.print (" bytes, "); Serial.print (util_ftos ((ESP.getFreePsram()*100.0)/ESP.getPsramSize(), 1)); Serial.println ("%");
@@ -2356,9 +2365,10 @@ void help(int nparam, char **param)  // show help data
     }
     #ifdef USEWIFI
     if (all || strcmp(param[1], "mdns")==0) {
-      Serial.println ((const char*) "mdns [on|off|<name>]");
+      Serial.println ((const char*) "mdns [on|off|scan|<name>]");
       if (!summary) {
-        Serial.println ((const char*) "    Use mDNS to search for wiThrottle on network, or locate service <name>");
+        Serial.println ((const char*) "    Select to use mDNS to search for wiThrottle on network, or locate service <name>");
+        Serial.println ((const char*) "    \"scan\" will search for common mdns services - can validate mdns config without a withrottle server");
       }
     }
     #endif

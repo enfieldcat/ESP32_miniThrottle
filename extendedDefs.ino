@@ -167,16 +167,16 @@ SOFTWARE.
     { SPI_RESET,    (char*)"SPI - Reset" },
     #endif
     #ifdef SPI_CS
-    { SPI_CS,       (char*)"SPI - CS" },
+    { SPI_CS,       (char*)"SPI - CS/SS (Chip/Slave Select)" },
     #endif
     #ifdef SPI_DC
-    { SPI_DC,       (char*)"SPI - DC" },
+    { SPI_DC,       (char*)"SPI - DC (Data/Command)" },
     #endif
     #ifdef SPI_SCL
-    { SPI_SCL,      (char*)"SPI - Clock/SCL" },
+    { SPI_SCL,      (char*)"SPI - Clock/SCLK" },
     #endif
-    #ifdef SPI_SDA
-    { SPI_SDA,      (char*)"SPI - Data/SDA" },
+    #ifdef SPI_MOSI
+    { SPI_MOSI,      (char*)"SPI - MOSI/SDATA" },
     #endif
     #ifdef BACKLIGHTPIN
     { BACKLIGHTPIN, (char*)"Backlight" },
@@ -197,7 +197,7 @@ SOFTWARE.
     { DIRFWDPIN,    (char*)"Forward Switch" },
     #endif
     #ifdef DIRREVPIN
-    { DIRRWVPIN,    (char*)"Reverse Switch" },
+    { DIRREVPIN,    (char*)"Reverse Switch" },
     #endif
     #ifdef TRACKPWR
     { TRACKPWR,     (char*)"Trk Power LED" },
@@ -227,15 +227,25 @@ SOFTWARE.
     #endif
     #if ESPMODEL == ESP32C3
     { 20,           (char*)"Console - Tx" },
-    { 21,           (char*)"Console - Rx" }
-    #elif ESPMODEL == ESP32C2
-    { 20,           (char*)"Console - Tx" },
-    { 19,           (char*)"Console - Rx" }
+    { 21,           (char*)"Console - Rx" },
+    { 26,           (char*)"Internal flash - SPIHD" },
+    { 27,           (char*)"Internal flash - SPIWP" },
+    { 28,           (char*)"Internal flash - SPICS0" },
+    { 29,           (char*)"Internal flash - SPICLK" },
+    { 30,           (char*)"Internal flash - SPID" },
+    { 31,           (char*)"Internal flash - SPIQ" }
     #elif ESPMODEL == ESP32S3
     { 22,           (char*)"Not Usable" },
     { 23,           (char*)"Not Usable" },
     { 24,           (char*)"Not Usable" },
     { 25,           (char*)"Not Usable" },
+    { 26,           (char*)"Internal flash - SPICS1" },
+    { 27,           (char*)"Internal flash - SPIHD" },
+    { 28,           (char*)"Internal flash - SPIWP" },
+    { 29,           (char*)"Internal flash - SPICS0" },
+    { 30,           (char*)"Internal flash - SPICLK" },
+    { 31,           (char*)"Internal flash - SPIQ" },
+    { 32,           (char*)"Internal flash - SPID" },
     { 43,           (char*)"Console - Tx" },
     { 44,           (char*)"Console - Rx" }
     #elif ESPMODEL == ESP32S2
@@ -243,9 +253,35 @@ SOFTWARE.
     { 23,           (char*)"Not Usable" },
     { 24,           (char*)"Not Usable" },
     { 25,           (char*)"Not Usable" },
+    { 26,           (char*)"Internal flash - SPICS1" },
+    { 27,           (char*)"Internal flash - SPIHD" },
+    { 28,           (char*)"Internal flash - SPIWP" },
+    { 29,           (char*)"Internal flash - SPICS0" },
+    { 30,           (char*)"Internal flash - SPICLK" },
+    { 31,           (char*)"Internal flash - SPIQ" },
+    { 32,           (char*)"Internal flash - SPID" },
     { 43,           (char*)"Console - Tx" },
     { 44,           (char*)"Console - Rx" }
-    #else
+    #elif ESPMODEL == ESP32C5
+    { 11,           (char*)"Console - Tx" },
+    { 12,           (char*)"Console - Rx" },
+    { 15,           (char*)"Internal flash - SPICS1" },
+    { 16,           (char*)"Internal flash - SPICS0" },
+    { 17,           (char*)"Internal flash - SPIQ" },
+    { 18,           (char*)"Internal flash - SPIWP" },
+    { 20,           (char*)"Internal flash - SPIHD" },
+    { 21,           (char*)"Internal flash - SPICLK" },
+    { 22,           (char*)"Internal flash - SPID" }
+    #elif ESPMODEL == ESP32C6
+    { 16,           (char*)"Console - Tx" },
+    { 17,           (char*)"Console - Rx" },
+    { 24,           (char*)"Internal flash - SPICS0" },
+    { 25,           (char*)"Internal flash - SPIQ" },
+    { 26,           (char*)"Internal flash - SPIWP" },
+    { 28,           (char*)"Internal flash - SPIHD" },
+    { 29,           (char*)"Internal flash - SPICLK" },
+    { 29,           (char*)"Internal flash - SPID" }
+    #elif ESMPMODEL == ESP32
     { 1,            (char*)"Console - Tx" },
     { 3,            (char*)"Console - Rx" },
     { 6,            (char*)"Internal Flash - sdclk" },

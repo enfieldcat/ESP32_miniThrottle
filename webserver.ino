@@ -360,7 +360,8 @@ void webHandler(void *pvParameters)
       uint16_t n = 0;
       uint16_t i = 0;
   
-      content = (char*) malloc(contentLength+1); // Add 1 for a terminating null
+      if (usePSRAM) content = (char*) malloc(contentLength+1); // Add 1 for a terminating null
+      else content = (char*) malloc(contentLength+1); // Add 1 for a terminating null
       for (n=0, i=0; n<contentLength && myClient->available()>0; n++) {
         inChar = myClient->read();
         if (inChar == '%' && myClient->available()>0) {
@@ -1745,7 +1746,7 @@ void mkWebDeviceDescript (WiFiClient *myClient)
      coreCount, \
      ESP.getChipModel(), \
      ESP.getChipRevision(), \
-     spi_flash_get_chip_size() / (1024 * 1024));
+     flash_size);
   myClient->printf ((const char*)"<tr><td align=\"right\">Software:</td><td>%s %s</td></tr>", PRODUCTNAME, VERSION);
   myClient->printf ((const char*)"<tr><td align=\"right\">Compile time:</td><td>%s %s</td></tr>", __DATE__, __TIME__);
   myClient->printf ((const char*)"<tr><td align=\"right\">Uptime:</td><td>");

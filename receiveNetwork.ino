@@ -25,7 +25,6 @@ SOFTWARE.
 */
 
 
-
 void receiveNetData(void *pvParameters)
 // This is the network receiver task.
 {
@@ -188,11 +187,13 @@ void receiveNetData(void *pvParameters)
   cmdProtocol = UNDEFINED;
   initialDataSent = false;
   #endif
+  #ifdef USEWIFI
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     if (WiFi.status() != WL_CONNECTED) Serial.printf ("%s WiFi signal lost\r\n", getTimeStamp());
     Serial.printf ("%s Network connection closed (disconnect)\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
+  #endif
   if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     netReceiveOK = false;
     xSemaphoreGive(tcpipSem);
@@ -229,7 +230,6 @@ bool netConnState (uint8_t chkmode)
   return (retval);
 }
 #endif
-
 
 void processPacket (char *packet)
 {

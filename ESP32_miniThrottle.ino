@@ -35,21 +35,21 @@ SOFTWARE.
 // Initialize the OLED display using i2c interface, Adjust according to display device
 // DisplaySSD1306_128x64_I2C display(-1); // or (-1,{busId, addr, scl, sda, frequency})
 #ifdef SSD1306
-DisplaySSD1306_128x64_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, -1});
+DisplaySSD1306_128x64_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, (uint32_t) -1});
 #endif
 #ifdef SSD1327
-DisplaySSD1327_128x128_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, -1});
+DisplaySSD1327_128x128_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, (uint32_t) -1});
 #endif
 #ifdef ST7735
 // params {reset, {busid, cs, dc, freq, scl, sca}}
 // reset may be -1 if not used, otherwise -1 => defaults
-DisplayST7735_128x160x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_SDA});
+DisplayST7735_128x160x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_MOSI});
 #endif
 #ifdef ST7789
-DisplayST7789_135x240x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_SDA});
+DisplayST7789_135x240x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_MOSI});
 #endif
 #ifdef ILI9341
-DisplayILI9341_240x320x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_SDA});
+DisplayILI9341_240x320x16_SPI display(SPI_RESET,{-1, SPI_CS, SPI_DC, 0, SPI_SCL, SPI_MOSI});
 #endif
 
 #ifdef USEWIFI
@@ -127,6 +127,7 @@ static int keepAliveTime    = 10;     // WiThrottle keepalive time
 static int brakePres        = 0;      // brake pressure register
 #endif
 static uint32_t fc_time = 36;         // in jmri mode we can receive fast clock, in relay mode we can send it, 36s past midnight => not updated
+static uint32_t flash_size = 0;
 static float sharedRegister[REGISTERCOUNT];
 static uint32_t defaultLatchVal     = 0;  // bit map of which functions latch
 static uint32_t defaultLeadVal      = 0;  // bit map of which functions are for lead loco only
@@ -213,6 +214,7 @@ static bool funcChange        = true;    // in locomotive driving mode, have fun
 static bool speedChange       = false;   // in locomotive driving mode, has speed changed?
 static bool netReceiveOK      = false;
 static bool diagReceiveOK     = false;   // flag to ensure only one cpy is running
+static bool usePSRAM          = false;   // Should we use PSRAM
 #ifdef USEWIFI
 static bool diagIsRunning     = false;   // run state indicator
 static bool obsessive         = false;   // obsessive connectivity checks
@@ -388,6 +390,21 @@ void setup()  {
   // Print a diagnostic to the console, Prior to starting tasks no semaphore required
   //esp_chip_info(&chip_info);
   coreCount = ESP.getChipCores();
+  #ifdef ESP_ARDUINO_VERSION_MAJOR
+  #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+    // Code for version 3.x
+    esp_flash_get_size(NULL, &flash_size);
+  #else
+    // Code for version 2.x
+    flash_size = spi_flash_get_chip_size();
+  #endif
+  #else
+    // Code for version 1.x
+    flash_size = spi_flash_get_chip_size();
+  #endif
+  flash_size = flash_size / ( 1024 *1024);
+
+  mt_ruler (NULL);
   #if ESPMODEL == ESP32C3
   printf  ("Hardware Vers: %d core %s (rev %d) %dMHz, Xtal: %dMHz, %d MB flash\r\n", \
      coreCount, \
@@ -395,19 +412,19 @@ void setup()  {
      ESP.getChipRevision(), \
      ESP.getCpuFreqMHz(), \
      getXtalFrequencyMhz(), \
-     spi_flash_get_chip_size() / (1024 * 1024));
+     flash_size);
   printf ("  Heap Memory: %d bytes\r\n", ESP.getHeapSize());
   printf ("Console Tx and Rx ports switch to I/O pins %d and %d respectively\r\n", TX, RX);
-  #endif
-  mt_ruler (NULL);
+  #else    // ESP32C3
   Serial.printf  ("Hardware Vers: %d core %s (rev %d) %dMHz, Xtal: %dMHz, %d MB flash\r\n", \
      coreCount, \
      ESP.getChipModel(), \
      ESP.getChipRevision(), \
      ESP.getCpuFreqMHz(), \
      getXtalFrequencyMhz(), \
-     spi_flash_get_chip_size() / (1024 * 1024));
+     flash_size);
   Serial.printf  ("  Heap Memory: %d bytes\r\n", ESP.getHeapSize());
+  #endif    // ESP32C3
   Serial.printf  ("Software Vers: %s %s\r\n", PRODUCTNAME, VERSION);
   Serial.printf  (" Compile Time: %s %s\r\n", __DATE__, __TIME__);
   #ifndef NODISPLAY
@@ -431,6 +448,10 @@ void setup()  {
   if (strcmp (ESP.getChipModel(), "ESP32-C2") != 0) cpuOK = false;
   #elif ESPMODEL == ESP32C2
   if (strcmp (ESP.getChipModel(), "ESP32-C3") != 0) cpuOK = false;
+  #elif ESPMODEL == ESP32C5
+  if (strcmp (ESP.getChipModel(), "ESP32-C5") != 0) cpuOK = false;
+  #elif ESPMODEL == ESP32C6
+  if (strcmp (ESP.getChipModel(), "ESP32-C6") != 0) cpuOK = false;
   #endif
   if (!cpuOK) {
     char* cpuName = (char*) ESP.getChipModel();
@@ -439,9 +460,12 @@ void setup()  {
     else if (strcmp (cpuName, "ESP32-S2") == 0) Serial.printf ("ESP32S2");
     else if (strcmp (cpuName, "ESP32-S3") == 0) Serial.printf ("ESP32S3");
     else if (strcmp (cpuName, "ESP32-C2") == 0) Serial.printf ("ESP32C2");
-    else                                        Serial.printf ("ESP32C3");
+    else if (strcmp (cpuName, "ESP32-C5") == 0) Serial.printf ("ESP32C5");
+    else if (strcmp (cpuName, "ESP32-C6") == 0) Serial.printf ("ESP32C6");
+    else if (strcmp (cpuName, "ESP32-C3") == 0) Serial.printf ("ESP32C3");
+    else                                        Serial.printf ("ESP32");
     Serial.printf ("\r\nInitialisation halted, please define and recompile.\r\n");
-    while (1 == 1) sleep (3600);
+    while (true) delay (10000);
   }
   #ifdef SHOWPARTITIONS
   displayPartitions();
@@ -451,7 +475,7 @@ void setup()  {
     Serial.printf ("%s Basic hardware check failed.\r\n", getTimeStamp());
     Serial.printf ("%s Some I/O pins may have more than one assignment.\r\n", getTimeStamp());
     Serial.printf ("%s Reconfigure and recompile required to proceed.\r\n", getTimeStamp());
-    Serial.printf ("%s System initialisation aborted.\r\n", getTimeStamp());
+    Serial.printf ("%s System initialisation halted.\r\n", getTimeStamp());
     while (true) delay (10000);
   }
   #ifdef SHOWPACKETSONSTART
@@ -474,6 +498,12 @@ void setup()  {
     }
   }
   #endif
+  if (psramInit()) {
+    Serial.printf("%s PSRAM initialized: %dMb\r\n", getTimeStamp(), ((int)(ESP.getPsramSize() / (1024*1024))));
+    if (nvs_get_int ("usePSRAM", 1) > 0) usePSRAM = true;
+  } else {
+    Serial.printf("%s PSRAM not available\r\n", getTimeStamp());
+  }
   debuglevel      = nvs_get_int ("debuglevel",    DEBUGLEVEL);
   dccPowerFunc    = nvs_get_int ("dccPower",      DCCPOWER);
   defaultLatchVal = nvs_get_int ("FLatchDefault", FUNCTLATCH);
@@ -539,9 +569,26 @@ void setup()  {
   // digitalWrite (BACKLIGHTPIN, 1);
   backlightValue = nvs_get_int ("backlightValue", 200);
   #endif    //  BACKLIGHTREF
-  ledcSetup(0, 5000, 8);
-  ledcAttachPin(BACKLIGHTPIN, 0);
-  ledcWrite(0, backlightValue);
+  #ifdef ESP_ARDUINO_VERSION_MAJOR
+  #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+    // Code for version 3.x
+    // Attach the pin, frequency (5000 Hz), and resolution (8 bits) in one call
+    ledcAttach(BACKLIGHTPIN, 5000, 8);
+    // Write the PWM duty cycle directly using the pin number
+    ledcWrite(BACKLIGHTPIN, backlightValue);
+  #else
+    // Code for version 2.x
+    ledcSetup(0, 5000, 8);
+    ledcAttachPin(BACKLIGHTPIN, 0);
+    ledcWrite(0, backlightValue);
+  #endif
+  #else
+    // Code for version 1.x
+    ledcSetup(0, 5000, 8);
+    ledcAttachPin(BACKLIGHTPIN, 0);
+    ledcWrite(0, backlightValue);
+  #endif
+
   // analogWrite(BACKLIGHTPIN, backlightValue);
   #endif    //  BACKIGHTPIN
   // Set speedometer initial position
@@ -566,7 +613,7 @@ void setup()  {
   }
   delay (250);
   sampleConfigExists(SPIFFS);
-  #ifdef CERTFILE
+  #if defined(CERTFILE) && defined(WEBLIFETIME)
   defaultCertExists(SPIFFS);
   #endif   //  CERTFILE
   #ifdef WEBLIFETIME
@@ -673,9 +720,11 @@ void setup()  {
   xTaskCreate(switchMonitor, "switchMonitor", 2048, NULL, 4, NULL);
   #endif   // NODISPLAY
   // Finally check for an auto run
+  #ifdef FILESUPPORT
   if(SPIFFS.exists("/auto.run")) {
     runInitialAuto();
   }
+  #endif
 }
 
 /*
@@ -805,11 +854,11 @@ void loop()
     }
     else {
       while (wiCliConnected) {
-    #else
+    #else   // SERIALCTRL
     // handling for Serial connection
     if (true) {
       while (true) { // Assume serial => always connected
-    #endif
+    #endif  // SERIALCTRL
         // Prime the menuResponse as if it will all work
         for (uint8_t n=0; n<sizeof(menuResponse); n++) menuResponse[n] = n+1;
         // Find if any options are disabled due to lack of power

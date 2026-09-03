@@ -315,7 +315,8 @@ void dccConfLoco (char *data)
   }
   if (isAllNumeric) {
     if (dccExNumList != NULL) free (dccExNumList);
-    dccExNumList = (uint16_t*) malloc (sizeof(uint16_t) * totalFields);
+    if (usePSRAM) dccExNumList = (uint16_t*) ps_malloc (sizeof(uint16_t) * totalFields);
+    else dccExNumList = (uint16_t*) malloc (sizeof(uint16_t) * totalFields);
     dccExNumListSize = 0;
   }
   fld = data;
@@ -383,7 +384,8 @@ void dccConfLoco (char *data)
               locoRoster[indexer].relayIdx      = 255;
               locoRoster[indexer].functionLatch = 65535;
               if (strlen(funcName) > 0) {
-                locoRoster[indexer].functionString = (char*) malloc (strlen(funcName));
+                if (usePSRAM) locoRoster[indexer].functionString = (char*) ps_malloc (strlen(funcName));
+                else locoRoster[indexer].functionString = (char*) malloc (strlen(funcName));
                 strcpy(locoRoster[indexer].functionString, funcName);
                 }
               else locoRoster[indexer].functionString = NULL;
@@ -425,7 +427,8 @@ void dccConfTurnout (char *data)
   }
   if (isAllNumeric) {
     if (dccExNumList != NULL) free (dccExNumList);
-    dccExNumList = (uint16_t*) malloc (sizeof(uint16_t) * totalFields);
+    if (usePSRAM) dccExNumList = (uint16_t*) ps_malloc (sizeof(uint16_t) * totalFields);
+    else dccExNumList = (uint16_t*) malloc (sizeof(uint16_t) * totalFields);
     dccExNumListSize = 0;
     toID = nvs_get_int("toOffset", 100);
   }
@@ -518,7 +521,8 @@ void dccConfRoute (char *data)
   }
   if (isAllNumeric) {
     if (dccExNumList != NULL) free (dccExNumList);
-    dccExNumList = (uint16_t*) malloc (sizeof(uint16_t) * totalFields);
+    if (usePSRAM) dccExNumList = (uint16_t*) ps_malloc (sizeof(uint16_t) * totalFields);
+    else dccExNumList = (uint16_t*) malloc (sizeof(uint16_t) * totalFields);
     dccExNumListSize = 0;
     rtID = nvs_get_int("toOffset", 100);
   }
@@ -799,7 +803,8 @@ void dccPopulateLoco()
   }
   // allocate storage for locos
   limit = (totalEntries + MAXCONSISTSIZE) * sizeof(struct locomotive_s);
-  locoData = (struct locomotive_s*) malloc (limit);
+  if (usePSRAM) locoData = (struct locomotive_s*) ps_malloc (limit);
+  else locoData = (struct locomotive_s*) malloc (limit);
   cPtr = (char*) locoData;
   for (int n=0; n<limit; n++) cPtr[n] = '\0';
   if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -914,7 +919,8 @@ void dccPopulateTurnout()
   }
   // Configure turnout states array
   if (turnoutState != NULL) free (turnoutState);
-  turnoutState = (struct turnoutState_s*) malloc (4 * sizeof(struct turnoutState_s));
+  if (usePSRAM) turnoutState = (struct turnoutState_s*) ps_malloc (4 * sizeof(struct turnoutState_s));
+  else turnoutState = (struct turnoutState_s*) malloc (4 * sizeof(struct turnoutState_s));
   cPtr = (char*) turnoutState;
   for (int n=0; n<(4 * sizeof(struct turnoutState_s)); n++) cPtr[n] = '\0';
   turnoutState[0].state = '2';
@@ -947,7 +953,8 @@ void dccPopulateTurnout()
   // Create array to hold all that stuff
   if (totalEntries > 0) {
     int limit = totalEntries * sizeof(struct turnout_s);
-    turnoutData = (struct turnout_s*) malloc (limit);
+    if (usePSRAM) turnoutData = (struct turnout_s*) ps_malloc (limit);
+    else turnoutData = (struct turnout_s*) malloc (limit);
     if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("Total Turnouts allocated: %d (%d bytes)\r\n", totalEntries, limit);
       xSemaphoreGive(consoleSem);
@@ -1101,7 +1108,8 @@ void dccPopulateRoutes()
   }
 
   if (routeState != NULL) free (routeState);
-  routeState = (struct routeState_s*) malloc (4 * sizeof(struct routeState_s));
+  if (usePSRAM) routeState = (struct routeState_s*) ps_malloc (4 * sizeof(struct routeState_s));
+  else routeState = (struct routeState_s*) malloc (4 * sizeof(struct routeState_s));
   cPtr = (char*) routeState;
   for (int n=0; n<(4 * sizeof(struct routeState_s)); n++) cPtr[n] = '\0';
   routeState[0].state = '2';
@@ -1133,7 +1141,8 @@ void dccPopulateRoutes()
   }
   if (totalEntries > 0) {
     int limit = totalEntries * sizeof(struct route_s);
-    rtData = (struct route_s*) malloc (limit);
+    if (usePSRAM) rtData = (struct route_s*) ps_malloc (limit);
+    else rtData = (struct route_s*) malloc (limit);
     if (debuglevel>1 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("Total Routes allocated: %d (%d bytes)\r\n", totalEntries, limit);
       xSemaphoreGive(consoleSem);

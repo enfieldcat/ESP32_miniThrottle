@@ -360,7 +360,7 @@ private:
       else if (strcmp (varcopy, "xtalfreq")     == 0) retval = getXtalFrequencyMhz();
       else if (strcmp (varcopy, "psram")        == 0) retval = ESP.getPsramSize();
       else if (strcmp (varcopy, "psramfree")    == 0) retval = ESP.getFreePsram();
-      else if (strcmp (varcopy, "flashsize")    == 0) retval = (spi_flash_get_chip_size() / (1024 * 1024));
+      else if (strcmp (varcopy, "flashsize")    == 0) retval = flash_size;
       #ifdef LED_BUILTIN
       else if (strcmp (varcopy, "ledbuiltin")   == 0) retval = LED_BUILTIN;
       #endif
@@ -670,8 +670,15 @@ private:
         case 6 : // call - wait for completion of script
         case 7 : // exec - run in background and keep going
           if (nparam == 2) {
+            #ifdef FILESUPPORT
             if (token == 6) runfg (param[1]);
             else runbg (param[1]);
+            #else
+            if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+              Serial.printf ("%s %s No file support available\r\n", getTimeStamp(), param[0]);
+              xSemaphoreGive(consoleSem);
+            }
+            #endif
           }
           else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
             Serial.printf ("%s %s requires one parameter, a filename\r\n", getTimeStamp(), param[0]);
@@ -788,7 +795,8 @@ private:
                 case AOUT:
                   dacWrite (pinNr, temp);
                   break;
-                #elif ESPMODEL == ESP32C2
+                #endif
+                #if ESPMODEL == ESP32C2
                 case AOUT:
                   dacWrite (pinNr, temp);
                   break;
@@ -796,7 +804,15 @@ private:
                 case PWM:
                   if (temp < 0) temp = 0;
                   else if (temp > 255) temp = 255;
+                  #ifdef ESP_ARDUINO_VERSION_MAJOR
+                  #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+                  ledcWrite(pinNr, temp);
+                  #else
                   ledcWrite(channel, temp);
+                  #endif
+                  #else
+                  ledcWrite(channel, temp);
+                  #endif
                   break;
                 #ifdef USENEOPIXEL
                 case RGB:
@@ -886,7 +902,7 @@ private:
       xSemaphoreGive(consoleSem);
     }
     // Sanity check parameters
-    if (pinNr >= MAXPINS
+    if (pinNr > MAXPINS
       #ifdef LED_BUILTIN
       && pinNr != LED_BUILTIN
       #endif
@@ -917,7 +933,7 @@ private:
     #elif ESPMODEL == ESP32S3
     if (function == AIN  && (pinNr < 3 || pinNr > 10)) ok = false;
     if (function == AOUT) ok = false;
-    #else
+    #elif ESPMODEL == ESP32C3
     if (function == AIN  && pinNr > 4) ok = false;
     if (function == AOUT) ok = false;
     #endif
@@ -964,19 +980,46 @@ private:
           break;
         case AIN:
           analogReadResolution(10);
+          #ifdef ESP_ARDUINO_VERSION_MAJOR
+          #if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
           adcAttachPin(pinNr);
+          #endif
+          #else
+          adcAttachPin(pinNr);
+          #endif
           analogSetPinAttenuation(pinNr, ADC_11db);  // param 2 = attenuation, range 0-3 sets FSD: 0:ADC_0db=800mV, 1:ADC_2_5db=1.1V, 2:ADC_6db=1.35V, 3:ADC_11db=2.6V
           break;
 #if ESPMODEL == ESP32
         case AOUT:
           dacWrite (pinNr, initVal);
           break;
-#elif ESPMODEL == ESP32C2
+#endif
+#if ESPMODEL == ESP32C2
         case AOUT:
           dacWrite (pinNr, initVal);
           break;
 #endif
         case PWM:
+          #ifdef ESP_ARDUINO_VERSION_MAJOR
+          #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+            // Code for version 3.x
+            // Attach the pin, frequency (5000 Hz), and resolution (8 bits) in one call
+            ledcAttach(pinNr, 5000, 8);
+            // Write the PWM duty cycle directly using the pin number
+            ledcWrite(pinNr, initVal);
+          #else
+            // Code for version 2.x
+            if (ledChannel<15) {
+            ledChannel++;
+            if (initVal>255) initVal = 255;
+            localPinTable[i].channel = ledChannel;
+            ledcSetup(ledChannel, 5000, 8);
+            ledcAttachPin(pinNr, ledChannel);
+            ledcWrite(ledChannel, initVal);
+          }
+         #endif
+         #else
+         // Code for version 1.x
           if (ledChannel<15) {
             ledChannel++;
             if (initVal>255) initVal = 255;
@@ -985,6 +1028,7 @@ private:
             ledcAttachPin(pinNr, ledChannel);
             ledcWrite(ledChannel, initVal);
           }
+          #endif
           break;
         #ifdef USENEOPIXEL
         case RGB:
@@ -1002,6 +1046,7 @@ private:
   }
   
 
+#ifdef FILESUPPORT
   void runLoadFile (uint8_t indexer)
   {
     char *automationData = NULL;
@@ -1159,6 +1204,7 @@ private:
     if (indexer<PROCTABLESIZE) (new runAutomation)->runLoadFile (indexer);
     vTaskDelete( NULL );
   }
+#endif  ///FILESUPPORT
 
   static uint8_t allocateProc(char *fileName)
   {
@@ -1213,6 +1259,7 @@ private:
   }
 public:
 
+#ifdef FILESUPPORT
 static void runbg(char *fileName)
   {
   static uint16_t serial=0;
@@ -1238,6 +1285,7 @@ static void runfg(char *fileName)
   indexer = allocateProc(fileName);
   if (indexer<PROCTABLESIZE) (new runAutomation)->runLoadFile (indexer);
   }
+#endif   //FILESUPPORT
 
 static void listProcs()
   {
@@ -1362,6 +1410,7 @@ static void listProcs()
 };
 
 
+#ifdef FILESUPPORT
 void runInitialAuto()
 {
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -1370,3 +1419,4 @@ void runInitialAuto()
   }
   runAutomation::runbg ("/auto.run");
 }
+#endif

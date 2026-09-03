@@ -1,48 +1,58 @@
 /*
  * Use this file to centralise any defines and includes
  * This file should contain only customisable data as far as possible
- * 
+ * minThrottle.002 template for:
+ *  - Serial connected throttle - direct to DCC-Ex serial port
+ *  - WiThrottle relay over WiFi, up to 8 throttles
+ *  - External ST7735 display - 128x160x16 SPI
+ *  - 4x5 keypad
+ *  - With encoder
+ *  - web enabled configuration
  */
+
+ /*
+ * Model options
+ * ESPMODEL ESP32
+ * ESPMODEL ESP32S2
+ * ESPMODEL ESP32S3
+ * ESPMODEL ESP32C3
+ * ESPMODEL ESP32C5
+ * ESPMODEL ESP32C6
+ */
+#define ESPMODEL ESP32C6
+
+/* ***********************************************************************\
+ * Enable I2C for offchip I/O and SSD1306 / SSD1327 displays
+\*********************************************************************** */
+#define USEI2C 1
+#ifdef USEI2C
+#define SDA_PIN        05    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
+#define SCK_PIN        04    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
+#endif
 
 
 /* ***********************************************************************\
- * PROCESSOR MODEL: ESP32, ESP32C3, ESP32S3 - used for HW checks
- * ESP32   - Tx pin  1, Rx pin  3  - primary target
- * ESP32C3 - Tx pin 20, Rx pin 21  - no Encoder and no display
- * ESP32S2 - Tx pin 43, Rx pin 44  - Untested
- * ESP32S3 - Tx pin 43, Rx pin 44  - Limited testing seems OK.
+ * Enable SPI for ST7735 / ST7789 / ILI9341 displays
 \*********************************************************************** */
-#define ESPMODEL ESP32S3
-
+#define USESPI 1
+#ifdef USESPI
+#define SPI_RESET      20
+#define SPI_CS         -1
+#define SPI_DC         21
+#define SPI_SCL        22
+#define SPI_MOSI       23
+#endif
 /* ***********************************************************************\
  * DEBUG LEVEL
 \*********************************************************************** */
-// Can be changed from runtime console - recommendation: less than 2 unless diagnosing issues.
-// 0 - Minimal
+// Can be changed from runtime console - less than 2 unless diagnosing issues.
+// 0 - Normal
 // 1 - Additional info re process start time
 // 2 - Additional info re semaphores
 // 3 - most verbose
 #define DEBUGLEVEL 1
-
-/* ***********************************************************************\
- * Newer compilers can support NEO-Pixel hardware
-\*********************************************************************** */
+#define NOHTTPCLIENT 0
 #define USENEOPIXEL 1
-
-/* ***********************************************************************\
- * SUPPORT HTTP CLIENT
-\*********************************************************************** */
-// On the version 1 of ESP for Arduino the display and http client were compatible
-// On version 2 they are not: choose between NOHTTPCLIENT or NODISPLAY
-#define NOHTTPCLIENT 1
-
-/* ***********************************************************************\
- * Startup options
-\*********************************************************************** */
-// STARTDELAY - delay n sec before starting __ANY__ initialisation
-// SHOWPARTITIONS - include partition layout in start up diagnostics
-#define STARTDELAY 2
-#define SHOWPARTITIONS 1
 
 /* ***********************************************************************\
  * FILE SUPPORT
@@ -52,11 +62,6 @@
 #define FILESUPPORT
 
 /* ***********************************************************************\
- *  NeoPixel support
-\*********************************************************************** */
-//#define USENEOPIXEL
-
-/* ***********************************************************************\
  * WiFi CONNECTIVITY
 \*********************************************************************** */
 // Typically a WiFi connection is required to either or both
@@ -64,12 +69,13 @@
 // 2. to provide for web based configuration
 #define USEWIFI
 #ifdef USEWIFI
-#ifndef NOHTTPCLIENT
 // default location for over the air update, comment out if not required
 // only works if WiFi enabled
-//#define OTAUPDATE   "https://camelthorn.cloud/projects/miniThrottleHandheld/"
-#endif    // NOHTTPCLIENT
-#endif    // USEWIFI
+//#define OTAUPDATE   "https://camelthorn.cloud/projects/miniThrottleRelay/"
+#else   // USEWIFI
+// If you are not using WIFi, you should use a serial connection, otherwise this project is pointless
+#define SERIALCTRL 1
+#endif
 
 /* ***********************************************************************\
  * DIRECT SERIAL CONNECTION
@@ -79,12 +85,14 @@
 // A further use of the serial DCC-Ex connection is for acting as a WiFi relay.
 // If using serial connection, then the WiFi connectivity is not required, but may
 // be useful for configuration or network relay purposes.
-#define SERIALCTRL 1
+#ifndef SERIALCTRL   // may have been defined by virtue of not having USEWIFI
+//#define SERIALCTRL 1
+#endif
 #ifdef SERIALCTRL
 // These are used for the serial connected throttle, ie not using WiFi
 // I/O pins to use
-#define DCCRX 5
-#define DCCTX 6
+#define DCCRX 33
+#define DCCTX 32
 // Serial speed of serially connected DCC-EX unit
 #define DCCSPEED 115200
 #ifdef USEWIFI
@@ -111,6 +119,7 @@
 \*********************************************************************** */
 // Should a web interface start and how long should it be active for?
 // Comment out => no web server, 0 => always running or lifetime in minutes
+#ifdef USEWIFI
 #define WEBLIFETIME   0
 #ifdef WEBLIFETIME
 // Default port to listen on
@@ -124,6 +133,7 @@
 // Default credentials - adjust defaults here, NVS preference can be adjusted later
 #define WEBUSER "admin"
 #define WEBPASS "mysecret"
+#endif
 #endif
 
 /* ***********************************************************************\
@@ -140,7 +150,7 @@
 // Uncomment these to enable debug options on startup
 // DELAYONSTART can also be used with serially connected DCC-EX to allow it to initialise prior to the throttle starting
 // DELAYONSTART = seconds before initialising comms with command station
-#define DELAYONSTART 10
+#define DELAYONSTART 0
 //#define SHOWPACKETSONSTART 1
 
 /* ***********************************************************************\
@@ -151,33 +161,29 @@
 // Other displays can be supported, but initialisation in ESP32_miniThrottle.ino and some defs below will need adjusting
 //#define NODISPLAY    // No display
 //#define SSD1306      // SSD1306 128x64     I2C
-#define SSD1327      // SSD1327 128x128    I2C
+//#define SSD1327      // SSD1327 128x128    I2C
 //#define ST7735       // ST7735  128x160x16 SPI
 //#define ST7789       // ST7789  135x240x16 SPI
-//#define ILI9341      // ILI9341 240x320x16 SPI
+#define ILI9341      // ILI9341 240x320x16 SPI
 
 // Display board may have a built in backlight, eg in Lilygo, in which case you probably want this
 // if no backlight, eg monochrome displays this is not needed
 // BACKLIGHTPIN - any PWM capable output
 // BACKLIGHTREF - Optional: Pins 32 - 39 only, optional 0-3V reference voltage for backlight, otherwise can be set at prompt
 // SCREENSAVER  - define idle time in minutes to screen blanking (screen saver), 0 = never blank
-#ifndef NODISPLAY
-#ifndef SSD1306
-#ifndef SSD1327
-//#define BACKLIGHTPIN 16
-//#define SCREENSAVER 60
+#define BACKLIGHTPIN 9
+#ifdef BACKLIGHTPIN
 //#define BACKLIGHTREF 35
-#endif
-#endif
+#define SCREENSAVER 60
 #endif
 
 /* ***********************************************************************\
  * KEYPAD SELECTION - select only one keyboard type
 \*********************************************************************** */
 // Define keypad things, Define one type of keypad
-//#define keynone
+#define keynone
 //#define key1x5
-#define key3x4
+//#define key3x4
 //#define key4x4
 //#define key4x5
 
@@ -185,7 +191,7 @@
  * NETWORK DEFAULTS
 \*********************************************************************** */
 // Default settings
-#define MYSSID  "dccStation"
+#define MYSSID  "DCC_ESP"
 #define HOST    "192.168.4.1"
 #define PORT    12090
 #define NAME    "miniThrottle"
@@ -202,10 +208,10 @@
  * NB: pins 06 to 11 are connected to the internal flash memory, do not use these even if available on your board
  * 
  * ADC is used for Potentiometer throttle (Pot-Throt / POTTHROTPIN)
- *     ADC1_CH0 - GPIO 36  (SVP / Sense V Pos)
+ *     ADC1_CH0 - GPIO 36  (SVN - Sense V Neg)
  *     ADC1_CH1 - GPIO 37
  *     ADC1_CH2 - GPIO 38
- *     ADC1_CH3 - GPIO 39  (SVN / Sense V Neg)
+ *     ADC1_CH3 - GPIO 39  (SVP - Sense V Pos)
  *     ADC1_CH4 - GPIO 32
  *     ADC1_CH5 - GPIO 33
  *     ADC1_CH6 - GPIO 34
@@ -238,7 +244,7 @@
  * INDICATOR LEDS
 \*********************************************************************** */
 // define either of TRACKPWR or TRACKPWRINV or neither. do not set both
-//#define TRACKPWR       22   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
+// #define TRACKPWR       26   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
 //#define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
 // To enable bidirectional mode indicator
 //#define TRAINSETLED    16
@@ -249,21 +255,22 @@
 /* ***********************************************************************\
  * ENCODERS AND SWITCHES
 \*********************************************************************** */
-#define ENCODE_UP      25   // encoder up bounce
-#define ENCODE_DN      33   // encoder down bounce
-#define ENCODE_SW      32   // encoder switch
+//#define ENCODE_UP      39   // encoder up bounce
+//#define ENCODE_DN      36   // encoder down bounce
+//#define ENCODE_SW      34   // encoder switch
 //#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
 //#define DIRREVPIN      33   // Direction sw spdt center off LOW active
-//#define POTTHROTPIN    36   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
+//#define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
 
 /* ***********************************************************************\
- * ANALOGUE VOLT METER OUTPUT
+ * ANALOGUE VOLT METER OUTPUT - ESP32 only
 \*********************************************************************** */
+#if ESPMODEL == ESP32
 // To configure a speedometer, use one of the 2 DAC pins (25, 26) to drive a 3v voltmeter
 //#define SPEEDOPIN      25
 // To define a brake pressure gauge using a 3V voltmeter, use BRAKEPRESPIN on one of 2 DAC pins
 //#define BRAKEPRESPIN   26
-
+#endif
 
 /* ***********************************************************************\
  * DISPLAY PIN MAPPING AND COLOR ASSIGNMENT
@@ -280,57 +287,54 @@
 //
 #ifdef SSD1306
 #define DISPLAYADDR  0x3c    // i2c display addr
-#define SDA_PIN        05    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
-#define SCK_PIN        04    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
 #define SCREENROTATE    2    // Screen can be rotated to 1 of 2 positions
 #define DISPLAYNAME "sdd1306"
-#endif
+#ifndef USEI2C
+#define USEI2C
+#endif  // USEI2C
+#endif  // SDD1306
 //
 #ifdef SSD1327
 #define DISPLAYADDR  0x3c    // i2c display addr
-#define SDA_PIN         8    // i2c SDA pin, normally 21
-#define SCK_PIN         9    // i2c SCK pin, normally 22
 #define DISPLAYNAME "sdd1327"
+#ifndef USEI2C  // USEI2C
+#define USEI2C  // SDD1327
+#endif
 #endif
 //
 #ifdef ST7735
-#define SPI_RESET      27
-#define SPI_CS         15
-#define SPI_DC         12
-#define SPI_SCL        14
-#define SPI_SDA        13
 #define DISPLAYNAME "st7735"
 #define COLORDISPLAY
 #define SCALEFONT
 #define SCREENROTATE    4    // 4 different rotation positions
+#ifndef USESPI
+#define USESPI 1
+#endif // USESPI
 #endif
 //
 #ifdef ST7789
-#define SPI_RESET      27
-#define SPI_CS         26
-#define SPI_DC         12
-#define SPI_SCL        14
-#define SPI_SDA        13
 #define DISPLAYNAME "st7789"
 #define COLORDISPLAY
 #define SCALEFONT
 #define SCREENROTATE    4    // 4 different rotation positions
+#ifndef USESPI
+#define USESPI 1
+#endif // USESPI
 #endif
 //
 #ifdef ILI9341
-#define SPI_RESET      27
-#define SPI_CS         -1
-#define SPI_DC         12
-#define SPI_SCL        14
-#define SPI_SDA        13
 #define DISPLAYNAME "ili9341"
 #define COLORDISPLAY
 #define SCALEFONT
 #define SCREENROTATE    4    // 4 different rotation positions
+#ifndef USESPI
+#define USESPI 1
+#endif // USESPI
 #endif
 
 //
 // for colour displays, set your preferences here
+// Numbers represent 3 colour components in range 0 (darkest) - 255 (Brightest) for Red Green and Blue
 //
 #ifdef COLORDISPLAY
 #define BACKCOLOR   RGB_COLOR16(0,0,0)         // Background RGB color
@@ -348,7 +352,7 @@
 
 /* ***********************************************************************\
  * KEYPAD MAPPING
- * Define both the pin mapping and the key character assignment
+ * Define both the pin mapping and th key character assignment
 \*********************************************************************** */
 
 //
@@ -356,8 +360,8 @@
 #ifdef key4x5
 #define COLCOUNT        4
 #define ROWCOUNT        5
-#define MEMBR_COLS     16,25,26,00
-#define MEMBR_ROWS     02,14,12,13,15
+#define MEMBR_COLS     19,18,05,17
+#define MEMBR_ROWS     16,04,00,02,15
 // F1, F2 = X and Y
 // Arrow keys are "U"p, "D"own, "L"eft and "R"ight
 // ESC = "E" and ENT = "S"ubmit
@@ -395,8 +399,8 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 #ifdef key3x4
 #define COLCOUNT        3
 #define ROWCOUNT        4
-#define MEMBR_COLS     15,16,17
-#define MEMBR_ROWS     18,10,11,12
+#define MEMBR_COLS     17,16,04
+#define MEMBR_ROWS     05,18,19,21
 char keymap[ROWCOUNT][COLCOUNT] = {
 #ifdef POTTHROTPIN
   { 'P', '0', '#' },
@@ -417,3 +421,4 @@ char keymap[ROWCOUNT][COLCOUNT] = {
   { '*', '#', 'S', 'E', 'X' }
 };
 #endif
+

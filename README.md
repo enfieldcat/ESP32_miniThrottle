@@ -33,12 +33,13 @@ In bidirectional mode, the mid point of the potentiometer slider is stop, down i
 Configuration:
 --------------
 On initial start the unit will run in both WiFi AP and Station modes.
-This allows the user to connect via the AP to http://192/168.4.1 to perform the initial set up - default credentials are admin:mysecret.
+This allows the user to connect via the AP to http://192.168.4.1 to perform the initial set up - default credentials are admin:mysecret.
+It is advisable to change this web-interface password to something just you know.
 Alternatively use a serial terminal to connect to a "console" which will allow WiFi networks to be defined. Multiple networks can be defined.
 The serial terminal can also be used to define the locomotive roster and turnouts when using a direct connection to DCC-Ex.
 
 The serial terminal to console runs at 115200, 8 bits, no parity, 1 stop bit. Line terminator is line feed (LF) character.
-Run "help summary" at prompt to get list of configuration commands.
+Run "help summary", or "help [command-name]" at prompt to get list of configuration commands.
 
 If using serial direct to DCC-Ex a second serial port is opened for this and also runs at 115200 bits per second.
 

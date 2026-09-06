@@ -215,6 +215,7 @@ static bool speedChange       = false;   // in locomotive driving mode, has spee
 static bool netReceiveOK      = false;
 static bool diagReceiveOK     = false;   // flag to ensure only one cpy is running
 static bool usePSRAM          = false;   // Should we use PSRAM
+static bool useUTCtimestamp   = false;   // Has UTC time been set successfully
 #ifdef USEWIFI
 static bool diagIsRunning     = false;   // run state indicator
 static bool obsessive         = false;   // obsessive connectivity checks
@@ -684,8 +685,7 @@ void setup()  {
     xSemaphoreGive(consoleSem);
   }
   xTaskCreate(serialConnectionManager, "serialCntMgr", 6144, NULL, 4, NULL);
-  #ifdef RELAYPORT
-  #ifdef USEWIFI
+  #if defined(RELAYPORT) && defined (USEWIFI)
   // if (relayMode == WITHROTRELAY) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Starting fast clock server\r\n", getTimeStamp());
@@ -693,8 +693,7 @@ void setup()  {
     }
     xTaskCreate(fastClock, "fastClock", 2048, NULL, 4, NULL);
   // }
-  #endif  //  USEWIFI
-  #endif  //  RELAYPORT
+  #endif  //  USEWIFI && RELAYPORT
   #endif  //  SERIALCTRL
   #ifndef NODISPLAY
   #ifdef SCREENSAVER

@@ -460,6 +460,7 @@ void processSerialCmd (char *inBuffer)
   else if (nparam==1 && strcmp (param[0], "nosortdata")      == 0) nvs_put_int    ((char*) "sortData", 0);
   else if (nparam==1 && strcmp (param[0], "buttonstop")      == 0) nvs_put_int    ((char*) "buttonStop", 1);
   else if (nparam==1 && strcmp (param[0], "nobuttonstop")    == 0) nvs_put_int    ((char*) "buttonStop", 0);
+  else if (nparam==1 && strcmp (param[0], "timestamp")       == 0) displayTimeStamp();
   else if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT))   == pdTRUE) {
     Serial.println ("Command not recognised.");
     xSemaphoreGive(consoleSem);
@@ -1015,6 +1016,17 @@ void mt_ruler (char* title)
       }
     for (uint8_t n=0; n<cntr; n++) Serial.printf ("-");
     Serial.printf ("\r\n");
+    xSemaphoreGive(consoleSem);
+  }
+}
+
+void displayTimeStamp()
+{
+  struct tm timeinfo;
+
+  if(getLocalTime(&timeinfo) && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s ---   ---  Time Stamp   ---  ---\r\n", getTimeStamp());
+    // Serial.println(&timeinfo, "%H:%M:%S  ---oooOOO   Time Stamp   OOOooo---");
     xSemaphoreGive(consoleSem);
   }
 }
@@ -2526,6 +2538,12 @@ void help(int nparam, char **param)  // show help data
       Serial.println ((const char*) "speedstep [<1-9>]");
       if (!summary) {
         Serial.println ((const char*) "    Set the speed change set be each throttle click");
+      }
+    }
+    if (all || strcmp(param[1], "timestamp")==0) {
+      Serial.println ((const char*) "timestamp");
+      if (!summary) {
+        Serial.println ((const char*) "    Write a timestamp to the console");
       }
     }
     if (all || strcmp(param[1], "trace")==0) {

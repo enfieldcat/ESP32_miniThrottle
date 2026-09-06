@@ -101,10 +101,28 @@ char* getTimeStamp()
 {
   static char retVal[9];
   uint8_t secs;
-  uint32_t mins = esp_timer_get_time() / uS_TO_S_FACTOR;
-  secs = mins % 60;
-  mins = mins / 60;
-  sprintf (retVal, "%02d:%02d:%02d", mins/60, mins%60, secs);
+  uint32_t mins;
+  uint hours;
+  bool usinglocal = true;
+  if (useUTCtimestamp) {
+    struct tm timeinfo;
+    if (getLocalTime(&timeinfo)){
+      usinglocal = false;
+      hours = timeinfo.tm_hour;
+      mins  = timeinfo.tm_min;
+      secs  = timeinfo.tm_sec; 
+    } else
+      mins = esp_timer_get_time() / uS_TO_S_FACTOR;
+  } else {
+    mins = esp_timer_get_time() / uS_TO_S_FACTOR;
+  }
+  if (usinglocal) {
+    secs  = mins % 60;
+    mins  = mins / 60;
+    hours = mins / 60;
+    mins  = mins % 60;
+  }
+  sprintf (retVal, "%02d:%02d:%02d", hours, mins, secs);
   return (retVal);
 }
 

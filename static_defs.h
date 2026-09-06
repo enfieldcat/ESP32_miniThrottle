@@ -48,6 +48,7 @@ SOFTWARE.
 #include "esp_spi_flash.h"
 #include "esp_flash.h"
 #include <rom/rtc.h>
+#include <time.h>
 #include <esp_timer.h>
 #include <esp32-hal-psram.h>
 // Used for process / thread control

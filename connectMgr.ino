@@ -52,6 +52,7 @@ void connectionManager(void *pvParameters)
   uint8_t bumpCount = 0;
   uint8_t mywifimode= 0;
   bool networkFound = false;
+  bool ntptimeset   = false;
 
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s connectionManager(NULL)\r\n", getTimeStamp());
@@ -88,6 +89,24 @@ void connectionManager(void *pvParameters)
   }
   while (true) {
     // Check if WiFi station mode needs to be connected and is connected
+    if ((!ntptimeset) && WiFi.status() == WL_CONNECTED) {
+      char ntpserver[64];
+      int utcOffset = 0;
+      struct tm timeinfo;
+
+      ntptimeset = true;
+      nvs_get_string ("ntpserver", ntpserver, "pool.ntp.org", sizeof("ntpserver"));
+      utcOffset = nvs_get_int ("utcoffset", 0) * 60;  // convert mintes to seconds
+      configTime(utcOffset, 0, ntpserver);
+      delay (500); // allow some initial sync time
+      if(getLocalTime(&timeinfo)){
+        useUTCtimestamp = true;
+        if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+          Serial.println(&timeinfo, "Time: %A, %B %d %Y %H:%M:%S");
+          xSemaphoreGive(consoleSem);
+        }
+      }
+    }
     if ((mywifimode & 1) > 0) {
       if (WiFi.status() != WL_CONNECTED) {
         if (xSemaphoreTake(tcpipSem, pdMS_TO_TICKS(TIMEOUT*10)) == pdTRUE) {
@@ -559,7 +578,7 @@ void mdbsBrowseService(const char *service, const char *proto) {
         //Serial.print(MDNS.address(i));
         Serial.print(":");
         Serial.print(MDNS.port(i));
-        //Serial.println(")");
+        Serial.println("");
         xSemaphoreGive(consoleSem);
       }
     }

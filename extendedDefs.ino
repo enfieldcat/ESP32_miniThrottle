@@ -140,7 +140,9 @@ SOFTWARE.
     { (char*)"APname",         STRING,     4,            32,            0,      (char*)  NAME, (char*)"Access point name" },
     { (char*)"APpass",         STRING,     4,            32,            0,     (char*) "none", (char*)"Access point password" },
     { (char*)"apChannel",      INTEGER,    1,            13,            6,       (char*)   "", (char*)"Access point channel" },
-    { (char*)"apClients",      INTEGER,    1,             8,            4,       (char*)   "", (char*)"Max access point clients" }
+    { (char*)"apClients",      INTEGER,    1,             8,            4,       (char*)   "", (char*)"Max access point clients" },
+    { (char*)"ntpserver",      STRING,     4,            64,            0,     (char*) "pool.ntp.org", (char*)"NTP server for timestamps" },
+    { (char*)"utcoffset",      INTEGER, -960,           960,            0,       (char*)   "", (char*)"Offset from UTC in munutes, 180=E Africa, -300=EST" }
   };
 
 

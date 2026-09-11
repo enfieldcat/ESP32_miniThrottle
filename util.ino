@@ -758,7 +758,7 @@ void sampleConfigExists(fs::FS &fs)
 }
 #endif    // FILESUPPORT
 
-#ifdef WEBLIFETIME
+#if defined (WEBLIFETIME) && defined (FILESUPPORT)
 void defaultCssFileExists(fs::FS &fs)
 {
   if(!fs.exists(CSSFILE)){
@@ -778,6 +778,26 @@ void defaultCssFileExists(fs::FS &fs)
     }
     else {
       defCssFile.print (cssTemplate);
+      defCssFile.close ();
+    }
+  }
+  if(!fs.exists(FAVICON)){
+    if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.print   ("Missing default icon file, creating ");
+      Serial.println (FAVICON);
+      xSemaphoreGive (consoleSem);
+    }
+    // file.close();
+    File defCssFile = fs.open( FAVICON, FILE_WRITE);
+    if(!defCssFile){
+      if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.print   ("Failed to open icon file for writing: ");
+        Serial.println (FAVICON);
+        xSemaphoreGive (consoleSem);
+      }
+    }
+    else {
+      defCssFile.write (favIcon, sizeof(favIcon));
       defCssFile.close ();
     }
   }

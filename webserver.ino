@@ -240,7 +240,7 @@ void webHandler(void *pvParameters)
   WiFiClient *myClient = (WiFiClient*) pvParameters;
   char *content = NULL;
   char myUri[BUFFSIZE];
-  char inBuffer[BUFFSIZE];
+  char inBuffer[WEB_BUFFER_SIZE];   // WEB_BUFFER_SIZE or BUFFSIZE?
   char hostName[64];
   char inChar, lastChar;
   bool collectHeader = true;
@@ -389,6 +389,10 @@ void webHandler(void *pvParameters)
       if (strcmp (myUri, "/") == 0) mkWebSysStat(myClient, keepAlive, false, NULL, 0);  // Unauthenticated stats page
       else if (strncmp (myUri, "/status", 7) == 0) {
         if (authenticated) mkWebSysStat(myClient, keepAlive, true, content, dataSize);  // Authenticated stats page
+        else mkWebError (myClient, 401, myUri, keepAlive);
+        }
+      else if (strncmp (myUri, "/editLoco", 7) == 0) {
+        if (authenticated) mkWebEditLoco(myClient, keepAlive, true, content, dataSize);  // Authenticated stats page
         else mkWebError (myClient, 401, myUri, keepAlive);
         }
       else if (strncmp (myUri, "/edit/", 6) == 0) {                            // Edit a file
@@ -752,7 +756,11 @@ void mkWebAdmin(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAl
 \* --------------------------------------------------------------------------- */
 void mkWebConfig (WiFiClient *myClient, bool keepAlive)
 {
+  #if defined (ESP32C3) || defined (ESP32C6)
+  uint8_t speedOpts[] = { 80, 160, 0 };
+  #else
   uint8_t speedOpts[] = { 80, 160, 240, 0 };
+  #endif
   const char *dccPwrLabel[] = { "Main & Prog tracks", "Main Only", "Prog Only", "Join Main and Prog tracks" };
   const char *statusLabel[] = { "Top of page", "Bottom of page", "Not shown" };
   const char *powerLabel[]  = { "Not Displayed", "Displayed" };
@@ -880,7 +888,11 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   #endif   // NODISPLAY
   myClient->printf ((const char*)"</table>");
   #ifdef RELAYPORT
-  if (cpuSpeed!=240) myClient->printf ((const char*)"<p><strong>NB:</strong> When relaying a CPU speed of 240 MHz is recommended. Current value is %d MHz.</p>", cpuSpeed);
+  #if defined (ESP32C3) || defined (ESP32C6)
+  if (cpuSpeed!=160) myClient->printf ((const char*)"<p><strong>NB:</strong> When relaying the fastest CPU speed (160MHz) is recommended. Current value is %d MHz.</p>", cpuSpeed);
+  #else
+  if (cpuSpeed!=240) myClient->printf ((const char*)"<p><strong>NB:</strong> When relaying the fastest CPU speed (240MHz) is recommended. Current value is %d MHz.</p>", cpuSpeed);
+  #endif
   #endif   // RELAYPORT
   #ifndef NODISPLAY  // debounce settings only make sense if there is a user interface
   compInt = nvs_get_int ("debounceTime", DEBOUNCEMS);
@@ -1495,18 +1507,39 @@ void mkWebHtmlHeader (WiFiClient *myClient, const char *header, uint8_t refreshT
 void mkFastClock(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAlive)
 {
   float multiplier = 0.0;
-  char *time = NULL, *strMultiplier = NULL;
+  char *time = NULL, *strMultiplier = NULL, *ntpServerString = NULL;
+  char ntpserver[64];
   uint32_t mins = 0;
   uint32_t hours = 0;
+  int16_t utcoffset = 0;
   uint8_t n = 0;
   uint8_t send2dcc = 0;
-
+  uint8_t timePrefer = 0;
+  
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s mkFastClock(%x, %x, %d, keepAlive)\r\n", getTimeStamp(), myClient, data, dataSize);
     xSemaphoreGive(consoleSem);
   }
+  nvs_get_string ("ntpserver", ntpserver, "pool.ntp.org", sizeof(ntpserver));
   // Check if we have any updates to time
   time = webScanData (data, "fctime", dataSize);
+  ntpServerString = webScanData (data, "utcoffset", dataSize);
+  if (ntpServerString != NULL) {
+    utcoffset = util_str2int(ntpServerString);
+    nvs_put_int ("utcoffset", utcoffset);
+    ntpServerString = NULL;
+  }
+  ntpServerString = webScanData (data, "ntpserver", dataSize);
+  if (ntpServerString != NULL) {
+    nvs_put_string ("ntpserver", ntpServerString);
+    utcoffset = nvs_get_int ("utcoffset",  0);
+    configTime(utcoffset, 0, ntpserver);
+  }
+  ntpServerString = webScanData (data, "timePrefer", dataSize);
+  if (ntpServerString != NULL) {
+    if (strcmp (ntpServerString, "1") == 0) nvs_put_int ("timePrefer", 1);
+    else nvs_put_int ("timePrefer", 0);
+  }
   if (time != NULL) {
     strMultiplier =  webScanData (data, "fastclock2dcc", dataSize);
     if (strMultiplier[0]=='1') send2dcc = 1;
@@ -1523,6 +1556,13 @@ void mkFastClock(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepA
           nvs_put_int ("fc_hour", hours);
           nvs_put_int ("fc_min",  mins);
           nvs_put_int ("fc_rate", (int) (multiplier*100.00));
+        }
+        if (timePrefer == 1) {
+          struct tm timeinfo;
+          if (getLocalTime(&timeinfo)){
+            hours = timeinfo.tm_hour;
+            mins  = timeinfo.tm_min;
+          }
         }
         mins = ((hours*60) + mins) * 60;
         if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
@@ -1548,14 +1588,24 @@ void mkFastClock(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepA
   }
   else semFailed ("fastClockSem", __FILE__, __LINE__);
   // presnt web update form
-  send2dcc = nvs_get_int ("fastclock2dcc", 0);
+  send2dcc   = nvs_get_int ("fastclock2dcc", 0);
+  timePrefer = nvs_get_int ("timePrefer", 0);
+  utcoffset  = nvs_get_int ("utcoffset",  0);
+  nvs_get_string ("ntpserver", ntpserver, "pool.ntp.org", sizeof(ntpserver));
   mkWebHeader(myClient, 200, 0, keepAlive);
   mkWebHtmlHeader (myClient, "Fast Clock", nvs_get_int("webRefresh", WEBREFRESH));
   myClient->printf ((const char*) "<form action=\"/fastclock\" method=\"post\"><h3>Clock Settings</h3><table>");
-  myClient->printf ((const char*) "<tr><td align=\"right\">Time (HH:MM)</td><td><input type=\"time\" name=\"fctime\" value=\"%02d:%02d\"></td></tr>", hours, mins);
+  myClient->printf ((const char*) "<tr><td align=\"right\">Preferred source</td><td><input type=\"radio\" id=\"TimePrefer0\" name=\"timePrefer\" value=\"0\"");
+  if (timePrefer == 0) myClient->printf (" checked=\"true\"");
+  myClient->printf ((const char*) "><label for=\"TimePrefer0\"> Fixed Value</label><br><input type=\"radio\" id=\"TimePrefer1\" name=\"timePrefer\" value=\"1\"");
+  if (timePrefer == 1) myClient->printf (" checked=\"true\"");
+  myClient->printf ((const char*) "><label for=\"TimePrefer1\"> UTC + Offset</label></td></tr>");
+  myClient->printf ((const char*) "<tr><td align=\"right\">Time Server</td><td><input type=\"text\" name=\"ntpserver\" value=\"%s\" minlength=\"8\" maxlength=\"%d\" size=\"%d\"></td></tr>", ntpserver, sizeof(ntpserver)-1, sizeof(ntpserver)-1);
+  myClient->printf ((const char*) "<tr><td align=\"right\">Minutes Offset</td><td><input type=\"number\" name=\"utcoffset\" value=\"%d\" min=\"-960\" max=\"960\" size=\"5\"> from UTC: -300=EST, 180=East African Time</td></tr>", utcoffset);
+  myClient->printf ((const char*) "<tr><td align=\"right\">Time (HH:MM)</td><td><input type=\"time\" name=\"fctime\" value=\"%02d:%02d\"> Fixed value</td></tr>", hours, mins);
   myClient->printf ((const char*) "<tr><td align=\"right\">Multiplier</td><td><input type=\"number\" name=\"fcmultiplier\" value=\"%3.2f\" min=\"0\" max=\"12\" size=\"5\" step=\"0.05\"></td></tr>", multiplier);
   myClient->printf ((const char*) "<tr><td>&nbsp;</td><td>Multiplier=0.00, clock stopped</td></tr><tr><td>&nbsp;</td><td>Multiplier=1.00, normal pace of time</td></tr><tr><td>&nbsp;</td><td>Multiplier=3.00, 1 min wall clock time is 3 mins scale time</td></tr>");
-  myClient->printf ((const char*) "<tr><td align=\"right\">Retain</td><td><input type=\"checkbox\" name=\"retain\" id=\"retain\" value=\"low\"><label for=\"retain\">Use above settings as startup default</label></td></tr>");
+  myClient->printf ((const char*) "<tr><td align=\"right\">Retain</td><td><input type=\"checkbox\" name=\"retain\" id=\"retain\" value=\"low\"><label for=\"retain\">Use fixed offset as startup default</label></td></tr>");
   myClient->printf ((const char*) "</table><br><h3>Ex-RAIL Integration</h3><table>");
   myClient->printf ((const char*) "<tr><td>Send Time to<br> Ex-CommandStation</td><td><input type=\"radio\" id=\"no2dcc\" name=\"fastclock2dcc\" value=\"0\"");
   if (send2dcc==0) myClient->printf ((const char*) " checked=\"true\"");
@@ -1837,7 +1887,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
     uint8_t targetOperation;
     char outCommand[40];
     resultPtr = webScanData (postData, "op", dataSize);
-    if (resultPtr != NULL) {
+    if (resultPtr != NULL) {     // work through posted data
       if (strcmp (resultPtr, "pwr") == 0) {         // Power switch
         uint8_t pwrState = 1;
         if (trackPower) pwrState = 2;
@@ -1906,7 +1956,7 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
       xSemaphoreGive(velociSem);
     }
   }
-  if (locomotiveCount>0 || tCount>0) {
+  if (cmdProtocol==DCCEX || locomotiveCount>0 || tCount>0) {
     char *funcStringDCC = NULL;
     int16_t speedPercent;
     uint8_t locoDir;
@@ -1923,12 +1973,12 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
     #endif
     myClient->printf ((const char*)"<th align=\"right\">Speed %%</th><th>Speed Graph</th>");
     if (cmdProtocol==DCCEX) {
-      myClient->printf ((const char*)"<th>Configure</td>");
+      myClient->printf ((const char*)"<th colspan=\"2\">Configure</td>");
     }
     myClient->printf ((const char*)"</tr>");
     for (uint8_t n=0; n<limit; n++) {
       // If beyond the limit of the defined roster, check if the entry is for an ad-hoc address
-      if (n>=locomotiveCount) {
+      if (n>=locomotiveCount && locoRoster!=NULL) {
         if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) { // avoid contention when accessing data
           if (locoRoster[n].relayIdx != 255) tCount=1;
           else tCount=0;
@@ -1982,8 +2032,10 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
           }
           myClient->printf ((const char*)"</td><td width=\"%dpx\" class=\"speed\"></td><td width=\"%dpx\" class=\"space\"></td></tr></table></td>", speedPercent, 100-speedPercent);
           if (cmdProtocol==DCCEX) {
-            if (n<locomotiveCount && funcStringDCC == NULL)
+            if (n<locomotiveCount && funcStringDCC == NULL) {
               myClient->printf ((const char*)"<td><form action=\"/functions\" method=\"post\"><input type=\"hidden\" name=\"locoIdx\" value=\"%d\"><input type=\"submit\" value=\"Functions\"></form></td>", n);
+              myClient->printf ((const char*)"<td><form action=\"/editLoco\" method=\"post\"><input type=\"hidden\" name=\"locoIdx\" value=\"%d\"><input type=\"submit\" name=\"action\" value=\"Edit\"></form></td>", n);
+            }
             else myClient->printf ((const char*)"<td>&nbsp;</td>");
           }
           myClient->printf ((const char*)"</tr>");
@@ -1992,11 +2044,14 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
       }
     }
     myClient->printf ((const char*)"</table>");
+    if (cmdProtocol==DCCEX) {
+      myClient->printf ((const char*)"<form action=\"/editLoco\" method=\"post\">&nbsp;<input type=\"hidden\" name=\"locoIdx\" value=\"%d\"><input type=\"submit\" name=\"action\" value=\"Add\"></form>", locomotiveCount);
+    }
   }
-  if (turnoutCount>0 && turnoutCount<255 && turnoutList!=NULL && turnoutState!=NULL) {
+  if ((turnoutCount>0 && turnoutCount<255 && turnoutList!=NULL && turnoutState!=NULL)) {
     char prefix[] = {'\0','\0'};
     myClient->printf ((const char*)"<h2>Turnouts</h2><table><tr><th>ID</th><th>Description</th><th>State</th><th>Operate</th></tr>");
-    for (uint8_t n=0; n<turnoutCount; n++) {
+    for (uint8_t n=0; turnoutList!=NULL && turnoutState!=NULL && n<turnoutCount; n++) {
       tPtr = NULL;
       for (uint8_t z=0; z<turnoutStateCount && tPtr==NULL; z++) if (turnoutList[n].state == turnoutState[z].state) tPtr = turnoutState[z].name;
       if (tPtr == NULL) tPtr = (char*)"unknown";
@@ -2100,3 +2155,95 @@ void mkWebError(WiFiClient *myClient, uint16_t code, char* myUri, bool keepAlive
   myClient->printf ((const char*)"<hr></body></html>\r\n");
 }
 #endif
+
+
+/* --------------------------------------------------------------------------- *\
+ *
+ *
+\* --------------------------------------------------------------------------- */
+void mkWebEditLoco (WiFiClient *myClient, bool keepAlive, bool authenticated, char *postData, uint16_t dataSize)
+{
+   char locoName[NAMELENGTH];
+   uint16_t id = 3, tid = 255;          // DCC address
+   uint16_t locoIdx = 255;
+   char *newName = NULL, *newID = NULL, *action=NULL;
+
+   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s mkWebEditLoco(%x, keepAlive, authenicated, %x, %d)\r\n", getTimeStamp(), myClient, postData, dataSize);
+    xSemaphoreGive(consoleSem);
+  }
+  
+  // display headers
+  mkWebHeader(myClient, 200, 0, keepAlive);
+  mkWebHtmlHeader (myClient, "Locomotive Editor", 0);
+  // If there is post data, then we probably need to operate a turn out or some other equipment
+  if (authenticated && postData!=NULL) {
+    char *resultPtr = NULL;
+    action    = webScanData (postData, "action", dataSize);
+    if (action == NULL) {
+      myClient->printf ((const char*) "<p><strong>Warning:</strong> No action specified, misformed request.</p><hr></body></html>\r\n");
+    }
+    resultPtr = webScanData (postData, "locoIdx", dataSize);
+    if (resultPtr != NULL && util_str_isa_int(resultPtr)) {
+      locoIdx = util_str2int(resultPtr);
+      if (locoIdx > locomotiveCount) {
+        locoIdx = 255;
+        myClient->printf ((const char*) "<p>Invalid locomotive index number: %d</p>", resultPtr);
+      }
+    }
+    else myClient->printf ((const char*) "<p>Missing locomotive index number.</p>");
+    if (locoIdx<255) {
+      newID   = webScanData (postData, "locoNumber", dataSize);
+      newName = webScanData (postData, "locoName", dataSize);
+      if (newName != NULL && newID != NULL) {
+        id = util_str2int(newID);
+        strcpy (locoName, newName);
+        if (strcmp (action, "Update") == 0 || strcmp(action, "Create") == 0) {
+          if (id >= 1 && id <= 10239 && strlen(locoName) > 0) {
+            nvs_put_string ("loco", newID, newName);
+            myClient->printf ((const char*) "<p>Updated Loco ID %s in flash memory</p>", newID);
+            if (strcmp (action, "Update") == 0 && locoIdx < locomotiveCount) {
+              if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+                tid = locoRoster[locoIdx].id;
+                xSemaphoreGive(velociSem);
+              }
+              if (id != tid) {
+                char idString[10];
+                sprintf (idString, "%d", tid);
+                nvs_del_key ("loco", idString);
+                myClient->printf ((const char*) "<p>Deleted old Loco ID %s from flash memory</p>", idString);
+              }
+            }
+          }
+        } else if (strcmp(action, "Delete") == 0) {
+          nvs_del_key ("loco", newID);
+          myClient->printf ((const char*) "<p>Deleted Loco ID %s from flash memory</p>", newID);
+        }
+      } else {
+        if (locoIdx == locomotiveCount) {
+          id = 3;
+          locoName[0] = '\0';
+        } else if (locoIdx < locomotiveCount) {
+          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            strcpy (locoName, locoRoster[locoIdx].name);
+            id = locoRoster[locoIdx].id;
+            xSemaphoreGive(velociSem);
+          }
+        }
+      }
+      myClient->printf ((const char*) "<form action=\"/editLoco\" method=\"post\">");
+      myClient->printf ((const char*) "<input type=\"hidden\" name=\"locoIdx\" value=\"%d\"><table>", locoIdx);
+      myClient->printf ((const char*) "<tr><td align=\"right\">DCC ID</td><td><input type=\"number\" name=\"locoNumber\" value=\"%d\" max=\"%d\"></td></tr>", id, 10239);
+      myClient->printf ((const char*) "<tr><td align=\"right\">Locomotive Name</td><td><input type=\"text\" name=\"locoName\" value=\"%s\" maxlength=\"%d\"></td></tr>", locoName, NAMELENGTH);
+      if (locoIdx == locomotiveCount) {
+        myClient->printf ((const char*) "<tr><td></td><td><input type=\"submit\" name=\"action\" value=\"Create\"></td></tr>");
+      } else {
+        myClient->printf ((const char*) "<tr><td></td><td><input type=\"submit\" name=\"action\" value=\"Update\">&nbsp;<input type=\"submit\" name=\"action\" value=\"Delete\"></td></tr>");
+      }
+      myClient->printf ((const char*) "</table></form>");
+    }
+    else myClient->printf ((const char*) "<p>You have selected an invalid locomotive to edit</p>\r\n");
+  }
+  else myClient->printf ((const char*) "<p>You have not selected a locomotive to edit</p>\r\n");
+  myClient->printf ((const char*) "<hr></body></html>\r\n");
+}

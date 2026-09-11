@@ -141,6 +141,7 @@ SOFTWARE.
     { (char*)"APpass",         STRING,     4,            32,            0,     (char*) "none", (char*)"Access point password" },
     { (char*)"apChannel",      INTEGER,    1,            13,            6,       (char*)   "", (char*)"Access point channel" },
     { (char*)"apClients",      INTEGER,    1,             8,            4,       (char*)   "", (char*)"Max access point clients" },
+    { (char*)"timePrefer",     INTEGER,    0,             1,            0,       (char*)   "", (char*)"Time source preference, 0=fixed, 1=UTC-offset" },
     { (char*)"ntpserver",      STRING,     4,            64,            0,     (char*) "pool.ntp.org", (char*)"NTP server for timestamps" },
     { (char*)"utcoffset",      INTEGER, -960,           960,            0,       (char*)   "", (char*)"Offset from UTC in munutes, 180=E Africa, -300=EST" }
   };
@@ -237,6 +238,8 @@ SOFTWARE.
     { 30,           (char*)"Internal flash - SPID" },
     { 31,           (char*)"Internal flash - SPIQ" }
     #elif ESPMODEL == ESP32S3
+    { 43,           (char*)"Console - Tx" },
+    { 44,           (char*)"Console - Rx" },
     { 22,           (char*)"Not Usable" },
     { 23,           (char*)"Not Usable" },
     { 24,           (char*)"Not Usable" },
@@ -247,10 +250,10 @@ SOFTWARE.
     { 29,           (char*)"Internal flash - SPICS0" },
     { 30,           (char*)"Internal flash - SPICLK" },
     { 31,           (char*)"Internal flash - SPIQ" },
-    { 32,           (char*)"Internal flash - SPID" },
-    { 43,           (char*)"Console - Tx" },
-    { 44,           (char*)"Console - Rx" }
+    { 32,           (char*)"Internal flash - SPID" }
     #elif ESPMODEL == ESP32S2
+    { 43,           (char*)"Console - Tx" },
+    { 44,           (char*)"Console - Rx" },
     { 22,           (char*)"Not Usable" },
     { 23,           (char*)"Not Usable" },
     { 24,           (char*)"Not Usable" },
@@ -261,9 +264,7 @@ SOFTWARE.
     { 29,           (char*)"Internal flash - SPICS0" },
     { 30,           (char*)"Internal flash - SPICLK" },
     { 31,           (char*)"Internal flash - SPIQ" },
-    { 32,           (char*)"Internal flash - SPID" },
-    { 43,           (char*)"Console - Tx" },
-    { 44,           (char*)"Console - Rx" }
+    { 32,           (char*)"Internal flash - SPID" }
     #elif ESPMODEL == ESP32C5
     { 11,           (char*)"Console - Tx" },
     { 12,           (char*)"Console - Rx" },

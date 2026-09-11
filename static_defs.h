@@ -148,6 +148,7 @@ SOFTWARE.
 #include "mbedtls/base64.h"
 //}
 #define CSSFILE "/miniThrottle.css"
+#define FAVICON "/favicon.ico"
 #ifndef FILESUPPORT
 #define FILESUPPORT
 #endif

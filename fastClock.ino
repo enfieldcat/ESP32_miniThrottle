@@ -42,6 +42,7 @@ xQueueSend (fastClockQueue, &tint, 0);
 
 void fastClock (void *pvParameters)
 {
+  uint8_t timePrefer = nvs_get_int ("timePrefer", 0);
   uint8_t start_hour = nvs_get_int ("fc_hour", FC_HOUR);
   uint8_t start_min  = nvs_get_int ("fc_min",  FC_MIN);
   uint8_t queueData;
@@ -51,6 +52,26 @@ void fastClock (void *pvParameters)
   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.printf ("%s fastClock(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
+  }
+  // Attempt to start sync to UTC + offset
+  if (timePrefer == 1) {
+    int16_t utcoffset  = nvs_get_int ("utcoffset", 0);
+    char ntpserver[64];
+
+    nvs_get_string ("ntpserver", ntpserver, "pool.ntp.org", sizeof(ntpserver));
+    configTime(utcoffset, 0, ntpserver);
+    int cntr = 9;
+    struct tm timeinfo;
+    while (cntr-- > 0 && !getLocalTime(&timeinfo)) delay(20000);
+    if (cntr > 0) {
+      start_hour = timeinfo.tm_hour;
+      start_min  = timeinfo.tm_min;
+    } else {
+      if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        Serial.printf ("%s Failed to sync fastClock to %s + %d\r\n", getTimeStamp(), ntpserver, utcoffset);
+        xSemaphoreGive(consoleSem);
+      }
+    }
   }
   if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     fc_multiplier = nvs_get_int ("fc_rate", FC_RATE) / 100.00;

@@ -240,7 +240,7 @@ void webHandler(void *pvParameters)
   WiFiClient *myClient = (WiFiClient*) pvParameters;
   char *content = NULL;
   char myUri[BUFFSIZE];
-  char inBuffer[WEB_BUFFER_SIZE];   // WEB_BUFFER_SIZE or BUFFSIZE?
+  char inBuffer[BUFFSIZE];   // WEB_BUFFER_SIZE or BUFFSIZE?
   char hostName[64];
   char inChar, lastChar;
   bool collectHeader = true;
@@ -2203,6 +2203,7 @@ void mkWebEditLoco (WiFiClient *myClient, bool keepAlive, bool authenticated, ch
             nvs_put_string ("loco", newID, newName);
             myClient->printf ((const char*) "<p>Updated Loco ID %s in flash memory</p>", newID);
             if (strcmp (action, "Update") == 0 && locoIdx < locomotiveCount) {
+              webUpdateLocomotive (locoIdx, id, locoName);
               if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
                 tid = locoRoster[locoIdx].id;
                 xSemaphoreGive(velociSem);
@@ -2214,10 +2215,21 @@ void mkWebEditLoco (WiFiClient *myClient, bool keepAlive, bool authenticated, ch
                 myClient->printf ((const char*) "<p>Deleted old Loco ID %s from flash memory</p>", idString);
               }
             }
+            else if (strcmp (action, "Create") == 0 && locoIdx == locomotiveCount) {
+              webAddLocomotive (locoIdx, id, locoName);
+              // myClient->printf ((const char*) "<p>Updated Loco ID %s in memory</p>", newID);
+            }
           }
-        } else if (strcmp(action, "Delete") == 0) {
-          nvs_del_key ("loco", newID);
-          myClient->printf ((const char*) "<p>Deleted Loco ID %s from flash memory</p>", newID);
+        } else if (strcmp(action, "Delete") == 0 && locoIdx < locomotiveCount) {
+          if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+            id = locoRoster[locoIdx].id;
+            xSemaphoreGive(velociSem);
+          }
+          if (id == util_str2int(newID)) {
+            nvs_del_key ("loco", newID);
+            webDeleteLocomotive (locoIdx);
+            myClient->printf ((const char*) "<p>Deleted Loco ID %s from flash memory</p>", newID);
+          } else myClient->printf ((const char*) "<p>Loco not deleted, ID mismatch, return to <a href=\"/status\">main screen</a> and try again.</p>", newID);
         }
       } else {
         if (locoIdx == locomotiveCount) {
@@ -2231,7 +2243,7 @@ void mkWebEditLoco (WiFiClient *myClient, bool keepAlive, bool authenticated, ch
           }
         }
       }
-      myClient->printf ((const char*) "<form action=\"/editLoco\" method=\"post\">");
+      myClient->printf ((const char*) "<p>Please do not add or remove locomotives while any are running.</p><form action=\"/editLoco\" method=\"post\">");
       myClient->printf ((const char*) "<input type=\"hidden\" name=\"locoIdx\" value=\"%d\"><table>", locoIdx);
       myClient->printf ((const char*) "<tr><td align=\"right\">DCC ID</td><td><input type=\"number\" name=\"locoNumber\" value=\"%d\" max=\"%d\"></td></tr>", id, 10239);
       myClient->printf ((const char*) "<tr><td align=\"right\">Locomotive Name</td><td><input type=\"text\" name=\"locoName\" value=\"%s\" maxlength=\"%d\"></td></tr>", locoName, NAMELENGTH);
@@ -2246,4 +2258,101 @@ void mkWebEditLoco (WiFiClient *myClient, bool keepAlive, bool authenticated, ch
   }
   else myClient->printf ((const char*) "<p>You have not selected a locomotive to edit</p>\r\n");
   myClient->printf ((const char*) "<hr></body></html>\r\n");
+}
+
+
+void webDeleteLocomotive (uint8_t locoIdx)
+{
+  struct locomotive_s *locoData = NULL;
+  struct locomotive_s *tempSrc = NULL, *tempDest = NULL;
+  uint32_t copySize = 0;
+  uint32_t totalEntries = 0;
+  int limit;
+  
+   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s webDeleteLoco(%d)\r\n", getTimeStamp(), locoIdx);
+    xSemaphoreGive(consoleSem);
+  }
+
+  if (locoIdx<locomotiveCount) {
+    totalEntries = locomotiveCount + (MAXCONSISTSIZE - 1);
+    limit = totalEntries * sizeof(struct locomotive_s);
+    // Allocate the memory
+    if (usePSRAM) locoData = (struct locomotive_s*) ps_malloc (limit);
+    else locoData = (struct locomotive_s*) malloc (limit);
+    // Calculate sizes of data to move
+    copySize = locoIdx * sizeof(struct locomotive_s);
+    tempSrc  = locoRoster + locoIdx + 1;   // Add n structs to pointer
+    tempDest = locoData   + locoIdx;
+    totalEntries = (totalEntries - locoIdx) * sizeof(struct locomotive_s);
+    // Move and update data
+    if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (copySize>0) memcpy (locoData, locoRoster, copySize);
+      memcpy (tempDest, tempSrc, totalEntries);
+      free (locoRoster);
+      locoRoster = locoData;
+      locomotiveCount--;
+      xSemaphoreGive(velociSem);
+    }
+  }
+}
+
+void webAddLocomotive (uint8_t locoIdx, int locoID, char *locoName)
+{
+  struct locomotive_s *locoData = NULL; // New Structure
+  struct locomotive_s *tempSrc = NULL, *tempDest = NULL;
+  uint32_t copySize = 0;
+  uint32_t totalEntries = 0;
+  uint32_t limit;
+  
+   if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s webAddLocomotive(%d, %d, \"%s\")\r\n", getTimeStamp(), locoIdx, locoID, locoName);
+    xSemaphoreGive(consoleSem);
+  }
+
+  if (locoRoster == NULL) return;
+  if (locoIdx==locomotiveCount) {
+    totalEntries = locomotiveCount + (MAXCONSISTSIZE + 1);
+    limit = totalEntries * sizeof(struct locomotive_s);
+
+    // Allocate the memory
+    if (usePSRAM) locoData = (struct locomotive_s*) ps_malloc (limit);
+    else locoData = (struct locomotive_s*) malloc (limit);
+    // Calculate sizes of data to move
+    copySize = locoIdx * sizeof(struct locomotive_s);
+    tempSrc  = locoRoster + locoIdx;      // Add n struct values
+    tempDest = locoData   + locoIdx + 1;
+    totalEntries = MAXCONSISTSIZE * sizeof(struct locomotive_s);
+
+    // Move and update data
+    if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      if (copySize>0) memcpy (locoData, locoRoster, copySize);
+      memcpy (tempDest, tempSrc,    totalEntries);
+      strcpy (locoData[locoIdx].name, locoName);
+      locoData[locoIdx].direction = STOP;
+      locoData[locoIdx].speed     = 0;
+      locoData[locoIdx].steps     = 128;
+      locoData[locoIdx].id        = locoID;
+      locoData[locoIdx].owned     = false;
+      locoData[locoIdx].function  = 0;
+      locoData[locoIdx].throttleNr= 255;
+      locoData[locoIdx].relayIdx  = 255;
+      locoData[locoIdx].functionLatch  = 65535;
+      locoData[locoIdx].functionString = NULL;
+      locoData[locoIdx].reverseConsist = false;
+      free (locoRoster);
+      locoRoster = locoData;
+      locomotiveCount++;
+      xSemaphoreGive(velociSem);
+    }
+  }
+}
+
+void webUpdateLocomotive (uint8_t locoIdx, int locoID, char *locoName)
+{
+  if (locoIdx < locomotiveCount && xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    locoRoster[locoIdx].id = locoID;
+    strcpy (locoRoster[locoIdx].name, locoName);
+    xSemaphoreGive(velociSem);
+  }
 }

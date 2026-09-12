@@ -19,6 +19,13 @@ factory,  app,  factory, 0x10000, 0x280000,
 nvs,      data, nvs,     0x290000,0x10000,
 spiffs,   data, spiffs,  0x2A0000,0x160000,
 #
+# Here is an example for a 2Mb flash, 1.9Mb code, 64K SPIFFS, 64K NVS
+# Name,   Type, SubType, Offset,  Size,    Flags
+#factory,  app,  factory, 0x10000, 0x1d0000,
+#nvs,      data, nvs,     0x1e0000,0x10000,
+#spiffs,   data, spiffs,  0x1f0000,0x10000,
+#
+#
 # If you are using OTA (Over The Air update) then
 # comment out the entries above, and uncomment the
 # entries from otadata onwards below.

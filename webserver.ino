@@ -571,6 +571,7 @@ void webDumpFile (WiFiClient *myClient, File *file, bool encode)
         case '"': myClient->printf ("&quot;");    break;
         case '<': myClient->printf ("&lt;");      break;
         case '>': myClient->printf ("&gt;");      break;
+        case '\\': myClient->printf ("&#39;");    break;
         default:  dumpBuffer[dumpPtr++] = inChar; break;
         }
       }
@@ -582,6 +583,70 @@ void webDumpFile (WiFiClient *myClient, File *file, bool encode)
 }
 
 
+/* --------------------------------------------------------------------------- *\
+ *
+ * String Escape handling
+ *
+\* --------------------------------------------------------------------------- */
+void escape_html(const char *src, char *dest) {
+    if (!src || !dest) return;
+
+    while (*src) {
+        switch (*src) {
+            case '&':
+                dest += sprintf(dest, "&amp;");
+                break;
+            case '<':
+                dest += sprintf(dest, "&lt;");
+                break;
+            case '>':
+                dest += sprintf(dest, "&gt;");
+                break;
+            case '"':
+                dest += sprintf(dest, "&quot;");
+                break;
+            case '\'':
+                dest += sprintf(dest, "&#39;");
+                break;
+            default:
+                *dest++ = *src;
+                break;
+        }
+        src++;
+    }
+    *dest = '\0';
+}
+
+
+void unescape_html(const char *src, char *dest) {
+    if (!src || !dest) return;
+
+    while (*src) {
+        if (*src == '&') {
+            if (strncmp(src, "&amp;", 5) == 0) {
+                *dest++ = '&';
+                src += 5;
+            } else if (strncmp(src, "&lt;", 4) == 0) {
+                *dest++ = '<';
+                src += 4;
+            } else if (strncmp(src, "&gt;", 4) == 0) {
+                *dest++ = '>';
+                src += 4;
+            } else if (strncmp(src, "&quot;", 6) == 0) {
+                *dest++ = '"';
+                src += 6;
+            } else if (strncmp(src, "&#39;", 5) == 0 || strncmp(src, "&apos;", 6) == 0) {
+                *dest++ = '\'';
+                src += (*(src + 1) == '#') ? 5 : 6;
+            } else {
+                *dest++ = *src++;
+            }
+        } else {
+            *dest++ = *src++;
+        }
+    }
+    *dest = '\0';
+}
 
 /* --------------------------------------------------------------------------- *\
  *
@@ -767,6 +832,7 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   const char *clockLabel[]  = { "24hr (15:20)", "24hr (15h20)", "12hr (3:20)" };
   char labelName[16];
   char labelDesc[64];
+  char tTname[sizeof(tname)*2];
   int compInt;
   int cpuSpeed;
   #ifdef SCREENROTATE
@@ -787,10 +853,11 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
     Serial.printf ("%s mkWebConfig(%x, keepAlive)\r\n", getTimeStamp(), myClient);
     xSemaphoreGive(consoleSem);
   }
+  escape_html (tname, tTname);
   mkWebHeader (myClient, 200, 0, keepAlive);
   mkWebHtmlHeader (myClient, "Update Configuration", 0);
   myClient->printf ((const char*)"<form action=\"/save\" method=\"post\"><h2>Device &amp; Display</h2><table>");
-  myClient->printf ((const char*)"<tr><td>Name </td><td><input type=\"text\" id=\"tname\" name=\"tname\" value=\"%s\" minlength=\"4\" maxlength=\"%d\"></td></tr>", tname, sizeof(tname)-1);
+  myClient->printf ((const char*)"<tr><td>Name </td><td><input type=\"text\" id=\"tname\" name=\"tname\" value=\"%s\" minlength=\"4\" maxlength=\"%d\"> Alphnumeric and a single word please</td></tr>", tTname, sizeof(tname)-1);
   #ifndef NOCPUSPEED
   myClient->printf ((const char*)"<tr><td>CPU Speed </td><td>");
   cpuSpeed = nvs_get_int ("cpuspeed", 0);
@@ -1987,8 +2054,10 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
       }
       // If this is for a known loco print the detail
       if ((n<locomotiveCount || tCount>0) && locoRoster!=NULL) {
+        char tLocomotiveName[NAMELENGTH * 2];
         if (xSemaphoreTake(velociSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {  // do inside loop, to yield to any network I/O demands
-          myClient->printf ((const char*)"<tr><td align=\"right\">%d</td><td align=\"left\">%s</td>", locoRoster[n].id, locoRoster[n].name);
+          escape_html (locoRoster[n].name, tLocomotiveName);
+          myClient->printf ((const char*)"<tr><td align=\"right\">%d</td><td align=\"left\">%s</td>", locoRoster[n].id, tLocomotiveName);
           locoDir = locoRoster[n].direction;
           locoSteps = locoRoster[n].steps-2;
           speedPercent = locoRoster[n].speed;
@@ -2023,9 +2092,9 @@ void mkWebSysStat(WiFiClient *myClient, bool keepAlive, bool authenticated, char
           #endif
           myClient->printf ((const char*)"<td align=\"right\">%s %d</td><td><table><tr><td>", dirName[locoDir], speedPercent);
           switch (locoDir) {
-            FORWARD: myClient->printf ((const char*)">");
+            FORWARD: myClient->printf ((const char*)"&gt;");
                      break;
-            REVERSE: myClient->printf ((const char*)"<");
+            REVERSE: myClient->printf ((const char*)"&lt;");
                      break;
             default: myClient->printf ((const char*)"&nbsp;");
                      break;
@@ -2154,7 +2223,7 @@ void mkWebError(WiFiClient *myClient, uint16_t code, char* myUri, bool keepAlive
   }
   myClient->printf ((const char*)"<hr></body></html>\r\n");
 }
-#endif
+
 
 
 /* --------------------------------------------------------------------------- *\
@@ -2164,6 +2233,7 @@ void mkWebError(WiFiClient *myClient, uint16_t code, char* myUri, bool keepAlive
 void mkWebEditLoco (WiFiClient *myClient, bool keepAlive, bool authenticated, char *postData, uint16_t dataSize)
 {
    char locoName[NAMELENGTH];
+   char tLocoName[NAMELENGTH * 2];
    uint16_t id = 3, tid = 255;          // DCC address
    uint16_t locoIdx = 255;
    char *newName = NULL, *newID = NULL, *action=NULL;
@@ -2243,10 +2313,11 @@ void mkWebEditLoco (WiFiClient *myClient, bool keepAlive, bool authenticated, ch
           }
         }
       }
+      escape_html (locoName, tLocoName);
       myClient->printf ((const char*) "<p>Please do not add or remove locomotives while any are running.</p><form action=\"/editLoco\" method=\"post\">");
       myClient->printf ((const char*) "<input type=\"hidden\" name=\"locoIdx\" value=\"%d\"><table>", locoIdx);
       myClient->printf ((const char*) "<tr><td align=\"right\">DCC ID</td><td><input type=\"number\" name=\"locoNumber\" value=\"%d\" max=\"%d\"></td></tr>", id, 10239);
-      myClient->printf ((const char*) "<tr><td align=\"right\">Locomotive Name</td><td><input type=\"text\" name=\"locoName\" value=\"%s\" maxlength=\"%d\"></td></tr>", locoName, NAMELENGTH);
+      myClient->printf ((const char*) "<tr><td align=\"right\">Locomotive Name</td><td><input type=\"text\" name=\"locoName\" value=\"%s\" maxlength=\"%d\"></td></tr>", tLocoName, NAMELENGTH);
       if (locoIdx == locomotiveCount) {
         myClient->printf ((const char*) "<tr><td></td><td><input type=\"submit\" name=\"action\" value=\"Create\"></td></tr>");
       } else {
@@ -2356,3 +2427,9 @@ void webUpdateLocomotive (uint8_t locoIdx, int locoID, char *locoName)
     xSemaphoreGive(velociSem);
   }
 }
+
+
+
+
+
+#endif  // WEBLIFETIME

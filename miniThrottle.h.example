@@ -19,17 +19,7 @@
  * ESPMODEL ESP32C5
  * ESPMODEL ESP32C6
  */
-#define ESPMODEL ESP32C6
-
-/* ***********************************************************************\
- * Enable I2C for offchip I/O and SSD1306 / SSD1327 displays
-\*********************************************************************** */
-#define USEI2C 1
-#ifdef USEI2C
-#define SDA_PIN        05    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
-#define SCK_PIN        04    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
-#endif
-
+#define ESPMODEL ESP32
 
 /* ***********************************************************************\
  * Enable SPI for ST7735 / ST7789 / ILI9341 displays
@@ -38,8 +28,8 @@
 #ifdef USESPI
 #define SPI_RESET      20
 #define SPI_CS         -1
-#define SPI_DC         21
-#define SPI_SCL        22
+#define SPI_DC         14
+#define SPI_SCL        27
 #define SPI_MOSI       23
 #endif
 /* ***********************************************************************\
@@ -51,7 +41,11 @@
 // 2 - Additional info re semaphores
 // 3 - most verbose
 #define DEBUGLEVEL 1
-#define NOHTTPCLIENT 0
+// Do we show firmware partitions on boot
+#define SHOWPARTITIONS 1
+// Show we stop the unit form being able to download files firm Intranet
+//#define NOHTTPCLIENT 0
+// Can we use NEO PIXEL devices
 #define USENEOPIXEL 1
 
 /* ***********************************************************************\
@@ -71,11 +65,13 @@
 #ifdef USEWIFI
 // default location for over the air update, comment out if not required
 // only works if WiFi enabled
-//#define OTAUPDATE   "https://camelthorn.cloud/projects/miniThrottleRelay/"
+#define OTAUPDATE   "https://camelthorn.cloud/projects/miniThrottleRelay/"
 #else   // USEWIFI
 // If you are not using WIFi, you should use a serial connection, otherwise this project is pointless
+#ifndef SERIALCTRL
 #define SERIALCTRL 1
-#endif
+#endif // SERIALCTRL
+#endif // USEWIFI (else)
 
 /* ***********************************************************************\
  * DIRECT SERIAL CONNECTION
@@ -86,13 +82,13 @@
 // If using serial connection, then the WiFi connectivity is not required, but may
 // be useful for configuration or network relay purposes.
 #ifndef SERIALCTRL   // may have been defined by virtue of not having USEWIFI
-//#define SERIALCTRL 1
+// #define SERIALCTRL 1
 #endif
 #ifdef SERIALCTRL
 // These are used for the serial connected throttle, ie not using WiFi
 // I/O pins to use
-#define DCCRX 33
-#define DCCTX 32
+#define DCCRX 13
+#define DCCTX 12
 // Serial speed of serially connected DCC-EX unit
 #define DCCSPEED 115200
 #ifdef USEWIFI
@@ -150,7 +146,8 @@
 // Uncomment these to enable debug options on startup
 // DELAYONSTART can also be used with serially connected DCC-EX to allow it to initialise prior to the throttle starting
 // DELAYONSTART = seconds before initialising comms with command station
-#define DELAYONSTART 0
+// SHOWPACKETSONSTART = display packets received & transmitted on starting
+#define DELAYONSTART 10
 //#define SHOWPACKETSONSTART 1
 
 /* ***********************************************************************\
@@ -166,26 +163,48 @@
 //#define ST7789       // ST7789  135x240x16 SPI
 #define ILI9341      // ILI9341 240x320x16 SPI
 
+
+/* ***********************************************************************\
+ * Enable I2C for offchip I/O and SSD1306 / SSD1327 displays
+\*********************************************************************** */
+// Use one I2C bus for displays and another for instrumentation
+// Keep intrumentation I2C separate from displays
+#if defined (SSD1306) || defined (SSD1327)
+#define SDA_DISP_PIN   05    // i2c SDA pin, normally 21, built-in display uses 5 <-- test val 22
+#define SCK_DISP_PIN   04    // i2c SCK pin, normally 22, built-in display uses 4 <-- test val 23
+#endif // I2C displays
+
+// Comment out "#define USE_INSTR" if instrumentation bus is not of interest
+#define USE_INSTR 1
+#ifdef USE_INSTR
+#include <Wire.h>
+#define SDA_INST_PIN   21
+#define SCK_INST_PIN   22
+#endif // USE_INSTR
+
 // Display board may have a built in backlight, eg in Lilygo, in which case you probably want this
 // if no backlight, eg monochrome displays this is not needed
 // BACKLIGHTPIN - any PWM capable output
 // BACKLIGHTREF - Optional: Pins 32 - 39 only, optional 0-3V reference voltage for backlight, otherwise can be set at prompt
 // SCREENSAVER  - define idle time in minutes to screen blanking (screen saver), 0 = never blank
-#define BACKLIGHTPIN 9
+#if defined (SDD1327) || defined (SDD1306) || defined (NODISPLAY)
+#else
+#define BACKLIGHTPIN 13
 #ifdef BACKLIGHTPIN
 //#define BACKLIGHTREF 35
 #define SCREENSAVER 60
-#endif
+#endif // BACKLIGHTPIN
+#endif // display types
 
 /* ***********************************************************************\
  * KEYPAD SELECTION - select only one keyboard type
 \*********************************************************************** */
 // Define keypad things, Define one type of keypad
-#define keynone
+//#define keynone
 //#define key1x5
 //#define key3x4
 //#define key4x4
-//#define key4x5
+#define key4x5
 
 /* ***********************************************************************\
  * NETWORK DEFAULTS
@@ -207,7 +226,7 @@
  *     
  * NB: pins 06 to 11 are connected to the internal flash memory, do not use these even if available on your board
  * 
- * ADC is used for Potentiometer throttle (Pot-Throt / POTTHROTPIN)
+ * On ESP32 ADC is used for Potentiometer throttle (Pot-Throt / POTTHROTPIN)
  *     ADC1_CH0 - GPIO 36  (SVN - Sense V Neg)
  *     ADC1_CH1 - GPIO 37
  *     ADC1_CH2 - GPIO 38
@@ -244,8 +263,8 @@
  * INDICATOR LEDS
 \*********************************************************************** */
 // define either of TRACKPWR or TRACKPWRINV or neither. do not set both
-// #define TRACKPWR       26   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
-//#define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
+#define TRACKPWR       26   // track power indicator, 2 = devkit on-board, 5 = lolin on-board, 16 (inverted) for module w battery
+// #define TRACKPWRINV    16   // Same as TRACKPWR, but set as inverted - Define either TRACKPWR or TRACKPWRINV or neither but not both
 // To enable bidirectional mode indicator
 //#define TRAINSETLED    16
 // To enable function key indicators
@@ -255,11 +274,11 @@
 /* ***********************************************************************\
  * ENCODERS AND SWITCHES
 \*********************************************************************** */
-//#define ENCODE_UP      39   // encoder up bounce
-//#define ENCODE_DN      36   // encoder down bounce
-//#define ENCODE_SW      34   // encoder switch
-//#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
-//#define DIRREVPIN      33   // Direction sw spdt center off LOW active
+#define ENCODE_UP      38   // encoder up bounce
+#define ENCODE_DN      37   // encoder down bounce
+#define ENCODE_SW      36   // encoder switch
+#define DIRFWDPIN      32   // Direction sw spdt center off LOW active
+#define DIRREVPIN      33   // Direction sw spdt center off LOW active
 //#define POTTHROTPIN    35   // Potentiometer throttle, if defined do not leave to float (Candidates: 32, 33, 34, 35, 36, 39)
 
 /* ***********************************************************************\
@@ -267,7 +286,7 @@
 \*********************************************************************** */
 #if ESPMODEL == ESP32
 // To configure a speedometer, use one of the 2 DAC pins (25, 26) to drive a 3v voltmeter
-//#define SPEEDOPIN      25
+#define SPEEDOPIN      25
 // To define a brake pressure gauge using a 3V voltmeter, use BRAKEPRESPIN on one of 2 DAC pins
 //#define BRAKEPRESPIN   26
 #endif
@@ -415,8 +434,8 @@ char keymap[ROWCOUNT][COLCOUNT] = {
 #ifdef key1x5
 #define COLCOUNT        5
 #define ROWCOUNT        1
-#define MEMBR_COLS     15,26,23,17,05
-#define MEMBR_ROWS     17
+#define MEMBR_COLS     14,15,16,17,18
+#define MEMBR_ROWS     19
 char keymap[ROWCOUNT][COLCOUNT] = {
   { '*', '#', 'S', 'E', 'X' }
 };

@@ -292,7 +292,16 @@ class ota_control {
         if (esp_ota_begin(targetPart, image_size, &targetHandle) == ESP_OK) {
           inBuffer = (uint8_t*) malloc (WEB_BUFFER_SIZE);
           mbedtls_sha256_init(&sha256ctx);
-          sha256status = mbedtls_sha256_starts_ret(&sha256ctx, 0);
+          #ifdef ESP_ARDUINO_VERSION_MAJOR
+          #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+          // Code for version 3.x
+            sha256status = mbedtls_sha256_starts(&sha256ctx, 0);
+          #else
+            sha256status = mbedtls_sha256_starts_ret(&sha256ctx, 0);
+          #endif
+          #else
+            sha256status = mbedtls_sha256_starts_ret(&sha256ctx, 0);
+          #endif
           totalByte = 0;
           retryCount = 30;
           while (totalByte < image_size && retryCount > 0) {
@@ -311,7 +320,16 @@ class ota_control {
                 xSemaphoreGive(diagPortSem);
               }
               totalByte += inByte;
-              if (sha256status == 0) sha256status = mbedtls_sha256_update_ret(&sha256ctx, (const unsigned char*) inBuffer, inByte);
+              #ifdef ESP_ARDUINO_VERSION_MAJOR
+              #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+              // Code for version 3.x
+                if (sha256status == 0) sha256status = mbedtls_sha256_update(&sha256ctx, (const unsigned char*) inBuffer, inByte);
+              #else
+                if (sha256status == 0) sha256status = mbedtls_sha256_update_ret(&sha256ctx, (const unsigned char*) inBuffer, inByte);
+              #endif
+              #else
+                if (sha256status == 0) sha256status = mbedtls_sha256_update_ret(&sha256ctx, (const unsigned char*) inBuffer, inByte);
+              #endif
               esp_ota_write(targetHandle, (const void*) inBuffer, inByte);
               retryCount = 30;
             }
@@ -335,7 +353,16 @@ class ota_control {
               else diagEnqueue ('u', (char *) "\r\n-failed- too many retries", true);
               xSemaphoreGive(diagPortSem);
             }
-            sha256status = mbedtls_sha256_finish_ret(&sha256ctx, (unsigned char*) inBuffer);
+            #ifdef ESP_ARDUINO_VERSION_MAJOR
+            #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+            // Code for version 3.x
+              sha256status = mbedtls_sha256_finish(&sha256ctx, (unsigned char*) inBuffer);
+            #else
+              sha256status = mbedtls_sha256_finish_ret(&sha256ctx, (unsigned char*) inBuffer);
+            #endif
+            #else
+              sha256status = mbedtls_sha256_finish_ret(&sha256ctx, (unsigned char*) inBuffer);
+            #endif
             message[0] = '\0'; // Truncate message buffer, then use it as a temporary store of the calculated sha256 string
             for (retryCount=0; retryCount<32; retryCount++) {
               sprintf (bin2hex, "%02x", inBuffer[retryCount]);

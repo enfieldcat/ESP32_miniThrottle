@@ -35,10 +35,10 @@ SOFTWARE.
 // Initialize the OLED display using i2c interface, Adjust according to display device
 // DisplaySSD1306_128x64_I2C display(-1); // or (-1,{busId, addr, scl, sda, frequency})
 #ifdef SSD1306
-DisplaySSD1306_128x64_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, (uint32_t) -1});
+DisplaySSD1306_128x64_I2C display (-1,{0, DISPLAYADDR, SCK_DISP_PIN, SDA_DISP_PIN, (uint32_t) -1});
 #endif
 #ifdef SSD1327
-DisplaySSD1327_128x128_I2C display (-1,{0, DISPLAYADDR, SCK_PIN, SDA_PIN, (uint32_t) -1});
+DisplaySSD1327_128x128_I2C display (-1,{0, DISPLAYADDR, SCK_DISP_PIN, SDA_DISP_PIN, (uint32_t) -1});
 #endif
 #ifdef ST7735
 // params {reset, {busid, cs, dc, freq, scl, sca}}
@@ -426,17 +426,6 @@ void setup()  {
   flash_size = flash_size / ( 1024 *1024);
 
   mt_ruler (NULL);
-  #if ESPMODEL == ESP32C3
-  printf  ("Hardware Vers: %d core %s (rev %d) %dMHz, Xtal: %dMHz, %d MB flash\r\n", \
-     coreCount, \
-     ESP.getChipModel(), \
-     ESP.getChipRevision(), \
-     ESP.getCpuFreqMHz(), \
-     getXtalFrequencyMhz(), \
-     flash_size);
-  printf ("  Heap Memory: %d bytes\r\n", ESP.getHeapSize());
-  printf ("Console Tx and Rx ports switch to I/O pins %d and %d respectively\r\n", TX, RX);
-  #else    // ESP32C3
   Serial.printf  ("Hardware Vers: %d core %s (rev %d) %dMHz, Xtal: %dMHz, %d MB flash\r\n", \
      coreCount, \
      ESP.getChipModel(), \
@@ -444,7 +433,10 @@ void setup()  {
      ESP.getCpuFreqMHz(), \
      getXtalFrequencyMhz(), \
      flash_size);
-  Serial.printf  ("  Heap Memory: %d bytes\r\n", ESP.getHeapSize());
+  Serial.printf ("    GPIO Pins: %d\r\n", SOC_GPIO_PIN_COUNT);
+  Serial.printf ("  Heap Memory: %d bytes\r\n", ESP.getHeapSize());
+  #if ESPMODEL == ESP32C3
+  printf ("Console Tx and Rx ports switch to I/O pins %d and %d respectively\r\n", TX, RX);
   #endif    // ESP32C3
   Serial.printf  ("Software Vers: %s %s\r\n", PRODUCTNAME, VERSION);
   Serial.printf  (" Compile Time: %s %s\r\n", __DATE__, __TIME__);
@@ -458,6 +450,9 @@ void setup()  {
   mt_ruler (NULL);
   for (uint8_t n=0; n<coreCount; n++) print_reset_reason(n, rtc_get_reset_reason(n));
   mt_ruler (NULL);
+  #ifdef SHOWPARTITIONS
+  displayPartitions();
+  #endif    // SHOWPARTITIONS
   if (nvs_get_int ("bidirectional", 0) == 1) bidirectionalMode = true;
   #if ESPMODEL == ESP32
   if (strcmp (ESP.getChipModel(), "ESP32") != 0 && strncmp (ESP.getChipModel(), "ESP32-D", 7) != 0) cpuOK = false;
@@ -485,13 +480,9 @@ void setup()  {
     else if (strcmp (cpuName, "ESP32-C6") == 0) Serial.printf ("ESP32C6");
     else if (strcmp (cpuName, "ESP32-C3") == 0) Serial.printf ("ESP32C3");
     else                                        Serial.printf ("ESP32");
-    Serial.printf ("\r\nInitialisation halted, please define and recompile.\r\n");
-    while (true) delay (10000);
+    Serial.printf ("\r\n\r\n");
   }
-  #ifdef SHOWPARTITIONS
-  displayPartitions();
-  #endif    // SHOWPARTITIONS
-  if (showPinConfig()) Serial.printf ("%s Basic hardware check passed.\r\n", getTimeStamp());
+  if (showPinConfig() && cpuOK) Serial.printf ("%s Basic hardware check passed.\r\n", getTimeStamp());
   else {
     Serial.printf ("%s Basic hardware check failed.\r\n", getTimeStamp());
     Serial.printf ("%s Some I/O pins may have more than one assignment.\r\n", getTimeStamp());
@@ -513,7 +504,7 @@ void setup()  {
       if (cpuSpeed < 80) cpuSpeed = 80; 
       #endif
       Serial.printf ("%s Setting CPU speed to %d MHz\r\n", getTimeStamp(), cpuSpeed);
-      delay (1000);
+      // delay (1000);
       setCpuFrequencyMhz (cpuSpeed);
       delay (1000);
     }
@@ -551,37 +542,70 @@ void setup()  {
     Serial.printf ("%s Relay type is: %s, port %d, max clients %d\r\n", getTimeStamp(), relType[relayMode], relayPort, maxRelay);
     xSemaphoreGive(consoleSem);
   }
+  #else
+  if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Standard throttle mode\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
   #endif    //  RELAYPORT
   // Configure I/O pins
   // Track power indicator
   #ifdef TRACKPWR
+  if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Enable track power indicator\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
   pinMode(TRACKPWR, OUTPUT);
   digitalWrite(TRACKPWR, LOW);
   #else
   #ifdef TRACKPWRINV
+  if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Enable track power indicator\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
   pinMode(TRACKPWRINV, OUTPUT);
   digitalWrite(TRACKPWRINV, HIGH);
   #endif   //  TRACKPWRINV
   #endif   //  TRACKPWR
   // function key indicators off
   #ifdef F1LED
+    if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Enable F1 LED indicator\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
   pinMode(F1LED, OUTPUT);
   digitalWrite(F1LED, LOW);
   #endif   //  F1LED
   #ifdef F2LED
+  if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Enable F2 LED indicator\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
   pinMode(F2LED, OUTPUT);
   digitalWrite(F2LED, LOW);
   #endif   //  F2LED
   // trainset mode indicator
   #ifdef TRAINSETLED
+  if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Enable Bi-Directional LED (AKA Trainset mode LED)\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
   pinMode(TRAINSETLED, OUTPUT);
   if (bidirectionalMode) digitalWrite(TRAINSETLED, HIGH);
   else digitalWrite(TRAINSETLED, LOW);
   #endif   // TRAINSETLED
   // Read a backlight reference ADC pin and set backlight PWM using this
   #ifdef BACKLIGHTPIN
+  if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Enable screen backlight\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
   pinMode(BACKLIGHTPIN, OUTPUT);
   #ifdef BACKLIGHTREF
+  if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Enable Screen backlight reference\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
   analogReadResolution(10);
   adcAttachPin(BACKLIGHTREF);
   analogSetPinAttenuation(BACKLIGHTREF, ADC_11db);  // param 2 = attenuation, range 0-3 sets FSD: 0:ADC_0db=800mV, 1:ADC_2_5db=1.1V, 2:ADC_6db=1.35V, 3:ADC_11db=2.6V
@@ -614,10 +638,18 @@ void setup()  {
   #endif    //  BACKIGHTPIN
   // Set speedometer initial position
   #ifdef SPEEDOPIN
+  if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Enable speedometer output\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
   dacWrite (SPEEDOPIN, 0);
   #endif   //  SPEEDOPIN
   // Set brake initial position
   #ifdef BRAKEPRESPIN
+  if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Enable brake pressure output\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
   dacWrite (BRAKEPRESPIN, 0);
   #endif   //  BRAKEPRESPIN
 
@@ -633,8 +665,12 @@ void setup()  {
     Serial.printf ("%s SPIFFS filesystem formatted OK.\r\n", getTimeStamp());
   }
   delay (250);
+  if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Verify sample files are created\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
   sampleConfigExists(SPIFFS);
-  #if defined(CERTFILE) && defined(WEBLIFETIME)
+  #if defined (CERTFILE) && defined (WEBLIFETIME)
   defaultCertExists(SPIFFS);
   #endif   //  CERTFILE
   #ifdef WEBLIFETIME
@@ -663,11 +699,25 @@ void setup()  {
   xTaskCreate(serialConsole, "serialConsole", 8192, NULL, 4, NULL);
   delay (250);
   #ifdef SERIALCTRL
+  if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Set protocol to DCC-Ex\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
   cmdProtocol = DCCEX;    // expect it always to be this!
   #else
   cmdProtocol = nvs_get_int ("defaultProto", WITHROT);
   if (cmdProtocol == WITHROT) {
+    if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s Set protocol to WiThrottle\r\n", getTimeStamp());
+      xSemaphoreGive(consoleSem);
+    }
     resetKeepAliveInd = nvs_get_int("resetKeepAlive", 0) > 0;
+  }
+  else {
+    if (debuglevel>0 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+      Serial.printf ("%s Set protocol to DCC-Ex\r\n", getTimeStamp());
+      xSemaphoreGive(consoleSem);
+    }
   }
   #endif  //  SERIALCTRL
   #ifdef DELAYONSTART
@@ -686,6 +736,15 @@ void setup()  {
     }
   }
   #endif   // DELAYONSTART
+  #ifdef USE_INSTR
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s starting instrumentation bus\r\n", getTimeStamp());
+    xSemaphoreGive(consoleSem);
+  }
+  Wire.begin(SDA_INST_PIN, SCK_INST_PIN);
+  delay (1000); // Arbitrary pause for bus to settle
+  i2c_scan();
+  #endif
   #ifdef USEWIFI
   if (nvs_get_int ("obsessive", 0) == 1) obsessive = true;
   else obsessive = false;
@@ -705,7 +764,7 @@ void setup()  {
     xSemaphoreGive(consoleSem);
   }
   xTaskCreate(serialConnectionManager, "serialCntMgr", 6144, NULL, 4, NULL);
-  #if defined(RELAYPORT) && defined (USEWIFI)
+  #if defined (RELAYPORT) && defined (USEWIFI)
   // if (relayMode == WITHROTRELAY) {
     if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
       Serial.printf ("%s Starting fast clock server\r\n", getTimeStamp());
@@ -736,7 +795,7 @@ void setup()  {
   #else
   xTaskCreate(keypadMonitor, "keypadMonitor", 2048, NULL, 4, NULL);
   #endif   // keynone
-  xTaskCreate(switchMonitor, "switchMonitor", 2048, NULL, 4, NULL);
+  xTaskCreate(switchMonitor, "switchMonitor", 4096, NULL, 4, NULL);
   #endif   // NODISPLAY
   // Finally check for an auto run
   #ifdef FILESUPPORT

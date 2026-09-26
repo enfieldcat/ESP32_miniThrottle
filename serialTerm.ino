@@ -396,6 +396,7 @@ void processSerialCmd (char *inBuffer)
   #endif
   else if (nparam<=2 && strcmp (param[0], "help") == 0)          help                (nparam, param);
   else if (nparam==1 && strcmp (param[0], "history") == 0)       cmdGetHistory       ();
+  else if (nparam==1 && strcmp (param[0], "i2c") == 0)           i2c_scan            ();
   else if (nparam==2 && strcmp (param[0], "kill") == 0)          runAutomation::killProc(param[1]);
   #ifdef USEWIFI
   else if (nparam<=2 && strcmp (param[0], "mdns") == 0)          set_mdns            (nparam, param);
@@ -2020,6 +2021,8 @@ bool showPinConfig()  // Display pin out selection
   uint8_t maxWidth = 0;
   bool retVal = true;
 
+  // Serial.printf ("%d known pins:\r\n", limit);
+  // for (int n=0; n<limit; n++) Serial.printf ("%d = %s\r\n", pinVars[n].pinNr, pinVars[n].pinDesc);
   for (uint8_t n=0; n<limit; n++) if (maxWidth<strlen(pinVars[n].pinDesc) && strncmp(pinVars[n].pinDesc, "Internal ", 9)!=0) maxWidth = strlen(pinVars[n].pinDesc);
   if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     Serial.println ((char*) "Pin Reservation check:");
@@ -2067,11 +2070,15 @@ bool showPinConfig()  // Display pin out selection
     for (uint8_t n=0; n<sizeof(rows); n++) {
       for (uint8_t i=0; i<sizeof(rows); i++) if (i!=n && rows[i] == rows[n]) {
         retVal = false;
-        Serial.printf (", row pin %d used twice", rows[n]);
+        Serial.printf (", row pin %d used as keypad row twice", rows[n]);
       }
       for (uint8_t i=0; i<sizeof(cols); i++) if (cols[i] == rows[n]) {
         retVal = false;
         Serial.printf (", row pin %d also used as keypad column", rows[n]);
+      }
+      for (uint8_t i=0; i<limit; i++) if (pinVars[i].pinNr == rows[n]) {
+        retVal = false;
+        Serial.printf (", row pin %d also used as %s", rows[n], pinVars[i].pinDesc);        
       }
     }
     Serial.println ("");
@@ -2084,11 +2091,15 @@ bool showPinConfig()  // Display pin out selection
     for (uint8_t n=0; n<sizeof(cols); n++) {
       for (uint8_t i=0; i<sizeof(cols); i++) if (i!=n && cols[i] == cols[n]) {
         retVal = false;
-        Serial.printf (", column pin %d used twice", cols[n]);
+        Serial.printf (", column pin %d used as keypad column twice", cols[n]);
       }
       for (uint8_t i=0; i<sizeof(rows); i++) if (rows[i] == cols[n]) {
         retVal = false;
         Serial.printf (", column pin %d also used as keypad row", cols[n]);
+      }
+      for (uint8_t i=0; i<limit; i++) if (pinVars[i].pinNr == cols[n]) {
+        retVal = false;
+        Serial.printf (", column pin %d also used as %s", cols[n], pinVars[i].pinDesc);        
       }
     }
     Serial.println ("");
@@ -2128,11 +2139,23 @@ void pinEquiv(uint8_t pin)
     case 16:
       Serial.printf (" (Rxd2)");
       break;
+    case 34:
+      Serial.printf (" (input only)");
+      break;
+    case 35:
+      Serial.printf (" (input only)");
+      break;
     case 36:
-      Serial.printf (" (SensVP)");
+      Serial.printf (" (SensVP, input only)");
+      break;
+    case 37:
+      Serial.printf (" (input only)");
+      break;
+    case 38:
+      Serial.printf (" (input only)");
       break;
     case 39:
-      Serial.printf (" (SensVN)");
+      Serial.printf (" (SensVN, input only)");
       break;
   #elif ESPMODEL == ESP32C2
     case 20:
@@ -2187,6 +2210,53 @@ void showMemory()
     xSemaphoreGive(consoleSem);
   }
 }
+
+/*-------------------------------------------------- \
+ * Scan the i2c bus
+\ --------------------------------------------------*/
+#ifdef USE_INSTR
+void i2c_scan() {
+  byte error;
+  bool has_errors = false;
+  
+  if (xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf("\r\n     --- i2c Instrumentation Bus ------------------\r\n");
+    Serial.printf("     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\r\n");
+    Serial.printf("00:         "); // Indent first 3 reserved addresses (0x00, 0x01, 0x02)
+    // Scan standard 7-bit I2C address range (0x03 to 0x77)
+    for (uint8_t addr = 3; addr < 0x78; addr++) {
+      // Start a new row at every 16-byte boundary
+      if ((addr % 16) == 0) {
+        Serial.printf("\r\n%02X:", addr);
+      }
+
+      // Ping the address
+      Wire.beginTransmission(addr);
+      error = Wire.endTransmission();
+
+      if (error == 0) {
+        // Device found
+        Serial.printf(" %02X", addr);
+      } else if (error == 4) {
+        // Unknown error on the bus
+        Serial.printf(" XX");
+        has_errors = true;
+      } else {
+        // No device responded
+        Serial.printf(" --");
+      }
+    
+      yield(); // Prevent watchdog timer trigger during full bus scan
+    }
+ 
+    Serial.printf("\r\n");
+    if (has_errors) Serial.printf("XX - Indicates error detecting device\r\n");
+    Serial.printf("\r\n");
+    xSemaphoreGive(consoleSem);
+  }
+}
+#endif // USE_INSTR
+
 
 void help(int nparam, char **param)  // show help data
 {
@@ -2362,6 +2432,14 @@ void help(int nparam, char **param)  // show help data
         Serial.println ((const char*) "    Print command history since last restart");
       }
     }
+    #ifdef USE_INSTR
+    if (all || strcmp(param[1], "i2c")==0) {
+      Serial.println ((const char*) "i2c");
+      if (!summary) {
+        Serial.println ((const char*) "    scan and show devices on the 12c instrumentation bus");
+      }
+    }
+    #endif
     if (all || strcmp(param[1], "kill")==0 || strncmp(param[1], "auto", 4)==0) {
       Serial.println ((const char*) "kill <proc-id>");
       if (!summary) {

@@ -98,18 +98,22 @@ void switchMonitor(void *pvParameters)
   }
 
   // deal with the encoder first
-  #ifdef ENCODE_UP
-  #ifdef ENCODE_DN
+  #if ( defined (ENCODE_UP) && defined (ENCODE_DN) )  // Should have both defined
   ESP32Encoder::useInternalWeakPullResistors = puType::up;
   encoder.attachHalfQuad(ENCODE_UP, ENCODE_DN);
   encoder.setFilter(1023);
   encoder.setCount (100);
   #endif
-  #endif
   #ifdef POTTHROTPIN
   // We only need 8 bit resolution, higher resolution is wasted compute power
   analogReadResolution(10);
+  #ifdef ESP_ARDUINO_VERSION_MAJOR
+  #if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
   adcAttachPin(POTTHROTPIN);
+  #endif
+  #else
+  adcAttachPin(POTTHROTPIN);
+  #endif
   analogSetPinAttenuation(POTTHROTPIN, ADC_11db);  // param 2 = attenuation, range 0-3 sets FSD: 0:ADC_0db=800mV, 1:ADC_2_5db=1.1V, 2:ADC_6db=1.35V, 3:ADC_11db=2.6V
   #endif
   // now initialise other switches
@@ -342,3 +346,4 @@ void sendPotThrot (int8_t dir, int8_t speed)
 }
 #endif     // POTTHROTPIN
 #endif     // NODISPLAY
+

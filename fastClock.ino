@@ -53,7 +53,12 @@ void fastClock (void *pvParameters)
     Serial.printf ("%s fastClock(NULL)\r\n", getTimeStamp());
     xSemaphoreGive(consoleSem);
   }
-  // Attempt to start sync to UTC + offset
+  if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    fc_multiplier = nvs_get_int ("fc_rate", FC_RATE) / 100.00;
+    fc_time = ((start_hour * 60) + start_min) * 60;
+    xSemaphoreGive(fastClockSem);
+  }
+  // Attempt to start sync to UTC + offset if appropriate
   if (timePrefer == 1) {
     int16_t utcoffset  = nvs_get_int ("utcoffset", 0);
     char ntpserver[64];
@@ -63,22 +68,35 @@ void fastClock (void *pvParameters)
     int cntr = 9;
     struct tm timeinfo;
     while (cntr-- > 0 && !getLocalTime(&timeinfo)) delay(20000);
+    if (cntr > 0) {   // If successful, use a second reading to set time
+      delay (1000);
+      cntr = 10;
+      while (cntr-- > 0 && !getLocalTime(&timeinfo)) delay(1000); // should work on first attempt!
+    }
     if (cntr > 0) {
-      start_hour = timeinfo.tm_hour;
-      start_min  = timeinfo.tm_min;
+      if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+        start_hour = timeinfo.tm_hour;
+        start_min  = timeinfo.tm_min;
+        xSemaphoreGive(fastClockSem);
+      }
     } else {
       if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
-        Serial.printf ("%s Failed to sync fastClock to %s + %d\r\n", getTimeStamp(), ntpserver, utcoffset);
+        Serial.printf ("%s Failed to sync fastClock to %s + %d minutes, using fixed offset\r\n", getTimeStamp(), ntpserver, utcoffset);
         xSemaphoreGive(consoleSem);
       }
     }
   }
+  // Now using the found paramters start the timer
+  if (debuglevel>2 && xSemaphoreTake(consoleSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
+    Serial.printf ("%s Fast clock start time set as %02d:%02d\r\n", getTimeStamp(), start_hour, start_min);
+    xSemaphoreGive(consoleSem);
+    }
   if (xSemaphoreTake(fastClockSem, pdMS_TO_TICKS(TIMEOUT)) == pdTRUE) {
     fc_multiplier = nvs_get_int ("fc_rate", FC_RATE) / 100.00;
     fc_time = ((start_hour * 60) + start_min) * 60;
     xSemaphoreGive(fastClockSem);
   }
-
+  
   delay (TIMEOUT*2);  // add a slight startup delay
   period = int (1000/fc_multiplier);
   if (fastClockQueue == NULL) {

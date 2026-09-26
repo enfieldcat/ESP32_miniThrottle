@@ -141,6 +141,7 @@ SOFTWARE.
     { (char*)"APpass",         STRING,     4,            32,            0,     (char*) "none", (char*)"Access point password" },
     { (char*)"apChannel",      INTEGER,    1,            13,            6,       (char*)   "", (char*)"Access point channel" },
     { (char*)"apClients",      INTEGER,    1,             8,            4,       (char*)   "", (char*)"Max access point clients" },
+    { (char*)"usePSRAM",       INTEGER,    0,             1,            1,       (char*)   "", (char*)"Should PSRAM be used when possible" },
     { (char*)"timePrefer",     INTEGER,    0,             1,            0,       (char*)   "", (char*)"Time source preference, 0=fixed, 1=UTC-offset" },
     { (char*)"ntpserver",      STRING,     4,            64,            0,     (char*) "pool.ntp.org", (char*)"NTP server for timestamps" },
     { (char*)"utcoffset",      INTEGER, -960,           960,            0,       (char*)   "", (char*)"Offset from UTC in munutes, 180=E Africa, -300=EST" }
@@ -160,11 +161,17 @@ SOFTWARE.
     #ifdef DCCRX
     { DCCRX,        (char*)"DCC - Rx" },
     #endif
-    #ifdef SDA_PIN
-    { SDA_PIN,      (char*)"I2C - SDA" },
+    #ifdef SDA_DISP_PIN
+    { SDA_DISP_PIN,      (char*)"I2C - SDA - Display" },
     #endif
-    #ifdef SCK_PIN
-    { SCK_PIN,      (char*)"I2C - SCK" },
+    #ifdef SCK_DISP_PIN
+    { SCK_DISP_PIN,      (char*)"I2C - SCK - Display" },
+    #endif
+    #ifdef SDA_INST_PIN
+    { SDA_INST_PIN,      (char*)"I2C - SDA - Instrumentation" },
+    #endif
+    #ifdef SCK_INST_PIN
+    { SCK_INST_PIN,      (char*)"I2C - SCK - Instrumentation" },
     #endif
     #ifdef SPI_RESET
     { SPI_RESET,    (char*)"SPI - Reset" },
@@ -226,72 +233,80 @@ SOFTWARE.
     #ifdef POTTHROTPIN
     { POTTHROTPIN,  (char*)"Throttle Poten" },
     #endif
-    #ifndef keynone
-    #endif
     #if ESPMODEL == ESP32C3
-    { 20,           (char*)"Console - Tx" },
-    { 21,           (char*)"Console - Rx" },
-    { 26,           (char*)"Internal flash - SPIHD" },
-    { 27,           (char*)"Internal flash - SPIWP" },
-    { 28,           (char*)"Internal flash - SPICS0" },
-    { 29,           (char*)"Internal flash - SPICLK" },
-    { 30,           (char*)"Internal flash - SPID" },
-    { 31,           (char*)"Internal flash - SPIQ" }
-    #elif ESPMODEL == ESP32S3
-    { 43,           (char*)"Console - Tx" },
-    { 44,           (char*)"Console - Rx" },
-    { 22,           (char*)"Not Usable" },
-    { 23,           (char*)"Not Usable" },
-    { 24,           (char*)"Not Usable" },
-    { 25,           (char*)"Not Usable" },
-    { 26,           (char*)"Internal flash - SPICS1" },
-    { 27,           (char*)"Internal flash - SPIHD" },
-    { 28,           (char*)"Internal flash - SPIWP" },
-    { 29,           (char*)"Internal flash - SPICS0" },
-    { 30,           (char*)"Internal flash - SPICLK" },
-    { 31,           (char*)"Internal flash - SPIQ" },
-    { 32,           (char*)"Internal flash - SPID" }
-    #elif ESPMODEL == ESP32S2
-    { 43,           (char*)"Console - Tx" },
-    { 44,           (char*)"Console - Rx" },
-    { 22,           (char*)"Not Usable" },
-    { 23,           (char*)"Not Usable" },
-    { 24,           (char*)"Not Usable" },
-    { 25,           (char*)"Not Usable" },
-    { 26,           (char*)"Internal flash - SPICS1" },
-    { 27,           (char*)"Internal flash - SPIHD" },
-    { 28,           (char*)"Internal flash - SPIWP" },
-    { 29,           (char*)"Internal flash - SPICS0" },
-    { 30,           (char*)"Internal flash - SPICLK" },
-    { 31,           (char*)"Internal flash - SPIQ" },
-    { 32,           (char*)"Internal flash - SPID" }
-    #elif ESPMODEL == ESP32C5
-    { 11,           (char*)"Console - Tx" },
-    { 12,           (char*)"Console - Rx" },
-    { 15,           (char*)"Internal flash - SPICS1" },
-    { 16,           (char*)"Internal flash - SPICS0" },
-    { 17,           (char*)"Internal flash - SPIQ" },
-    { 18,           (char*)"Internal flash - SPIWP" },
-    { 20,           (char*)"Internal flash - SPIHD" },
-    { 21,           (char*)"Internal flash - SPICLK" },
-    { 22,           (char*)"Internal flash - SPID" }
-    #elif ESPMODEL == ESP32C6
-    { 16,           (char*)"Console - Tx" },
-    { 17,           (char*)"Console - Rx" },
-    { 24,           (char*)"Internal flash - SPICS0" },
-    { 25,           (char*)"Internal flash - SPIQ" },
-    { 26,           (char*)"Internal flash - SPIWP" },
-    { 28,           (char*)"Internal flash - SPIHD" },
-    { 29,           (char*)"Internal flash - SPICLK" },
-    { 29,           (char*)"Internal flash - SPID" }
-    #elif ESMPMODEL == ESP32
-    { 1,            (char*)"Console - Tx" },
-    { 3,            (char*)"Console - Rx" },
-    { 6,            (char*)"Internal Flash - sdclk" },
-    { 7,            (char*)"Internal Flash - data0" },
-    { 8,            (char*)"Internal Flash - data1" },
-    { 9,            (char*)"Internal Flash - data2" },
-    { 10,           (char*)"Internal Flash - data3" },
-    { 11,           (char*)"Internal Flash - sdcmd" }
+    { 20,           (const char*)"Console - Tx" },
+    { 21,           (const char*)"Console - Rx" },
+    { 26,           (const char*)"Internal flash - SPIHD" },
+    { 27,           (const char*)"Internal flash - SPIWP" },
+    { 28,           (const char*)"Internal flash - SPICS0" },
+    { 29,           (const char*)"Internal flash - SPICLK" },
+    { 30,           (const char*)"Internal flash - SPID" },
+    { 31,           (const char*)"Internal flash - SPIQ" }
+    #endif
+    #if ESPMODEL == ESP32S3
+    { 43,           (const char*)"Console - Tx" },
+    { 44,           (const char*)"Console - Rx" },
+    { 22,           (const char*)"Internal - Not Usable" },
+    { 23,           (const char*)"Internal - Not Usable" },
+    { 24,           (const char*)"Internal - Not Usable" },
+    { 25,           (const char*)"Internal - Not Usable" },
+    { 26,           (const char*)"Internal flash - SPICS1" },
+    { 27,           (const char*)"Internal flash - SPIHD" },
+    { 28,           (const char*)"Internal flash - SPIWP" },
+    { 29,           (const char*)"Internal flash - SPICS0" },
+    { 30,           (const char*)"Internal flash - SPICLK" },
+    { 31,           (const char*)"Internal flash - SPIQ" },
+    { 32,           (const char*)"Internal flash - SPID" }
+    #endif
+    #if ESPMODEL == ESP32S2
+    { 43,           (const char*)"Console - Tx" },
+    { 44,           (const char*)"Console - Rx" },
+    { 22,           (const char*)"Internal - Not Usable" },
+    { 23,           (const char*)"Internal - Not Usable" },
+    { 24,           (const char*)"Internal - Not Usable" },
+    { 25,           (const char*)"Internal - Not Usable" },
+    { 26,           (const char*)"Internal flash - SPICS1" },
+    { 27,           (const char*)"Internal flash - SPIHD" },
+    { 28,           (const char*)"Internal flash - SPIWP" },
+    { 29,           (const char*)"Internal flash - SPICS0" },
+    { 30,           (const char*)"Internal flash - SPICLK" },
+    { 31,           (const char*)"Internal flash - SPIQ" },
+    { 32,           (const char*)"Internal flash - SPID" }
+    #endif
+    #if ESPMODEL == ESP32C5
+    { 11,           (const char*)"Console - Tx" },
+    { 12,           (const char*)"Console - Rx" },
+    { 15,           (const char*)"Internal flash - SPICS1" },
+    { 16,           (const char*)"Internal flash - SPICS0" },
+    { 17,           (const char*)"Internal flash - SPIQ" },
+    { 18,           (const char*)"Internal flash - SPIWP" },
+    { 20,           (const char*)"Internal flash - SPIHD" },
+    { 21,           (const char*)"Internal flash - SPICLK" },
+    { 22,           (const char*)"Internal flash - SPID" }
+    #endif
+    #if ESPMODEL == ESP32C6
+    { 16,           (const char*)"Console - Tx" },
+    { 17,           (const char*)"Console - Rx" },
+    { 24,           (const char*)"Internal flash - SPICS0" },
+    { 25,           (const char*)"Internal flash - SPIQ" },
+    { 26,           (const char*)"Internal flash - SPIWP" },
+    { 28,           (const char*)"Internal flash - SPIHD" },
+    { 29,           (const char*)"Internal flash - SPICLK" },
+    { 29,           (const char*)"Internal flash - SPID" }
+    #endif
+    #if ESPMODEL == ESP32
+    { 1,            (const char*)"Console - Tx" },
+    { 3,            (const char*)"Console - Rx" },
+    { 24,           (const char*)"Internal - Not Usable" },
+    { 28,           (const char*)"Internal - Not Usable" },
+    { 29,           (const char*)"Internal - Not Usable" },
+    { 30,           (const char*)"Internal - Not Usable" },
+    { 31,           (const char*)"Internal - Not Usable" },
+    { 6,            (const char*)"Internal Flash - sdclk" },
+    { 7,            (const char*)"Internal Flash - data0" },
+    { 8,            (const char*)"Internal Flash - data1" },
+    { 9,            (const char*)"Internal Flash - data2" },
+    { 10,           (const char*)"Internal Flash - data3" },
+    { 11,           (const char*)"Internal Flash - sdcmd" }
     #endif
   }; 

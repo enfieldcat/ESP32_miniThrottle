@@ -33,9 +33,6 @@ SOFTWARE.
 // #include <stdio.h>
 // #include <time.h>
 // Used for user interfaces
-#if defined(USEI2C) || defined(SSD1306) || defined(SSD1327)
-#include <Wire.h>
-#endif
 #ifndef NODISPLAY
 #include "lcdgfx.h"
 #include <Keypad.h>
@@ -91,7 +88,7 @@ SOFTWARE.
 #define ESP32C5 5
 #define ESP32C6 6
 
-
+/*
 #if ESPMODEL == ESP32
 #define MAXPINS 39
 #elif ESPMODEL == ESP32S3
@@ -105,7 +102,8 @@ SOFTWARE.
 #elif ESPMODEL == ESP32C6
 #define MAXPINS 23
 #endif
-
+*/
+#define MAXPINS SOC_GPIO_PIN_COUNT
 
 // Use either WiFi or define additional pins for second serial port to connect directly to DCC-Ex (WiFi free)
 // It is expected most users will want to use miniThrottle as a WiFi device.

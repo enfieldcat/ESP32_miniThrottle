@@ -821,7 +821,7 @@ void mkWebAdmin(WiFiClient *myClient, char *data, uint16_t dataSize, bool keepAl
 \* --------------------------------------------------------------------------- */
 void mkWebConfig (WiFiClient *myClient, bool keepAlive)
 {
-  #if defined (ESP32C3) || defined (ESP32C6)
+  #if (defined (ESP32C3) || defined (ESP32C6))
   uint8_t speedOpts[] = { 80, 160, 0 };
   #else
   uint8_t speedOpts[] = { 80, 160, 240, 0 };
@@ -955,7 +955,7 @@ void mkWebConfig (WiFiClient *myClient, bool keepAlive)
   #endif   // NODISPLAY
   myClient->printf ((const char*)"</table>");
   #ifdef RELAYPORT
-  #if defined (ESP32C3) || defined (ESP32C6)
+  #if (defined (ESP32C3) || defined (ESP32C6))
   if (cpuSpeed!=160) myClient->printf ((const char*)"<p><strong>NB:</strong> When relaying the fastest CPU speed (160MHz) is recommended. Current value is %d MHz.</p>", cpuSpeed);
   #else
   if (cpuSpeed!=240) myClient->printf ((const char*)"<p><strong>NB:</strong> When relaying the fastest CPU speed (240MHz) is recommended. Current value is %d MHz.</p>", cpuSpeed);

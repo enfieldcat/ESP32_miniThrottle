@@ -14,18 +14,13 @@
 #  * 2.5M Program
 #  * 64K NVS (Non volatile storage)
 #  * 1.375M File-System
-# Name,   Type, SubType, Offset,  Size,    Flags
-factory,  app,  factory, 0x10000, 0x280000,
-nvs,      data, nvs,     0x290000,0x10000,
-spiffs,   data, spiffs,  0x2A0000,0x160000,
-#
-# Here is an example for a 2Mb flash, 1.9Mb code, 64K SPIFFS, 64K NVS
+# This is for a 2 Mb Flash
 # Name,   Type, SubType, Offset,  Size,    Flags
 #factory,  app,  factory, 0x10000, 0x1d0000,
 #nvs,      data, nvs,     0x1e0000,0x10000,
 #spiffs,   data, spiffs,  0x1f0000,0x10000,
 #
-#
+# This is a 4Mbyte flash
 # If you are using OTA (Over The Air update) then
 # comment out the entries above, and uncomment the
 # entries from otadata onwards below.
@@ -35,8 +30,8 @@ spiffs,   data, spiffs,  0x2A0000,0x160000,
 #  * 64K NVS (Non volatile storage)
 #  * 128K File-System
 # Name,   Type, SubType, Offset,  Size,    Flags
-#otadata,  data, ota,     0xe000,  0x2000,
-#app0,     app,  ota_0,   0x10000, 0x1E0000,
-#app1,     app,  ota_1,   0x1F0000,0x1E0000,
-#nvs,      data, nvs,     0x3D0000,0x10000,
-#spiffs,   data, spiffs,  0x3E0000,0x20000,
+otadata,  data, ota,     0xe000,  0x2000,
+app0,     app,  ota_0,   0x10000, 0x1E0000,
+app1,     app,  ota_1,   0x1F0000,0x1E0000,
+nvs,      data, nvs,     0x3D0000,0x10000,
+spiffs,   data, spiffs,  0x3E0000,0x20000,

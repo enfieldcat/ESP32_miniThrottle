@@ -1,24 +1,32 @@
-/*
+/* ***********************************************************************\
+ *
  * Use this file to centralise any defines and includes
- * This file should contain only customisable data as far as possible
- * minThrottle.002 template for:
- *  - Serial connected throttle - direct to DCC-Ex serial port
- *  - WiThrottle relay over WiFi, up to 8 throttles
- *  - External ST7735 display - 128x160x16 SPI
- *  - 4x5 keypad
- *  - With encoder
- *  - web enabled configuration
- */
+ * This file should contain only customisable data as far as possible.
+ * For most builders this is the only file you need to customise.
+ *
+ * Don't not assume this file represents an example that will work for you.
+ * Work through it to:
+ *    *  Only edit "#define" lines - not all are left uncommented in this example.
+ *    *  Leave "#if..", "#else" and "endif lines alone"
+ *    *  Comment out features you don't want with "//" at the start of a line
+ *    *  Most sections will be proceeded by some explanation.
+ *
+ * When starting miniThrottle will do a "sanity-check" on the configuration
+ * and will halt starting if there is a configuration error. This is expected
+ * to catch most misconfigurations.
+ *
+\*********************************************************************** */
 
- /*
- * Model options
+/* ***********************************************************************\
+ * Model options, can be one of the following and should match your processor
+ * variant. Different variants have different features. Select only one.
  * ESPMODEL ESP32
  * ESPMODEL ESP32S2
  * ESPMODEL ESP32S3
  * ESPMODEL ESP32C3
  * ESPMODEL ESP32C5
  * ESPMODEL ESP32C6
- */
+\*********************************************************************** */
 #define ESPMODEL ESP32
 
 /* ***********************************************************************\
@@ -145,9 +153,9 @@
 \*********************************************************************** */
 // Uncomment these to enable debug options on startup
 // DELAYONSTART can also be used with serially connected DCC-EX to allow it to initialise prior to the throttle starting
-// DELAYONSTART = seconds before initialising comms with command station
+// DELAYONSTART = seconds before initialising comms with command station, 1 should be sufficient for most.
 // SHOWPACKETSONSTART = display packets received & transmitted on starting
-#define DELAYONSTART 10
+#define DELAYONSTART 1
 //#define SHOWPACKETSONSTART 1
 
 /* ***********************************************************************\
@@ -178,6 +186,9 @@
 #define USE_INSTR 1
 #ifdef USE_INSTR
 #include <Wire.h>
+// Comment out these lines if i2c is not being used to measure external in/outputs
+// this is for additional feature boards, if you are just using the esp32 module
+// and a display / keyboard etc, then this is not needed.
 #define SDA_INST_PIN   21
 #define SCK_INST_PIN   22
 #endif // USE_INSTR
@@ -371,7 +382,9 @@
 
 /* ***********************************************************************\
  * KEYPAD MAPPING
- * Define both the pin mapping and th key character assignment
+ * Define both the pin mapping and the key character assignment
+ * You only need to define the inputs used by your previously selected
+ * keyboard.
 \*********************************************************************** */
 
 //

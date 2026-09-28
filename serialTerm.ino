@@ -396,7 +396,9 @@ void processSerialCmd (char *inBuffer)
   #endif
   else if (nparam<=2 && strcmp (param[0], "help") == 0)          help                (nparam, param);
   else if (nparam==1 && strcmp (param[0], "history") == 0)       cmdGetHistory       ();
+  #ifdef USE_INSTR
   else if (nparam==1 && strcmp (param[0], "i2c") == 0)           i2c_scan            ();
+  #endif
   else if (nparam==2 && strcmp (param[0], "kill") == 0)          runAutomation::killProc(param[1]);
   #ifdef USEWIFI
   else if (nparam<=2 && strcmp (param[0], "mdns") == 0)          set_mdns            (nparam, param);
